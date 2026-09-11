@@ -1,0 +1,19 @@
+# VoiceEngine Paper Plugin Configuration
+
+# WebSocket URL of the VoiceEngine backend
+voice-server-url: "ws://localhost:3000/ws/plugin"
+
+# Public URL of the Web Client sent to players in /voice
+web-client-url: "http://localhost:5173"
+
+# Shared secret key used for authenticating with the voice backend
+secret-key: "change-me-to-a-secure-random-secret"
+
+# Telemetry streaming frequency in Hz (10 to 15 recommended)
+tick-rate-hz: 10
+
+# Token expiration time in minutes
+token-ttl-minutes: 5
+
+# Show connection prompt in chat when players join
+notify-on-join: true

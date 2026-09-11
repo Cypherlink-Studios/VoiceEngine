@@ -1,0 +1,15 @@
+name: VoiceEngine
+version: '1.0.0-SNAPSHOT'
+main: com.voiceengine.VoiceEnginePlugin
+api-version: '1.21'
+author: VoiceEngine Team
+description: Zero-mod Proximity Voice Chat Paper plugin
+commands:
+  voice:
+    description: Connect your microphone to VoiceEngine web client
+    permission: voiceengine.use
+    usage: /<command>
+permissions:
+  voiceengine.use:
+    description: Allows connecting to VoiceEngine
+    default: true

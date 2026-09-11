@@ -1,0 +1,94 @@
+import express from 'express';
+import cors from 'cors';
+import { createServer } from 'http';
+import { WebSocketServer } from 'ws';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+import { config } from './config.js';
+import { TokenStore } from './auth/TokenStore.js';
+import { SpatialEngine } from './spatial/SpatialEngine.js';
+import { MediasoupManager } from './sfu/MediasoupManager.js';
+import { PluginGateway } from './gateway/PluginGateway.js';
+import { ClientGateway } from './gateway/ClientGateway.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const httpServer = createServer(app);
+
+// Two distinct WebSocket servers mapped by path
+const pluginWss = new WebSocketServer({ noServer: true });
+const clientWss = new WebSocketServer({ noServer: true });
+
+httpServer.on('upgrade', (request, socket, head) => {
+  const pathname = request.url ? new URL(request.url, `http://${request.headers.host}`).pathname : '';
+
+  if (pathname === '/ws/plugin') {
+    pluginWss.handleUpgrade(request, socket, head, (ws) => {
+      pluginWss.emit('connection', ws, request);
+    });
+  } else if (pathname === '/ws/client') {
+    clientWss.handleUpgrade(request, socket, head, (ws) => {
+      clientWss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// Singletons
+const tokenStore = new TokenStore();
+const spatialEngine = new SpatialEngine(config.maxVoiceDistance, config.sneakVoiceDistance);
+const sfu = new MediasoupManager();
+let pluginGateway: PluginGateway;
+let clientGateway: ClientGateway;
+
+// Status & Health Endpoint
+app.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'voice-server',
+    pluginConnected: pluginGateway ? pluginGateway.isPluginConnected() : false,
+    connectedClients: clientGateway ? clientGateway.getConnectedClientsCount() : 0,
+    trackedPlayers: spatialEngine.getAllPlayers().length,
+    activeTokens: tokenStore.size(),
+  });
+});
+
+// Optional Static hosting for web-client dist
+const webClientDist = path.resolve(__dirname, '../../web-client/dist');
+app.use(express.static(webClientDist));
+app.get('*', (_req, res, next) => {
+  res.sendFile(path.join(webClientDist, 'index.html'), (err) => {
+    if (err) next();
+  });
+});
+
+export async function startServer(): Promise<void> {
+  await sfu.init();
+  pluginGateway = new PluginGateway(pluginWss, config.secretKey, tokenStore, spatialEngine);
+  clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway);
+
+  return new Promise((resolve) => {
+    httpServer.listen(config.port, config.host, () => {
+      console.log(`[VoiceServer] Running at http://${config.host}:${config.port}`);
+      console.log(`[VoiceServer] Plugin endpoint: ws://${config.host}:${config.port}/ws/plugin`);
+      console.log(`[VoiceServer] Client endpoint: ws://${config.host}:${config.port}/ws/client`);
+      resolve();
+    });
+  });
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  startServer().catch((err) => {
+    console.error('[VoiceServer] Fatal bootstrap error:', err);
+    process.exit(1);
+  });
+}
+
+export { app, httpServer, tokenStore, spatialEngine, sfu };
