@@ -11,6 +11,8 @@ build/
 bin/
 out/
 *.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+!**/gradle-wrapper.jar
 *.class
 
 # IDE

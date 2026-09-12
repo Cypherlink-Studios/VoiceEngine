@@ -155,14 +155,14 @@ if [ "$INSTALL_NODE" = true ]; then
 
     # Fallback to official standalone pre-compiled Node.js binary if NodeSource repository fails
     if [ "$NODE_INSTALLED" = false ]; then
-        log_warn "NodeSource repository setup was unsuccessful or unsupported. Installing official Node.js v20.18.0 binary..."
+        log_warn "NodeSource repository setup was unsuccessful or unsupported. Installing official Node.js v22.14.0 LTS binary..."
         ARCH=$(uname -m)
         NODE_ARCH="x64"
         if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
             NODE_ARCH="arm64"
         fi
-        NODE_TAR="node-v20.18.0-linux-${NODE_ARCH}.tar.xz"
-        curl -fsSL "https://nodejs.org/dist/v20.18.0/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
+        NODE_TAR="node-v22.14.0-linux-${NODE_ARCH}.tar.xz"
+        curl -fsSL "https://nodejs.org/dist/v22.14.0/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
         tar -xJf "/tmp/${NODE_TAR}" -C /usr/local --strip-components=1 --no-same-owner
         rm -f "/tmp/${NODE_TAR}"
         log_success "Node.js $(node -v) and npm $(npm -v) installed successfully via official binary."
@@ -204,6 +204,12 @@ log_success "Voice server built successfully in voice-server/dist"
 
 log_info "--- Building Paper Plugin (paper-plugin) ---"
 cd "${REPO_DIR}/paper-plugin"
+WRAPPER_JAR="${REPO_DIR}/paper-plugin/gradle/wrapper/gradle-wrapper.jar"
+if [ ! -f "$WRAPPER_JAR" ] || [ ! -s "$WRAPPER_JAR" ]; then
+    log_warn "gradle-wrapper.jar not found. Downloading Gradle wrapper binary..."
+    mkdir -p "$(dirname "$WRAPPER_JAR")"
+    curl -fsSL "https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar" -o "$WRAPPER_JAR" || true
+fi
 chmod +x gradlew
 ./gradlew build -x test
 log_success "Paper plugin built successfully in paper-plugin/build/libs/"
