@@ -180,4 +180,36 @@ describe('API Routes & Admin Auth', () => {
     expect(metricsData.channels.lobby).toBe(1);
     expect(metricsData.pluginConnected).toBe(true);
   });
+
+  it('POST /api/admin/auth permits repeated redemption for built-in dev admin token ADMIN1', async () => {
+    // 1. First redemption of ADMIN1
+    const res1 = await fetch(`${baseUrl}/api/admin/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'ADMIN1' }),
+    });
+    expect(res1.status).toBe(200);
+    const data1 = await res1.json();
+    expect(data1.success).toBe(true);
+    expect(data1.username).toBe('ServerAdmin');
+
+    // 2. Second redemption of ADMIN1 (allowed because it is a dev token)
+    const res2 = await fetch(`${baseUrl}/api/admin/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'ADMIN1' }),
+    });
+    expect(res2.status).toBe(200);
+    const data2 = await res2.json();
+    expect(data2.success).toBe(true);
+    expect(data2.username).toBe('ServerAdmin');
+
+    // 3. Regular dev token STEVE1 without admin rights is rejected
+    const resSteve = await fetch(`${baseUrl}/api/admin/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'STEVE1' }),
+    });
+    expect(resSteve.status).toBe(401);
+  });
 });

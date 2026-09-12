@@ -1,9 +1,4 @@
-# admin-portal-and-customization Specification
-
-## Purpose
-Provides a web-based administrative management portal, dynamic visual branding customization, persistent runtime settings, and fixed audio channel orchestration for VoiceEngine.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Administrative Portal Access and Session Authentication
 The portal SHALL enforce token-based administrative authentication issued via in-game authorization and provide protected administrative sessions with resilient token exchange and local development proxying.
@@ -20,26 +15,7 @@ The portal SHALL enforce token-based administrative authentication issued via in
 - **WHEN** the administrative portal component mounts or updates in development environments with a token URL parameter
 - **THEN** the client SHALL guard against duplicate concurrent authentication requests and sanitize the token search parameter from the URL upon successful exchange.
 
-### Requirement: Dynamic Visual Branding Customizer
-The system SHALL allow administrators to customize visual brand attributes with real-time live preview and persist the configuration.
-
-#### Scenario: Visual brand configuration update
-- **WHEN** an administrator modifies primary colors, accent colors, server name, logo URL, background wallpaper, or welcome message and saves
-- **THEN** the system SHALL persist the settings to `data/settings.json` and make the updated branding available via `GET /api/config/public`.
-
-### Requirement: Fixed Channel Voice Rooms Management
-The system SHALL allow administrators to create, update, and remove fixed Discord-style global voice channels.
-
-#### Scenario: Fixed channel creation
-- **WHEN** an administrator creates a new fixed channel with a name, description, and user limit
-- **THEN** the system SHALL register the channel in persistent settings and broadcast the channel list to all connected clients.
-
-### Requirement: Runtime Backend Tuning and Health Monitoring
-The system SHALL allow administrators to adjust server slot limits, audio bitrates, and proximity distance thresholds at runtime and monitor connected sessions.
-
-#### Scenario: Adjusting voice distance thresholds
-- **WHEN** an administrator updates the maximum voice distance or sneak distance in the admin portal
-- **THEN** the backend spatial engine SHALL immediately apply the new thresholds to proximity calculations without restarting the service.
+## ADDED Requirements
 
 ### Requirement: Development Environment API Routing and Test Admin Token
 The development environment SHALL route administrative REST API calls to the backend and provide a reusable development administrator token.

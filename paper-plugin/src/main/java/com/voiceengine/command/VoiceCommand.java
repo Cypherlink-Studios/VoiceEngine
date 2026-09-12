@@ -13,23 +13,35 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 public class VoiceCommand implements CommandExecutor {
     private final TokenManager tokenManager;
     private final String webClientBaseUrl;
     private final Consumer<SessionToken> tokenConsumer;
+    private final BooleanSupplier isBackendConnected;
 
     public VoiceCommand(TokenManager tokenManager, String webClientBaseUrl) {
-        this(tokenManager, webClientBaseUrl, null);
+        this(tokenManager, webClientBaseUrl, null, () -> true);
     }
 
     public VoiceCommand(TokenManager tokenManager, String webClientBaseUrl, Consumer<SessionToken> tokenConsumer) {
+        this(tokenManager, webClientBaseUrl, tokenConsumer, () -> true);
+    }
+
+    public VoiceCommand(
+        TokenManager tokenManager,
+        String webClientBaseUrl,
+        Consumer<SessionToken> tokenConsumer,
+        BooleanSupplier isBackendConnected
+    ) {
         this.tokenManager = tokenManager;
         this.webClientBaseUrl = webClientBaseUrl.endsWith("/") 
             ? webClientBaseUrl.substring(0, webClientBaseUrl.length() - 1) 
             : webClientBaseUrl;
         this.tokenConsumer = tokenConsumer;
+        this.isBackendConnected = isBackendConnected != null ? isBackendConnected : () -> true;
     }
 
     @Override
@@ -47,6 +59,11 @@ public class VoiceCommand implements CommandExecutor {
         if (args.length > 0 && args[0].equalsIgnoreCase("admin")) {
             if (!player.hasPermission("voiceengine.admin")) {
                 player.sendMessage(Component.text("You do not have permission to access the VoiceEngine admin portal.", NamedTextColor.RED));
+                return true;
+            }
+
+            if (!isBackendConnected.getAsBoolean()) {
+                player.sendMessage(Component.text("[VoiceEngine] Voice backend is offline. Unable to generate admin session.", NamedTextColor.RED));
                 return true;
             }
 

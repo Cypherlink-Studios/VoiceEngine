@@ -122,4 +122,30 @@ class VoiceCommandTest {
         assertTrue(text.contains("[VoiceEngine Admin]"));
         assertTrue(text.contains(registeredToken.get().token()));
     }
+
+    @Test
+    void testAdminVoiceCommandWhenBackendDisconnected() {
+        Player player = mock(Player.class);
+        UUID uuid = UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(uuid);
+        when(player.getName()).thenReturn("AdminDev");
+        when(player.hasPermission("voiceengine.admin")).thenReturn(true);
+
+        AtomicReference<SessionToken> registeredToken = new AtomicReference<>();
+        VoiceCommand voiceCommand = new VoiceCommand(
+            tokenManager,
+            baseUrl,
+            registeredToken::set,
+            () -> false
+        );
+
+        boolean handled = voiceCommand.onCommand(player, mockCommand, "voice", new String[]{"admin"});
+        assertTrue(handled);
+
+        assertNull(registeredToken.get());
+        ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
+        verify(player).sendMessage(msgCaptor.capture());
+        String text = serializer.serialize(msgCaptor.getValue());
+        assertTrue(text.contains("backend is offline"));
+    }
 }

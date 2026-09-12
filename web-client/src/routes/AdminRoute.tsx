@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Lock, LogOut, Palette, Volume2, Sliders, Activity, Headphones, ArrowLeft } from 'lucide-react';
 import { useBrand, PublicBranding, PublicFixedChannel } from '../components/layout/BrandProvider.js';
@@ -22,6 +22,8 @@ export function AdminRoute() {
   const [authChecking, setAuthChecking] = useState(true);
   const [manualToken, setManualToken] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isSubmittingManual, setIsSubmittingManual] = useState(false);
+  const authenticatingTokenRef = useRef<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'branding' | 'channels' | 'backend' | 'monitor'>('branding');
   const [settings, setSettings] = useState<{
@@ -32,12 +34,18 @@ export function AdminRoute() {
 
   // Authenticate with token
   const authenticate = async (token: string) => {
+    const normalizedToken = token.trim().toUpperCase();
+    if (!normalizedToken) return;
+    if (authenticatingTokenRef.current === normalizedToken) return;
+    authenticatingTokenRef.current = normalizedToken;
+
     setAuthError(null);
+    setIsSubmittingManual(true);
     try {
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token.trim().toUpperCase() }),
+        body: JSON.stringify({ token: normalizedToken }),
       });
 
       if (res.ok) {
@@ -49,6 +57,7 @@ export function AdminRoute() {
         };
         sessionStorage.setItem('ve_admin_session', JSON.stringify(sessionData));
         setSession(sessionData);
+        navigate('/admin', { replace: true });
         await loadSettings(data.sessionToken);
       } else {
         const err = await res.json();
@@ -57,7 +66,9 @@ export function AdminRoute() {
     } catch {
       setAuthError('Connection error while authenticating.');
     } finally {
+      authenticatingTokenRef.current = null;
       setAuthChecking(false);
+      setIsSubmittingManual(false);
     }
   };
 
@@ -198,7 +209,7 @@ export function AdminRoute() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (manualToken) authenticate(manualToken);
+              if (manualToken && !isSubmittingManual) authenticate(manualToken);
             }}
             className="w-full flex gap-2"
           >
@@ -206,14 +217,16 @@ export function AdminRoute() {
               type="text"
               placeholder="PASTE ADMIN CODE"
               value={manualToken}
+              disabled={isSubmittingManual}
               onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-              className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-xs font-mono text-center tracking-widest text-white uppercase"
+              className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-xs font-mono text-center tracking-widest text-white uppercase disabled:opacity-50"
             />
             <button
               type="submit"
-              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white transition-all cursor-pointer"
+              disabled={isSubmittingManual || !manualToken.trim()}
+              className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 disabled:opacity-50 text-xs font-semibold text-white transition-all cursor-pointer disabled:cursor-not-allowed flex items-center justify-center min-w-[75px]"
             >
-              Verify
+              {isSubmittingManual ? 'Verifying...' : 'Verify'}
             </button>
           </form>
 

@@ -4,8 +4,8 @@
     "tagline": "Zero-Mod Proximity Voice Chat",
     "logoUrl": "",
     "backgroundUrl": "",
-    "primaryColor": "#6366f1",
-    "accentColor": "#22c55e",
+    "primaryColor": "#dc2626",
+    "accentColor": "#ef4444",
     "welcomeMessage": "Welcome to VoiceEngine! Proximity voice is active."
   },
   "voice": {
