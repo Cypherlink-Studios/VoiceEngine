@@ -176,4 +176,59 @@ describe('SpatialEngine', () => {
     expect(audible).toHaveLength(1);
     expect(audible[0].isSubmerged).toBe(true);
   });
+
+  it('enforces server isolation when players share the same world name and coordinates', () => {
+    const lobbyPlayer: PlayerSpatialState = {
+      uuid: 'player-lobby',
+      username: 'LobbySteve',
+      serverId: 'lobby',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    const survivalPlayer: PlayerSpatialState = {
+      uuid: 'player-survival',
+      username: 'SurvivalAlex',
+      serverId: 'survival',
+      world: 'world',
+      x: 2,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    const sameServerPeer: PlayerSpatialState = {
+      uuid: 'player-lobby-2',
+      username: 'LobbyBob',
+      serverId: 'lobby',
+      world: 'world',
+      x: 3,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    engine.updatePlayer(lobbyPlayer);
+    engine.updatePlayer(survivalPlayer);
+    engine.updatePlayer(sameServerPeer);
+
+    const audibleForLobby = engine.getAudiblePeersFor('player-lobby');
+    expect(audibleForLobby).toHaveLength(1);
+    expect(audibleForLobby[0].peerUuid).toBe('player-lobby-2');
+
+    const audibleForSurvival = engine.getAudiblePeersFor('player-survival');
+    expect(audibleForSurvival).toHaveLength(0);
+  });
 });

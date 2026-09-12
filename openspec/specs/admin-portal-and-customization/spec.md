@@ -28,11 +28,11 @@ The system SHALL allow administrators to customize visual brand attributes with 
 - **THEN** the system SHALL persist the settings to `data/settings.json` and make the updated branding available via `GET /api/config/public`.
 
 ### Requirement: Fixed Channel Voice Rooms Management
-The system SHALL allow administrators to create, update, and remove fixed Discord-style global voice channels.
+The system SHALL allow administrators to create, update, and remove fixed Discord-style voice channels with configurable network scope (global or server-isolated).
 
 #### Scenario: Fixed channel creation
-- **WHEN** an administrator creates a new fixed channel with a name, description, and user limit
-- **THEN** the system SHALL register the channel in persistent settings and broadcast the channel list to all connected clients.
+- **WHEN** an administrator creates a new fixed channel with a name, description, user limit, and selected scope (global or server-isolated)
+- **THEN** the system SHALL register the channel in persistent settings with the specified scope (defaulting to global) and broadcast the channel list to all connected clients.
 
 ### Requirement: Runtime Backend Tuning and Health Monitoring
 The system SHALL allow administrators to adjust server slot limits, audio bitrates, and proximity distance thresholds at runtime and monitor connected sessions.

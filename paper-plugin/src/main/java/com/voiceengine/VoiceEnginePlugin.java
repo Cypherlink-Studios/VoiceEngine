@@ -60,32 +60,45 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         getServer().getServicesManager().register(VoiceEngineAPI.class, this.api, this, ServicePriority.Normal);
 
         // 5. Initialize Schedulers / Services
-        this.telemetryService = new TelemetryService(this, telemetryCollector, () -> voiceBackendClient, voiceConfig.tickRateHz());
+        this.telemetryService = new TelemetryService(this, telemetryCollector, () -> voiceBackendClient, () -> voiceConfig.serverId(), voiceConfig.tickRateHz());
         this.telemetryService.start();
 
         this.visualFeedbackService = new VisualFeedbackService(this, speechFeedbackHandler);
         this.visualFeedbackService.start();
 
         // 6. Initialize Commands via Incendo Cloud v2
-        this.commandService = new CommandService(this, translationService);
-        this.commandService.initialize();
-        this.commandService.registerCommands(new VoiceCommands(
-            tokenManager,
-            () -> voiceConfig,
-            () -> voiceBackendClient,
-            translationService,
-            token -> {
-                if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
-                    voiceBackendClient.registerToken(token);
-                }
-            },
-            this::reloadPlugin
-        ));
+        if (isProxyMode()) {
+            getLogger().info("[VoiceEngine] Proxy mode active (server: " + voiceConfig.serverId() + "). Local /voice commands delegated to Velocity.");
+        } else {
+            this.commandService = new CommandService(this, translationService);
+            this.commandService.initialize();
+            this.commandService.registerCommands(new VoiceCommands(
+                tokenManager,
+                () -> voiceConfig,
+                () -> voiceBackendClient,
+                translationService,
+                token -> {
+                    if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                        voiceBackendClient.registerToken(token);
+                    }
+                },
+                this::reloadPlugin
+            ));
+        }
 
         // 7. Register Bukkit Events
         getServer().getPluginManager().registerEvents(this, this);
 
         getLogger().info("VoiceEngine plugin enabled successfully!");
+    }
+
+    public boolean isProxyMode() {
+        boolean forwarding = false;
+        try {
+            forwarding = getServer().spigot().getSpigotConfig().getBoolean("settings.bungeecord", false);
+        } catch (Throwable ignored) {
+        }
+        return voiceConfig != null && voiceConfig.resolveProxyMode(forwarding);
     }
 
     @Override
@@ -130,6 +143,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             this.voiceBackendClient = new VoiceBackendClient(
                 voiceConfig.voiceServerUri(),
                 voiceConfig.secretKey(),
+                voiceConfig.serverId(),
                 speechFeedbackHandler,
                 this::handleSpeechEvent
             );
@@ -149,7 +163,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (voiceConfig != null && voiceConfig.notifyOnJoin()) {
+        if (!isProxyMode() && voiceConfig != null && voiceConfig.notifyOnJoin()) {
             Bukkit.getScheduler().runTaskLater(this, () -> {
                 if (event.getPlayer().isOnline()) {
                     translationService.send(event.getPlayer(), "notification.join");

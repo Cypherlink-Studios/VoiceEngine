@@ -57,8 +57,10 @@ export class SpatialEngine {
         continue;
       }
 
-      // Check dimensional isolation
-      if (speaker.world !== listener.world) {
+      // Check dimensional and server isolation
+      const speakerServer = speaker.serverId || 'default';
+      const listenerServer = listener.serverId || 'default';
+      if (speakerServer !== listenerServer || speaker.world !== listener.world) {
         continue;
       }
 

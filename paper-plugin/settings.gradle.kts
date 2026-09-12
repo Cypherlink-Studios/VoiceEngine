@@ -1,4 +1,4 @@
-rootProject.name = "paper-plugin"
+rootProject.name = "VoiceEngine-Paper"
 
 pluginManagement {
     repositories {

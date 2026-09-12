@@ -157,6 +157,7 @@ export class SettingsManager {
           description: typeof c.description === 'string' ? c.description.trim() : '',
           userLimit: typeof c.userLimit === 'number' && c.userLimit >= 0 ? Math.floor(c.userLimit) : 0,
           isDefault: Boolean(c.isDefault),
+          scope: c.scope === 'server' ? 'server' : 'global',
         }));
     }
 

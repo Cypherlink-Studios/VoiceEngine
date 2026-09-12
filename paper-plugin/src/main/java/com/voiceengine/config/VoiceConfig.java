@@ -12,8 +12,28 @@ public record VoiceConfig(
     int tickRateHz,
     Duration tokenTtl,
     boolean notifyOnJoin,
-    String defaultLocale
+    String defaultLocale,
+    String serverId,
+    String proxyMode
 ) {
+    public VoiceConfig(
+        URI voiceServerUri,
+        String webClientUrl,
+        String secretKey,
+        int tickRateHz,
+        Duration tokenTtl,
+        boolean notifyOnJoin,
+        String defaultLocale
+    ) {
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto");
+    }
+
+    public boolean resolveProxyMode(boolean velocityForwardingDetected) {
+        if ("true".equalsIgnoreCase(proxyMode)) return true;
+        if ("false".equalsIgnoreCase(proxyMode)) return false;
+        return velocityForwardingDetected;
+    }
+
     public static VoiceConfig fromConfiguration(ConfigurationSection config) {
         String serverUrlStr = config != null ? config.getString("voice-server-url", "ws://localhost:3000/ws/plugin") : "ws://localhost:3000/ws/plugin";
         URI serverUri;
@@ -43,6 +63,16 @@ public record VoiceConfig(
             defaultLoc = "en_US";
         }
 
+        String srvId = config != null ? config.getString("server-id", "default") : "default";
+        if (srvId == null || srvId.isBlank()) {
+            srvId = "default";
+        }
+
+        String pMode = config != null ? config.getString("proxy-mode", "auto") : "auto";
+        if (pMode == null || pMode.isBlank()) {
+            pMode = "auto";
+        }
+
         return new VoiceConfig(
             serverUri,
             webClient,
@@ -50,7 +80,9 @@ public record VoiceConfig(
             tickRate,
             Duration.ofMinutes(ttlMinutes),
             notify,
-            defaultLoc
+            defaultLoc,
+            srvId,
+            pMode
         );
     }
 }

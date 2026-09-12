@@ -23,6 +23,10 @@ class VoiceConfigTest {
         assertEquals(Duration.ofMinutes(5), config.tokenTtl());
         assertTrue(config.notifyOnJoin());
         assertEquals("en_US", config.defaultLocale());
+        assertEquals("default", config.serverId());
+        assertEquals("auto", config.proxyMode());
+        assertTrue(config.resolveProxyMode(true));
+        assertFalse(config.resolveProxyMode(false));
     }
 
     @Test
@@ -35,6 +39,8 @@ class VoiceConfigTest {
             token-ttl-minutes: 10
             notify-on-join: false
             default-locale: "es_ES"
+            server-id: "survival-1"
+            proxy-mode: "true"
             """;
         YamlConfiguration parsed = YamlConfiguration.loadConfiguration(new StringReader(yaml));
         VoiceConfig config = VoiceConfig.fromConfiguration(parsed);
@@ -46,6 +52,9 @@ class VoiceConfigTest {
         assertEquals(Duration.ofMinutes(10), config.tokenTtl());
         assertFalse(config.notifyOnJoin());
         assertEquals("es_ES", config.defaultLocale());
+        assertEquals("survival-1", config.serverId());
+        assertEquals("true", config.proxyMode());
+        assertTrue(config.resolveProxyMode(false)); // explicitly "true"
     }
 
     @Test

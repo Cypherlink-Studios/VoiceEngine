@@ -20,3 +20,10 @@ notify-on-join: true
 
 # Default language locale for players with unsupported client locales (e.g. en_US, es_ES)
 default-locale: "en_US"
+
+# Network server identifier (e.g. lobby, survival, minigames-1)
+server-id: "default"
+
+# Proxy mode: auto, true, or false.
+# When enabled, suppresses local /voice commands and join notices, delegating to Velocity.
+proxy-mode: "auto"

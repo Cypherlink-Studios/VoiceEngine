@@ -13,13 +13,19 @@ public class TelemetryService implements VoiceEngineService {
     private final Plugin plugin;
     private final TelemetryCollector collector;
     private final Supplier<VoiceBackendClient> clientSupplier;
+    private final Supplier<String> serverIdSupplier;
     private int tickRateHz;
     private BukkitTask task;
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, int tickRateHz) {
+        this(plugin, collector, clientSupplier, () -> "default", tickRateHz);
+    }
+
+    public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, Supplier<String> serverIdSupplier, int tickRateHz) {
         this.plugin = plugin;
         this.collector = collector;
         this.clientSupplier = clientSupplier;
+        this.serverIdSupplier = serverIdSupplier != null ? serverIdSupplier : () -> "default";
         this.tickRateHz = Math.max(1, Math.min(20, tickRateHz));
     }
 
@@ -40,7 +46,7 @@ public class TelemetryService implements VoiceEngineService {
         this.task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             VoiceBackendClient client = clientSupplier.get();
             if (client != null && client.isOpen()) {
-                SpatialTelemetryBatch batch = collector.collectBatch(Bukkit.getOnlinePlayers());
+                SpatialTelemetryBatch batch = collector.collectBatch(Bukkit.getOnlinePlayers(), serverIdSupplier.get());
                 client.sendTelemetry(batch);
             }
         }, periodTicks, periodTicks);

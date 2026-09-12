@@ -9,12 +9,16 @@ import java.util.List;
 public class TelemetryCollector {
 
     public SpatialTelemetryBatch collectBatch(Collection<? extends Player> players) {
+        return collectBatch(players, "default");
+    }
+
+    public SpatialTelemetryBatch collectBatch(Collection<? extends Player> players, String serverId) {
         List<PlayerSpatialState> states = new ArrayList<>(players.size());
         for (Player player : players) {
             if (player != null && player.isOnline()) {
-                states.add(PlayerSpatialState.fromPlayer(player));
+                states.add(PlayerSpatialState.fromPlayer(player, serverId));
             }
         }
-        return new SpatialTelemetryBatch(System.currentTimeMillis(), states);
+        return new SpatialTelemetryBatch(serverId, System.currentTimeMillis(), states);
     }
 }

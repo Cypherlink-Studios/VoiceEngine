@@ -4,6 +4,7 @@ dist/
 build/
 .npm/
 *.tsbuildinfo
+voice-server/data
 
 # Java / Gradle
 .gradle/

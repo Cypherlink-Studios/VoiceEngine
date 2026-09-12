@@ -50,4 +50,22 @@ class SpatialTelemetryTest {
         assertTrue(dPlayer2.isSneaking());
         assertTrue(dPlayer2.isSubmerged());
     }
+
+    @Test
+    void testBatchWithCustomServerId() {
+        UUID uuid = UUID.randomUUID();
+        PlayerSpatialState player = new PlayerSpatialState(
+            uuid, "Steve", "survival-1", "world", 10.0, 64.0, 20.0, 0.0f, 0.0f, false, false
+        );
+
+        long now = System.currentTimeMillis();
+        SpatialTelemetryBatch batch = new SpatialTelemetryBatch("survival-1", now, List.of(player));
+
+        String json = batch.toJson();
+        assertTrue(json.contains("\"serverId\":\"survival-1\""));
+
+        SpatialTelemetryBatch deserialized = SpatialTelemetryBatch.fromJson(json);
+        assertEquals("survival-1", deserialized.serverId());
+        assertEquals("survival-1", deserialized.players().get(0).serverId());
+    }
 }

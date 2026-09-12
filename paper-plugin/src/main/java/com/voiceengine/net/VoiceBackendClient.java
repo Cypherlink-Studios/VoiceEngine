@@ -24,6 +24,7 @@ public class VoiceBackendClient extends WebSocketClient {
     private static final Gson GSON = new Gson();
 
     private final String secretKey;
+    private final String serverId;
     private final SpeechFeedbackHandler speechFeedbackHandler;
     private final java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
@@ -36,7 +37,7 @@ public class VoiceBackendClient extends WebSocketClient {
         String secretKey,
         SpeechFeedbackHandler speechFeedbackHandler
     ) {
-        this(serverUri, secretKey, speechFeedbackHandler, null);
+        this(serverUri, secretKey, "default", speechFeedbackHandler, null);
     }
 
     public VoiceBackendClient(
@@ -45,15 +46,28 @@ public class VoiceBackendClient extends WebSocketClient {
         SpeechFeedbackHandler speechFeedbackHandler,
         java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange
     ) {
-        super(serverUri, createHeaders(secretKey));
+        this(serverUri, secretKey, "default", speechFeedbackHandler, onSpeakingStateChange);
+    }
+
+    public VoiceBackendClient(
+        URI serverUri,
+        String secretKey,
+        String serverId,
+        SpeechFeedbackHandler speechFeedbackHandler,
+        java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange
+    ) {
+        super(serverUri, createHeaders(secretKey, serverId));
         this.secretKey = secretKey;
+        this.serverId = serverId != null ? serverId : "default";
         this.speechFeedbackHandler = speechFeedbackHandler;
         this.onSpeakingStateChange = onSpeakingStateChange;
     }
 
-    private static Map<String, String> createHeaders(String secretKey) {
+    private static Map<String, String> createHeaders(String secretKey, String serverId) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Authorization", "Bearer " + secretKey);
+        headers.put("X-Role", "paper");
+        headers.put("X-Server-Id", serverId != null ? serverId : "default");
         return headers;
     }
 
@@ -66,6 +80,8 @@ public class VoiceBackendClient extends WebSocketClient {
         JsonObject auth = new JsonObject();
         auth.addProperty("type", "plugin_handshake");
         auth.addProperty("secret", secretKey);
+        auth.addProperty("role", "paper");
+        auth.addProperty("serverId", serverId);
         send(GSON.toJson(auth));
     }
 

@@ -106,12 +106,107 @@ describe('PluginGateway', () => {
             const player = spatialEngine.getPlayer('uuid-1');
             expect(player).toBeDefined();
             expect(player?.x).toBe(10);
+            expect(player?.serverId).toBe('default');
 
             ws.close();
             resolve();
           }, 50);
         }
       });
+    });
+  });
+
+  it('manages multiple Paper servers and Velocity proxy concurrently and targets speech status', async () => {
+    // 1. Connect Velocity
+    const velocityWs = new WebSocket(`ws://localhost:${port}`);
+    // 2. Connect Paper Lobby
+    const lobbyWs = new WebSocket(`ws://localhost:${port}`);
+    // 3. Connect Paper Survival
+    const survivalWs = new WebSocket(`ws://localhost:${port}`);
+
+    const receivedLobbyMessages: any[] = [];
+    const receivedSurvivalMessages: any[] = [];
+
+    await new Promise<void>((resolve) => {
+      let openCount = 0;
+      const checkAllReady = () => {
+        openCount++;
+        if (openCount === 3) {
+          velocityWs.send(
+            JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123', role: 'velocity' })
+          );
+          lobbyWs.send(
+            JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123', role: 'paper', serverId: 'lobby' })
+          );
+          survivalWs.send(
+            JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123', role: 'paper', serverId: 'survival' })
+          );
+        }
+      };
+
+      velocityWs.on('open', checkAllReady);
+      lobbyWs.on('open', checkAllReady);
+      survivalWs.on('open', checkAllReady);
+
+      lobbyWs.on('message', (d) => {
+        const msg = JSON.parse(d.toString());
+        if (msg.type === 'speech_status') receivedLobbyMessages.push(msg);
+      });
+
+      survivalWs.on('message', (d) => {
+        const msg = JSON.parse(d.toString());
+        if (msg.type === 'speech_status') receivedSurvivalMessages.push(msg);
+      });
+
+      setTimeout(() => {
+        expect(gateway.isVelocityConnected()).toBe(true);
+        const servers = gateway.getConnectedServers();
+        expect(servers).toContain('lobby');
+        expect(servers).toContain('survival');
+
+        // Send telemetry from lobby for player-1
+        lobbyWs.send(
+          JSON.stringify({
+            type: 'telemetry_batch',
+            serverId: 'lobby',
+            timestamp: Date.now(),
+            players: [
+              {
+                uuid: 'player-lobby-1',
+                username: 'LobbyPlayer',
+                world: 'world',
+                x: 0,
+                y: 64,
+                z: 0,
+                yaw: 0,
+                pitch: 0,
+                isSneaking: false,
+                isSubmerged: false,
+              },
+            ],
+          })
+        );
+
+        setTimeout(() => {
+          const p = spatialEngine.getPlayer('player-lobby-1');
+          expect(p?.serverId).toBe('lobby');
+
+          // Notify speech status: should go directly to lobbyWs, NOT survivalWs
+          gateway.notifySpeechStatus('player-lobby-1', true);
+
+          setTimeout(() => {
+            expect(receivedLobbyMessages).toHaveLength(1);
+            expect(receivedLobbyMessages[0].uuid).toBe('player-lobby-1');
+            expect(receivedLobbyMessages[0].speaking).toBe(true);
+            expect(receivedSurvivalMessages).toHaveLength(0);
+
+            velocityWs.close();
+            lobbyWs.close();
+            survivalWs.close();
+            resolve();
+          }, 50);
+        }, 50);
+      }, 100);
     });
   });
 });

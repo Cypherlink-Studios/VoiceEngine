@@ -133,7 +133,7 @@ app.get('*', (_req, res, next) => {
 export async function startServer(): Promise<void> {
   await sfu.init();
   pluginGateway = new PluginGateway(pluginWss, config.secretKey, tokenStore, spatialEngine);
-  clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway);
+  clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway, settingsManager);
 
   return new Promise((resolve) => {
     httpServer.listen(config.port, config.host, () => {

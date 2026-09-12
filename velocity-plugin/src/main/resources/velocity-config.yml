@@ -1,0 +1,19 @@
+# VoiceEngine Velocity Proxy Configuration
+
+# WebSocket URL of the VoiceEngine backend
+voice-server-url: "ws://localhost:3000/ws/plugin"
+
+# Public URL of the Web Client sent to players in /voice
+web-client-url: "http://localhost:5173"
+
+# Shared secret key used for authenticating with the voice backend
+secret-key: "change-me-to-a-secure-random-secret"
+
+# Token expiration time in minutes
+token-ttl-minutes: 5
+
+# Show connection prompt in chat when players join the network
+notify-on-join: true
+
+# MiniMessage formatted join notification message
+join-message: "<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <gray>Proximity voice chat is active on this network! Type <click:run_command:'/voice'><hover:show_text:'<gray>Click to get connection link</gray>'><yellow>/voice</yellow></hover></click> to connect.</gray>"

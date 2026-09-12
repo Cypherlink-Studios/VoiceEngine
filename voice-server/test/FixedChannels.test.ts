@@ -153,4 +153,118 @@ describe('Fixed Channels Audio Routing', () => {
     steveWs.close();
     alexWs.close();
   });
+
+  it('respects scope: server for fixed channels and isolates clients on different backend servers', async () => {
+    // Recreate clientGateway with server-scoped channel setting
+    clientGateway.shutdown();
+    const mockSettingsManager = {
+      getSettings: () => ({
+        branding: {} as any,
+        voice: {} as any,
+        fixedChannels: [
+          {
+            id: 'server-room',
+            name: 'Server Room',
+            description: '',
+            userLimit: 0,
+            scope: 'server',
+          },
+        ],
+      }),
+    } as any;
+
+    clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway, mockSettingsManager);
+
+    tokenStore.registerToken({
+      token: 'STEVE_TOKEN_2',
+      playerUuid: 'steve-srv',
+      playerName: 'Steve',
+      expiresAt: Date.now() + 60000,
+    });
+    tokenStore.registerToken({
+      token: 'ALEX_TOKEN_2',
+      playerUuid: 'alex-srv',
+      playerName: 'Alex',
+      expiresAt: Date.now() + 60000,
+    });
+
+    // Steve is on lobby, Alex is on survival
+    spatialEngine.updatePlayer({
+      uuid: 'steve-srv',
+      username: 'Steve',
+      serverId: 'lobby',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+    spatialEngine.updatePlayer({
+      uuid: 'alex-srv',
+      username: 'Alex',
+      serverId: 'survival',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+
+    const steveWs = new WebSocket(clientWsUrl);
+    const alexWs = new WebSocket(clientWsUrl);
+
+    await Promise.all([
+      new Promise<void>((res) => steveWs.on('open', res)),
+      new Promise<void>((res) => alexWs.on('open', res)),
+    ]);
+
+    steveWs.send(
+      JSON.stringify({
+        type: 'client_auth',
+        token: 'STEVE_TOKEN_2',
+        rtpCapabilities: sfu.getRtpCapabilities(),
+      })
+    );
+
+    alexWs.send(
+      JSON.stringify({
+        type: 'client_auth',
+        token: 'ALEX_TOKEN_2',
+        rtpCapabilities: sfu.getRtpCapabilities(),
+      })
+    );
+
+    await new Promise<void>((res) => {
+      let count = 0;
+      const onAuth = () => {
+        count++;
+        if (count === 2) res();
+      };
+      steveWs.on('message', (d) => {
+        if (JSON.parse(d.toString()).type === 'auth_success') onAuth();
+      });
+      alexWs.on('message', (d) => {
+        if (JSON.parse(d.toString()).type === 'auth_success') onAuth();
+      });
+    });
+
+    // Both join server-room
+    steveWs.send(JSON.stringify({ type: 'join_channel', channelId: 'server-room' }));
+    alexWs.send(JSON.stringify({ type: 'join_channel', channelId: 'server-room' }));
+
+    await new Promise((res) => setTimeout(res, 100));
+
+    // Channel stats show 2 members in the channel overall
+    const stats = clientGateway.getChannelStats();
+    expect(stats['server-room']).toBe(2);
+
+    steveWs.close();
+    alexWs.close();
+  });
 });

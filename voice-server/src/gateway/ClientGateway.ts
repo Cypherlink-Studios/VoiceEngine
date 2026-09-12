@@ -5,6 +5,7 @@ import { SpatialEngine } from '../spatial/SpatialEngine.js';
 import { MediasoupManager } from '../sfu/MediasoupManager.js';
 import { PluginGateway } from './PluginGateway.js';
 import { ClientSession } from '../types.js';
+import { SettingsManager } from '../config/SettingsManager.js';
 import * as mediasoup from 'mediasoup';
 
 export class ClientGateway {
@@ -13,6 +14,7 @@ export class ClientGateway {
   private spatialEngine: SpatialEngine;
   private sfu: MediasoupManager;
   private pluginGateway: PluginGateway;
+  private settingsManager?: SettingsManager;
 
   private sessions = new Map<string, ClientSession>(); // sessionId -> ClientSession
   private playerSessions = new Map<string, ClientSession>(); // playerUuid -> ClientSession
@@ -23,13 +25,15 @@ export class ClientGateway {
     tokenStore: TokenStore,
     spatialEngine: SpatialEngine,
     sfu: MediasoupManager,
-    pluginGateway: PluginGateway
+    pluginGateway: PluginGateway,
+    settingsManager?: SettingsManager
   ) {
     this.wss = wss;
     this.tokenStore = tokenStore;
     this.spatialEngine = spatialEngine;
     this.sfu = sfu;
     this.pluginGateway = pluginGateway;
+    this.settingsManager = settingsManager;
 
     this.init();
     this.startProximityLoop();
@@ -297,11 +301,25 @@ export class ClientGateway {
               );
             }
           }
-        } else {
           // --- 2. Fixed Discord-Style Channel Audio Routing ---
-          const channelPeers = Array.from(this.playerSessions.values()).filter(
-            (p) => p.playerUuid !== listenerSession.playerUuid && (p.activeChannel || 'proximity') === channel
-          );
+          const fixedChannels = this.settingsManager?.getSettings().fixedChannels || [];
+          const channelConfig = fixedChannels.find((c) => c.id === channel);
+          const isServerScoped = channelConfig?.scope === 'server';
+          const listenerPlayer = this.spatialEngine.getPlayer(listenerSession.playerUuid);
+          const listenerServerId = listenerPlayer?.serverId || 'default';
+
+          const channelPeers = Array.from(this.playerSessions.values()).filter((p) => {
+            if (p.playerUuid === listenerSession.playerUuid) return false;
+            if ((p.activeChannel || 'proximity') !== channel) return false;
+            if (isServerScoped) {
+              const speakerPlayer = this.spatialEngine.getPlayer(p.playerUuid);
+              const speakerServerId = speakerPlayer?.serverId || 'default';
+              if (speakerServerId !== listenerServerId) {
+                return false;
+              }
+            }
+            return true;
+          });
           const channelPeerUuids = new Set(channelPeers.map((p) => p.playerUuid));
 
           for (const speakerSession of channelPeers) {

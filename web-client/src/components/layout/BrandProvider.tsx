@@ -23,6 +23,7 @@ export interface PublicFixedChannel {
   description: string;
   userLimit: number;
   isDefault?: boolean;
+  scope?: 'global' | 'server';
 }
 
 export interface PublicConfig {
@@ -56,6 +57,7 @@ const DEFAULT_CONFIG: PublicConfig = {
       description: 'Global voice room without 3D distance',
       userLimit: 0,
       isDefault: true,
+      scope: 'global',
     },
   ],
 };

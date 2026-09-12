@@ -1,0 +1,129 @@
+package com.voiceengine.velocity.command;
+
+import com.velocitypowered.api.command.CommandSource;
+import com.velocitypowered.api.proxy.Player;
+import com.voiceengine.velocity.auth.VelocitySessionToken;
+import com.voiceengine.velocity.auth.VelocityTokenManager;
+import com.voiceengine.velocity.config.VelocityVoiceConfig;
+import com.voiceengine.velocity.net.VelocityBackendClient;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
+import org.incendo.cloud.annotations.Command;
+import org.incendo.cloud.annotations.CommandDescription;
+import org.incendo.cloud.annotations.Permission;
+
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+public class VelocityVoiceCommands {
+    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
+
+    private final VelocityTokenManager tokenManager;
+    private final Supplier<VelocityVoiceConfig> configSupplier;
+    private final Supplier<VelocityBackendClient> clientSupplier;
+    private final Consumer<VelocitySessionToken> tokenConsumer;
+    private final Runnable reloadAction;
+
+    public VelocityVoiceCommands(
+        VelocityTokenManager tokenManager,
+        Supplier<VelocityVoiceConfig> configSupplier,
+        Supplier<VelocityBackendClient> clientSupplier,
+        Consumer<VelocitySessionToken> tokenConsumer,
+        Runnable reloadAction
+    ) {
+        this.tokenManager = tokenManager;
+        this.configSupplier = configSupplier;
+        this.clientSupplier = clientSupplier;
+        this.tokenConsumer = tokenConsumer;
+        this.reloadAction = reloadAction;
+    }
+
+    @Command("voice|ve|voiceengine|audio")
+    @Permission("voiceengine.use")
+    @CommandDescription("Connect your microphone to VoiceEngine web client")
+    public void onVoiceConnect(CommandSource source) {
+        if (!(source instanceof Player player)) {
+            source.sendMessage(MINI_MESSAGE.deserialize("<red>Only players can execute this command.</red>"));
+            return;
+        }
+
+        VelocityBackendClient client = clientSupplier != null ? clientSupplier.get() : null;
+        if (client == null || !client.isOpen()) {
+            source.sendMessage(MINI_MESSAGE.deserialize("<red>VoiceEngine backend is currently offline. Please try again in a few moments.</red>"));
+            return;
+        }
+
+        VelocitySessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getUsername(), false);
+        if (tokenConsumer != null) {
+            tokenConsumer.accept(sessionToken);
+        }
+
+        VelocityVoiceConfig config = configSupplier.get();
+        String connectionUrl = config.webClientUrl() + "/?token=" + sessionToken.token();
+        player.sendMessage(MINI_MESSAGE.deserialize(
+            "<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <gray>Click to connect:</gray> <click:open_url:'<url>'><hover:show_text:'<gray>Click to open web client</gray>'><underlined><aqua><url></aqua></underlined></hover></click> <gray>or enter code</gray> <yellow><bold><token></bold></yellow> <dark_gray>(expires in <time>)</dark_gray>",
+            Placeholder.parsed("url", connectionUrl),
+            Placeholder.parsed("token", sessionToken.token()),
+            Placeholder.parsed("time", config.tokenTtl().toMinutes() + "m")
+        ));
+    }
+
+    @Command("voice|ve|voiceengine|audio admin")
+    @Permission("voiceengine.admin")
+    @CommandDescription("Open the VoiceEngine Admin Portal")
+    public void onVoiceAdmin(CommandSource source) {
+        if (!(source instanceof Player player)) {
+            source.sendMessage(MINI_MESSAGE.deserialize("<red>Only players can execute this command.</red>"));
+            return;
+        }
+
+        VelocityBackendClient client = clientSupplier != null ? clientSupplier.get() : null;
+        if (client == null || !client.isOpen()) {
+            source.sendMessage(MINI_MESSAGE.deserialize("<red>VoiceEngine backend is currently offline. Please try again in a few moments.</red>"));
+            return;
+        }
+
+        VelocitySessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getUsername(), true);
+        if (tokenConsumer != null) {
+            tokenConsumer.accept(sessionToken);
+        }
+
+        VelocityVoiceConfig config = configSupplier.get();
+        String adminUrl = config.webClientUrl() + "/admin?token=" + sessionToken.token();
+        player.sendMessage(MINI_MESSAGE.deserialize(
+            "<gradient:#6366f1:#a855f7><bold>[VoiceEngine Admin]</bold></gradient> <gray>Access your admin portal here:</gray> <click:open_url:'<url>'><hover:show_text:'<gray>Click to open admin dashboard</gray>'><underlined><aqua><url></aqua></underlined></hover></click> <gray>or use code</gray> <yellow><bold><token></bold></yellow> <dark_gray>(expires in <time>)</dark_gray>",
+            Placeholder.parsed("url", adminUrl),
+            Placeholder.parsed("token", sessionToken.token()),
+            Placeholder.parsed("time", config.tokenTtl().toMinutes() + "m")
+        ));
+    }
+
+    @Command("voice|ve|voiceengine|audio reload")
+    @Permission("voiceengine.admin.reload")
+    @CommandDescription("Reload VoiceEngine Velocity proxy configuration")
+    public void onVoiceReload(CommandSource source) {
+        if (reloadAction != null) {
+            reloadAction.run();
+        }
+        source.sendMessage(MINI_MESSAGE.deserialize("<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <green>Velocity proxy configuration reloaded successfully!</green>"));
+    }
+
+    @Command("voice|ve|voiceengine|audio status")
+    @Permission("voiceengine.admin.status")
+    @CommandDescription("Inspect backend connection status and active tokens")
+    public void onVoiceStatus(CommandSource source) {
+        VelocityBackendClient client = clientSupplier != null ? clientSupplier.get() : null;
+        boolean connected = client != null && client.isOpen();
+        VelocityVoiceConfig config = configSupplier.get();
+
+        source.sendMessage(MINI_MESSAGE.deserialize(
+            "<gradient:#6366f1:#a855f7><bold>[VoiceEngine Status]</bold></gradient><newline>" +
+            "<gray>Backend URI: </gray><aqua><uri></aqua><newline>" +
+            "<gray>Status: </gray><status><newline>" +
+            "<gray>Reconnect Attempts: </gray><yellow><reconnects></yellow>",
+            Placeholder.parsed("uri", config.voiceServerUri().toString()),
+            Placeholder.parsed("status", connected ? "<green>Connected</green>" : "<red>Disconnected</red>"),
+            Placeholder.parsed("reconnects", String.valueOf(client != null ? client.getReconnectAttempts() : 0))
+        ));
+    }
+}

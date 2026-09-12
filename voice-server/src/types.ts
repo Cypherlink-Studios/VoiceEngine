@@ -4,6 +4,7 @@ import * as mediasoup from 'mediasoup';
 export interface PlayerSpatialState {
   uuid: string;
   username: string;
+  serverId?: string;
   world: string;
   x: number;
   y: number;
@@ -59,6 +60,7 @@ export interface FixedChannelConfig {
   description: string;
   userLimit: number; // 0 = unlimited
   isDefault?: boolean;
+  scope?: 'global' | 'server';
 }
 
 export interface ServerSettings {

@@ -7,13 +7,18 @@ import java.util.List;
 
 public record SpatialTelemetryBatch(
     String type,
+    String serverId,
     long timestamp,
     List<PlayerSpatialState> players
 ) {
     private static final Gson GSON = new GsonBuilder().create();
 
     public SpatialTelemetryBatch(long timestamp, List<PlayerSpatialState> players) {
-        this("telemetry_batch", timestamp, players);
+        this("telemetry_batch", "default", timestamp, players);
+    }
+
+    public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players) {
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players);
     }
 
     public String toJson() {

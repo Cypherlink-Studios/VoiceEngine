@@ -13,6 +13,7 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newLimit, setNewLimit] = useState<number>(0);
+  const [newScope, setNewScope] = useState<'global' | 'server'>('global');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -32,6 +33,7 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
       description: newDesc.trim(),
       userLimit: Math.max(0, newLimit),
       isDefault: false,
+      scope: newScope,
     };
 
     setList([...list, added]);
@@ -39,6 +41,7 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
     setNewName('');
     setNewDesc('');
     setNewLimit(0);
+    setNewScope('global');
   };
 
   const handleRemoveChannel = (id: string) => {
@@ -95,6 +98,9 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
                 <div className="text-sm font-semibold text-white flex items-center gap-2">
                   <span>{ch.name}</span>
                   <span className="text-[10px] font-mono text-slate-400">#{ch.id}</span>
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium ${ch.scope === 'server' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'}`}>
+                    {ch.scope === 'server' ? 'Server' : 'Global'}
+                  </span>
                   {ch.userLimit > 0 && (
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-slate-300">
                       Limit: {ch.userLimit}
@@ -131,7 +137,7 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
           <span>Add New Channel</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
           <div>
             <label className="block text-[10px] text-slate-400 mb-1">ID (Slug)</label>
             <input
@@ -174,6 +180,17 @@ export function ChannelsTab({ channels, onSave }: ChannelsTabProps) {
               onChange={(e) => setNewLimit(parseInt(e.target.value, 10) || 0)}
               className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-white text-xs"
             />
+          </div>
+          <div>
+            <label className="block text-[10px] text-slate-400 mb-1">Scope</label>
+            <select
+              value={newScope}
+              onChange={(e) => setNewScope(e.target.value as 'global' | 'server')}
+              className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-white/10 text-white text-xs cursor-pointer"
+            >
+              <option value="global">Global Network</option>
+              <option value="server">Server-Isolated</option>
+            </select>
           </div>
         </div>
 
