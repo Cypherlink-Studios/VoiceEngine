@@ -14,9 +14,10 @@ interface RadarProps {
   maxRange?: number;
   localUsername?: string;
   localUuid?: string;
+  onPeerClick?: (peer: PeerRadarInfo) => void;
 }
 
-export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid }: RadarProps) {
+export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid, onPeerClick }: RadarProps) {
   const size = 320;
   const center = size / 2;
   const radius = size / 2 - 24;
@@ -124,8 +125,10 @@ export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid }
           return (
             <div
               key={peer.uuid}
-              className="absolute z-30 transform -translate-x-1/2 -translate-y-1/2 transition-all duration-100 ease-linear group"
+              onClick={() => onPeerClick?.(peer)}
+              className="absolute z-30 transform -translate-x-1/2 -translate-y-1/2 transition-all duration-100 ease-linear group cursor-pointer hover:scale-110 active:scale-95"
               style={{ left: px, top: py }}
+              title={`Clic para ajustar volumen de ${peer.username}`}
             >
               <div className="relative flex flex-col items-center">
                 {/* Speaking Glowing Ring */}

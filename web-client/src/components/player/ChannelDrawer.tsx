@@ -8,6 +8,7 @@ interface ChannelDrawerProps {
   channelMembers: ChannelMember[];
   proximityPeersCount: number;
   onSelectChannel: (channelId: string) => void;
+  onMemberClick?: (member: ChannelMember) => void;
 }
 
 export function ChannelDrawer({
@@ -16,6 +17,7 @@ export function ChannelDrawer({
   channelMembers,
   proximityPeersCount,
   onSelectChannel,
+  onMemberClick,
 }: ChannelDrawerProps) {
   return (
     <div className="flex flex-col gap-3 w-full max-w-md bg-slate-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 shadow-xl">
@@ -126,7 +128,12 @@ export function ChannelDrawer({
                   {channelMembers.map((member) => (
                     <div
                       key={member.uuid}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950/80 border border-white/10 text-xs text-slate-200"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMemberClick?.(member);
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-white/25 text-xs text-slate-200 cursor-pointer transition-colors"
+                      title={`Clic para ajustar volumen de ${member.username}`}
                     >
                       <div className="relative">
                         <img

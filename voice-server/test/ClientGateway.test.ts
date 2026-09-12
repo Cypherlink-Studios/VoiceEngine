@@ -124,4 +124,23 @@ describe('ClientGateway', () => {
       });
     });
   });
+
+  it('handles client ping by returning pong with matching timestamp', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'ping', timestamp: 123456789 }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        expect(msg.type).toBe('pong');
+        expect(msg.timestamp).toBe(123456789);
+        ws.close();
+        resolve();
+      });
+    });
+  });
 });
+

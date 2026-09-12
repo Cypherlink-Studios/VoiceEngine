@@ -17,6 +17,7 @@ export interface SignalingCallbacks {
   onChannelChanged?: (channelId: string) => void;
   onChannelMembersUpdated?: (channelId: string, members: ChannelMember[]) => void;
   onChannelPeerSpeaking?: (channelId: string, peerUuid: string, speaking: boolean) => void;
+  onPingUpdated?: (pingMs: number) => void;
 }
 
 export class VoiceSignaling {
@@ -32,6 +33,7 @@ export class VoiceSignaling {
   private audioProducer?: mediasoupTypes.Producer;
   private consumers = new Map<string, mediasoupTypes.Consumer>(); // peerUuid -> consumer
   private peersInfo = new Map<string, PeerRadarInfo>(); // peerUuid -> PeerRadarInfo
+  private pingInterval?: any;
 
   constructor(
     wsUrl: string,
@@ -52,6 +54,7 @@ export class VoiceSignaling {
     this.ws = new WebSocket(this.wsUrl);
 
     this.ws.onopen = async () => {
+      this.startPingLoop();
       // Send authentication request
       this.send({
         type: 'client_auth',
@@ -74,6 +77,7 @@ export class VoiceSignaling {
     };
 
     this.ws.onclose = () => {
+      this.stopPingLoop();
       console.log('[VoiceSignaling] WebSocket closed.');
       this.callbacks.onDisconnected();
     };
@@ -81,6 +85,14 @@ export class VoiceSignaling {
 
   private async handleMessage(msg: any, micStream: MediaStream): Promise<void> {
     switch (msg.type) {
+      case 'pong': {
+        if (typeof msg.timestamp === 'number') {
+          const rtt = Math.max(0, Date.now() - msg.timestamp);
+          this.callbacks.onPingUpdated?.(rtt);
+        }
+        break;
+      }
+
       case 'auth_error': {
         this.callbacks.onError(msg.message || 'Authentication failed');
         break;
@@ -256,7 +268,33 @@ export class VoiceSignaling {
     }
   }
 
+  public async replaceMicrophoneTrack(newTrack: MediaStreamTrack): Promise<void> {
+    if (this.audioProducer) {
+      await this.audioProducer.replaceTrack({ track: newTrack });
+    }
+  }
+
+  private startPingLoop(): void {
+    this.stopPingLoop();
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.send({
+          type: 'ping',
+          timestamp: Date.now(),
+        });
+      }
+    }, 2500);
+  }
+
+  private stopPingLoop(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = undefined;
+    }
+  }
+
   public disconnect(): void {
+    this.stopPingLoop();
     if (this.audioProducer) {
       this.audioProducer.close();
     }

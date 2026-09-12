@@ -185,6 +185,16 @@ export class ClientGateway {
               }
               break;
             }
+
+            case 'ping': {
+              ws.send(
+                JSON.stringify({
+                  type: 'pong',
+                  timestamp: msg.timestamp,
+                })
+              );
+              break;
+            }
           }
         } catch (err) {
           console.error('[ClientGateway] Error handling client message:', err);

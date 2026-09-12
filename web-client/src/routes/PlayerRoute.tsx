@@ -7,6 +7,9 @@ import { VoiceSignaling, ChannelMember } from '../net/VoiceSignaling.js';
 import { Radar, PeerRadarInfo } from '../components/Radar.js';
 import { ControlDock } from '../components/player/ControlDock.js';
 import { ChannelDrawer } from '../components/player/ChannelDrawer.js';
+import { SettingsModal, AudioConstraintsConfig } from '../components/player/SettingsModal.js';
+import { PlayerVolumePopover } from '../components/player/PlayerVolumePopover.js';
+import { soundEffects } from '../audio/SoundEffects.js';
 import { useBrand } from '../components/layout/BrandProvider.js';
 
 export function PlayerRoute() {
@@ -28,6 +31,53 @@ export function PlayerRoute() {
   const [activeChannel, setActiveChannel] = useState<string>('proximity');
   const [channelMembers, setChannelMembers] = useState<ChannelMember[]>([]);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+
+  // Audio Device Selection & Constraints
+  const [selectedInputId, setSelectedInputId] = useState<string>(
+    () => localStorage.getItem('voiceengine:input_device') || ''
+  );
+  const [selectedOutputId, setSelectedOutputId] = useState<string>(
+    () => localStorage.getItem('voiceengine:output_device') || ''
+  );
+  const [audioConstraints, setAudioConstraints] = useState<AudioConstraintsConfig>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem('voiceengine:audio_constraints') || ''
+      );
+    } catch {
+      return { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+    }
+  });
+
+  // Per-User Volumes & Local Mutes
+  const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('voiceengine:peer_volumes') || '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [peerMuted, setPeerMuted] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('voiceengine:peer_muted') || '{}');
+    } catch {
+      return {};
+    }
+  });
+
+  // QoL: Sound Effects & Network Latency
+  const [sfxEnabled, setSfxEnabled] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:sfx_enabled') !== 'false'
+  );
+  const [sfxVolume, setSfxVolume] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem('voiceengine:sfx_volume') || '0.5');
+    return isNaN(v) ? 0.5 : v;
+  });
+  const [pingMs, setPingMs] = useState<number | null>(null);
+
+  // Modals and Popovers
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [popoverPeer, setPopoverPeer] = useState<{ uuid: string; username: string } | null>(null);
 
   const signalingRef = useRef<VoiceSignaling | null>(null);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
@@ -51,20 +101,31 @@ export function PlayerRoute() {
     setIsConnecting(true);
 
     try {
-      // 1. Request microphone permissions
+      // 1. Request microphone permissions with configured device and constraints
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          deviceId: selectedInputId ? { exact: selectedInputId } : undefined,
+          echoCancellation: audioConstraints.echoCancellation,
+          noiseSuppression: audioConstraints.noiseSuppression,
+          autoGainControl: audioConstraints.autoGainControl,
         },
       });
       micStreamRef.current = stream;
 
-      // 2. Initialize Audio Pipeline, Analyser, & VAD
+      // 2. Initialize Audio Pipeline, Analyser, Preferences & VAD
       const pipeline = new SpatialAudioPipeline();
       pipelineRef.current = pipeline;
       pipeline.setMasterVolume(masterVolume);
+      pipeline.loadPreferences(peerVolumes, peerMuted);
+
+      if (selectedOutputId) {
+        await pipeline.setOutputDevice(selectedOutputId);
+      }
+
+      // Initialize procedural sound effects with pipeline audio context
+      soundEffects.init(pipeline.getContext());
+      soundEffects.setEnabled(sfxEnabled);
+      soundEffects.setVolume(sfxVolume);
 
       const localAnalyser = pipeline.createLocalAnalyser(stream);
       setAnalyser(localAnalyser);
@@ -92,6 +153,7 @@ export function PlayerRoute() {
           setLocalPlayer(player);
           setIsConnected(true);
           setIsConnecting(false);
+          soundEffects.playConnect();
         },
         onError: (err) => {
           setErrorMsg(err);
@@ -113,6 +175,9 @@ export function PlayerRoute() {
             prev.map((m) => (m.uuid === peerUuid ? { ...m, isSpeaking: speaking } : m))
           );
         },
+        onPingUpdated: (rtt) => {
+          setPingMs(rtt);
+        },
         onDisconnected: () => {
           handleDisconnect();
         },
@@ -129,6 +194,8 @@ export function PlayerRoute() {
   };
 
   const handleDisconnect = () => {
+    soundEffects.playDisconnect();
+
     signalingRef.current?.disconnect();
     signalingRef.current = null;
 
@@ -150,6 +217,8 @@ export function PlayerRoute() {
     setPeers([]);
     setChannelMembers([]);
     setActiveChannel('proximity');
+    setPingMs(null);
+    setPopoverPeer(null);
   };
 
   const handleToggleMute = () => {
@@ -162,7 +231,117 @@ export function PlayerRoute() {
     if (nextMuted) {
       setIsSpeaking(false);
       signalingRef.current?.notifySpeaking(false);
+      soundEffects.playMute();
+    } else {
+      soundEffects.playUnmute();
     }
+  };
+
+  const handleSelectInputDevice = async (deviceId: string) => {
+    setSelectedInputId(deviceId);
+    localStorage.setItem('voiceengine:input_device', deviceId);
+    if (isConnected) {
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            echoCancellation: audioConstraints.echoCancellation,
+            noiseSuppression: audioConstraints.noiseSuppression,
+            autoGainControl: audioConstraints.autoGainControl,
+          },
+        });
+        const newTrack = newStream.getAudioTracks()[0];
+        if (newTrack) {
+          if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach((t) => t.stop());
+          }
+          micStreamRef.current = newStream;
+          if (isMuted) {
+            newTrack.enabled = false;
+          }
+          await signalingRef.current?.replaceMicrophoneTrack(newTrack);
+
+          if (pipelineRef.current) {
+            const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
+            setAnalyser(newAnalyser);
+          }
+
+          if (vadRef.current) {
+            vadRef.current.stop();
+            const newVad = new VoiceActivityDetector(
+              newStream,
+              {
+                onSpeakingChange: (speaking) => {
+                  setIsSpeaking(speaking);
+                  signalingRef.current?.notifySpeaking(speaking);
+                },
+                onVolumeChange: () => {},
+              },
+              vadThreshold
+            );
+            vadRef.current = newVad;
+          }
+        }
+      } catch (err) {
+        console.error('[PlayerRoute] Failed to switch microphone:', err);
+      }
+    }
+  };
+
+  const handleSelectOutputDevice = async (deviceId: string) => {
+    setSelectedOutputId(deviceId);
+    localStorage.setItem('voiceengine:output_device', deviceId);
+    if (pipelineRef.current) {
+      await pipelineRef.current.setOutputDevice(deviceId);
+    }
+  };
+
+  const handleUpdateConstraints = async (newConstraints: AudioConstraintsConfig) => {
+    setAudioConstraints(newConstraints);
+    localStorage.setItem('voiceengine:audio_constraints', JSON.stringify(newConstraints));
+    if (isConnected) {
+      await handleSelectInputDevice(selectedInputId);
+    }
+  };
+
+  const handleSetPeerVolume = (uuid: string, volume: number) => {
+    setPeerVolumes((prev) => {
+      const next = { ...prev, [uuid]: volume };
+      localStorage.setItem('voiceengine:peer_volumes', JSON.stringify(next));
+      return next;
+    });
+    pipelineRef.current?.setPeerVolume(uuid, volume);
+  };
+
+  const handleSetPeerMuted = (uuid: string, muted: boolean) => {
+    setPeerMuted((prev) => {
+      const next = { ...prev, [uuid]: muted };
+      localStorage.setItem('voiceengine:peer_muted', JSON.stringify(next));
+      return next;
+    });
+    pipelineRef.current?.setPeerMuted(uuid, muted);
+  };
+
+  const handleResetAllVolumes = () => {
+    setPeerVolumes({});
+    setPeerMuted({});
+    localStorage.removeItem('voiceengine:peer_volumes');
+    localStorage.removeItem('voiceengine:peer_muted');
+    if (pipelineRef.current) {
+      pipelineRef.current.loadPreferences({}, {});
+    }
+  };
+
+  const handleToggleSfx = (enabled: boolean) => {
+    setSfxEnabled(enabled);
+    localStorage.setItem('voiceengine:sfx_enabled', String(enabled));
+    soundEffects.setEnabled(enabled);
+  };
+
+  const handleSetSfxVolume = (vol: number) => {
+    setSfxVolume(vol);
+    localStorage.setItem('voiceengine:sfx_volume', String(vol));
+    soundEffects.setVolume(vol);
   };
 
   const handleChangeMasterVolume = (vol: number) => {
@@ -177,9 +356,41 @@ export function PlayerRoute() {
 
   const handleSelectChannel = (channelId: string) => {
     if (channelId === activeChannel) return;
+    soundEffects.playChannelSwitch();
     setActiveChannel(channelId);
     signalingRef.current?.joinChannel(channelId);
   };
+
+  // Keyboard Shortcuts (M for mute with input suppression, Esc to close overlays)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (popoverPeer) {
+          setPopoverPeer(null);
+          return;
+        }
+        if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+          return;
+        }
+      }
+
+      if (e.key === 'm' || e.key === 'M') {
+        const activeEl = document.activeElement;
+        const isInput =
+          activeEl instanceof HTMLInputElement ||
+          activeEl instanceof HTMLTextAreaElement ||
+          (activeEl as HTMLElement)?.isContentEditable;
+        if (!isInput && isConnected) {
+          e.preventDefault();
+          handleToggleMute();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isConnected, isMuted, popoverPeer, isSettingsOpen]);
 
   return (
     <div className="relative min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center select-none overflow-x-hidden">
@@ -325,6 +536,7 @@ export function PlayerRoute() {
                 maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
                 localUsername={localPlayer?.username}
                 localUuid={localPlayer?.uuid}
+                onPeerClick={(peer) => setPopoverPeer({ uuid: peer.uuid, username: peer.username })}
               />
             </div>
 
@@ -336,11 +548,30 @@ export function PlayerRoute() {
                 channelMembers={channelMembers}
                 proximityPeersCount={peers.length}
                 onSelectChannel={handleSelectChannel}
+                onMemberClick={(member) => setPopoverPeer({ uuid: member.uuid, username: member.username })}
               />
             </div>
           </div>
         )}
       </main>
+
+      {/* Player Volume Popover Modal */}
+      {popoverPeer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs"
+          onClick={() => setPopoverPeer(null)}
+        >
+          <PlayerVolumePopover
+            peerUuid={popoverPeer.uuid}
+            peerUsername={popoverPeer.username}
+            volume={peerVolumes[popoverPeer.uuid] ?? 1.0}
+            isMuted={peerMuted[popoverPeer.uuid] ?? false}
+            onVolumeChange={handleSetPeerVolume}
+            onMuteToggle={handleSetPeerMuted}
+            onClose={() => setPopoverPeer(null)}
+          />
+        </div>
+      )}
 
       {/* Floating Control Dock (When Connected) */}
       {isConnected && (
@@ -350,12 +581,39 @@ export function PlayerRoute() {
           masterVolume={masterVolume}
           vadThreshold={vadThreshold}
           analyser={analyser}
+          pingMs={pingMs}
           onToggleMute={handleToggleMute}
           onChangeMasterVolume={handleChangeMasterVolume}
           onChangeVadThreshold={handleChangeVadThreshold}
+          onOpenSettings={() => setIsSettingsOpen(true)}
           onDisconnect={handleDisconnect}
         />
       )}
+
+      {/* Settings Modal (Devices, Volumes, Preferences) */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        selectedInputId={selectedInputId}
+        selectedOutputId={selectedOutputId}
+        onSelectInputDevice={handleSelectInputDevice}
+        onSelectOutputDevice={handleSelectOutputDevice}
+        audioConstraints={audioConstraints}
+        onUpdateConstraints={handleUpdateConstraints}
+        analyserNode={analyser}
+        peers={peers}
+        channelMembers={channelMembers}
+        peerVolumes={peerVolumes}
+        peerMuted={peerMuted}
+        onSetPeerVolume={handleSetPeerVolume}
+        onSetPeerMuted={handleSetPeerMuted}
+        onResetAllVolumes={handleResetAllVolumes}
+        sfxEnabled={sfxEnabled}
+        sfxVolume={sfxVolume}
+        onToggleSfx={handleToggleSfx}
+        onSetSfxVolume={handleSetSfxVolume}
+        pingMs={pingMs}
+      />
     </div>
   );
 }

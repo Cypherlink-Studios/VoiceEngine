@@ -11,6 +11,8 @@ export class SpatialAudioPipeline {
   private audioContext: AudioContext;
   private masterGain: GainNode;
   private peers = new Map<string, PeerAudioNode>();
+  private peerVolumes = new Map<string, number>();
+  private peerMuted = new Map<string, boolean>();
 
   constructor() {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -65,7 +67,9 @@ export class SpatialAudioPipeline {
     const stream = new MediaStream([track]);
     const source = this.audioContext.createMediaStreamSource(stream);
     const gain = this.audioContext.createGain();
-    gain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+    const userVol = this.peerVolumes.get(peerUuid) ?? 1.0;
+    const isMuted = this.peerMuted.get(peerUuid) ?? false;
+    gain.gain.setValueAtTime(isMuted ? 0 : userVol, this.audioContext.currentTime);
 
     if (initialPos.isChannel) {
       // Direct Stereo Routing for Fixed Channels (no spatial filtering or panner)
@@ -164,6 +168,58 @@ export class SpatialAudioPipeline {
   public setMasterVolume(volume: number): void {
     const clamped = Math.max(0, Math.min(1.5, volume));
     this.masterGain.gain.setValueAtTime(clamped, this.audioContext.currentTime);
+  }
+
+  public async setOutputDevice(sinkId: string): Promise<boolean> {
+    try {
+      if ('setSinkId' in this.audioContext && typeof (this.audioContext as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId === 'function') {
+        await (this.audioContext as unknown as { setSinkId: (id: string) => Promise<void> }).setSinkId(sinkId);
+        return true;
+      }
+    } catch (err) {
+      console.warn('[SpatialAudioPipeline] setSinkId failed or unsupported:', err);
+    }
+    return false;
+  }
+
+  public setPeerVolume(peerUuid: string, volume: number): void {
+    const clamped = Math.max(0, Math.min(2.0, volume));
+    this.peerVolumes.set(peerUuid, clamped);
+    this.applyPeerGain(peerUuid);
+  }
+
+  public setPeerMuted(peerUuid: string, muted: boolean): void {
+    this.peerMuted.set(peerUuid, muted);
+    this.applyPeerGain(peerUuid);
+  }
+
+  public getPeerVolume(peerUuid: string): number {
+    return this.peerVolumes.get(peerUuid) ?? 1.0;
+  }
+
+  public isPeerMuted(peerUuid: string): boolean {
+    return this.peerMuted.get(peerUuid) ?? false;
+  }
+
+  public loadPreferences(volumes: Record<string, number>, mutes: Record<string, boolean>): void {
+    for (const [k, v] of Object.entries(volumes)) {
+      this.peerVolumes.set(k, Math.max(0, Math.min(2.0, v)));
+    }
+    for (const [k, v] of Object.entries(mutes)) {
+      this.peerMuted.set(k, Boolean(v));
+    }
+    for (const uuid of this.peers.keys()) {
+      this.applyPeerGain(uuid);
+    }
+  }
+
+  private applyPeerGain(peerUuid: string): void {
+    const peerNode = this.peers.get(peerUuid);
+    if (!peerNode) return;
+    const isMuted = this.peerMuted.get(peerUuid) ?? false;
+    const userVol = this.peerVolumes.get(peerUuid) ?? 1.0;
+    const finalGain = isMuted ? 0 : userVol;
+    peerNode.gain.gain.setValueAtTime(finalGain, this.audioContext.currentTime);
   }
 
   public getContext(): AudioContext {
