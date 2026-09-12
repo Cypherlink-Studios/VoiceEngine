@@ -102,11 +102,14 @@ if ! apt-get update -y; then
     log_warn "Continuing package installation with available package lists..."
 fi
 
-log_info "Installing system packages and native build toolchain for Mediasoup..."
+log_info "Installing system packages and native build toolchain..."
 apt-get install -y \
     curl \
     wget \
     git \
+    tar \
+    xz-utils \
+    openssl \
     build-essential \
     python3 \
     python3-pip \
@@ -117,23 +120,72 @@ apt-get install -y \
     ufw \
     jq
 
+# ------------------------------------------------------------------------------
 # Install OpenJDK 21 (for Gradle toolchain and PaperMC)
-log_info "Installing OpenJDK 21..."
-apt-get install -y openjdk-21-jdk
+# ------------------------------------------------------------------------------
+log_info "Installing OpenJDK 21 / Java runtime..."
+if ! apt-get install -y openjdk-21-jdk; then
+    log_warn "openjdk-21-jdk package not found in current repositories. Installing default-jdk..."
+    apt-get install -y default-jdk
+fi
 
-# Install Node.js 20 LTS via NodeSource
-NODE_MAJOR=0
-if command -v node >/dev/null 2>&1; then
+# ------------------------------------------------------------------------------
+# Install Node.js 20+ and npm (NodeSource with standalone binary fallback)
+# ------------------------------------------------------------------------------
+INSTALL_NODE=true
+if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
     NODE_MAJOR=$(node -v | cut -d'.' -f1 | tr -d 'v')
+    if [ "$NODE_MAJOR" -ge 20 ]; then
+        log_success "Node.js $(node -v) and npm $(npm -v) are already installed."
+        INSTALL_NODE=false
+    fi
 fi
 
-if [ "$NODE_MAJOR" -lt 20 ]; then
-    log_info "Installing Node.js 20 LTS from NodeSource..."
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-    apt-get install -y nodejs
-else
-    log_info "Node.js is already installed at version $(node -v)."
+if [ "$INSTALL_NODE" = true ]; then
+    log_info "Attempting to install Node.js 20 LTS and npm via NodeSource..."
+    NODE_INSTALLED=false
+    if curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; then
+        if apt-get install -y nodejs; then
+            if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+                NODE_INSTALLED=true
+                log_success "Node.js $(node -v) and npm $(npm -v) installed via NodeSource."
+            fi
+        fi
+    fi
+
+    # Fallback to official standalone pre-compiled Node.js binary if NodeSource repository fails
+    if [ "$NODE_INSTALLED" = false ]; then
+        log_warn "NodeSource repository setup was unsuccessful or unsupported. Installing official Node.js v20.18.0 binary..."
+        ARCH=$(uname -m)
+        NODE_ARCH="x64"
+        if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+            NODE_ARCH="arm64"
+        fi
+        NODE_TAR="node-v20.18.0-linux-${NODE_ARCH}.tar.xz"
+        curl -fsSL "https://nodejs.org/dist/v20.18.0/${NODE_TAR}" -o "/tmp/${NODE_TAR}"
+        tar -xJf "/tmp/${NODE_TAR}" -C /usr/local --strip-components=1 --no-same-owner
+        rm -f "/tmp/${NODE_TAR}"
+        log_success "Node.js $(node -v) and npm $(npm -v) installed successfully via official binary."
+    fi
 fi
+
+# Ensure npm is present if system packaged nodejs separately
+if ! command -v npm >/dev/null 2>&1; then
+    log_info "Installing npm package explicitly..."
+    apt-get install -y npm || true
+fi
+
+# ------------------------------------------------------------------------------
+# Verify required dependency tools
+# ------------------------------------------------------------------------------
+log_info "Verifying required dependency tools..."
+for tool in node npm java git curl nginx; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        log_error "Critical dependency '$tool' is not installed or not in PATH."
+        exit 1
+    fi
+    log_success "Found $tool: $(command -v "$tool")"
+done
 
 # ------------------------------------------------------------------------------
 # 4. Monorepo Build Sequence

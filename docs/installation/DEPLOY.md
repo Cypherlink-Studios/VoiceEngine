@@ -91,7 +91,7 @@ Mediasoup compiles native C++ binaries (`mediasoup-worker`) during package insta
 
 ```bash
 sudo apt update && sudo apt upgrade -y
-sudo apt install -y curl wget git build-essential python3 python3-pip pkg-config nginx certbot python3-certbot-nginx ufw jq
+sudo apt install -y curl wget git tar xz-utils openssl build-essential python3 python3-pip pkg-config nginx certbot python3-certbot-nginx ufw jq
 ```
 
 ### Step 2: Install Node.js 20 LTS
