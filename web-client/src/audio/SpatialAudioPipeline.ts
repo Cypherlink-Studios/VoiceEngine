@@ -5,6 +5,7 @@ export interface PeerAudioNode {
   gain: GainNode;
   isSubmerged: boolean;
   isChannel?: boolean;
+  audioEl?: HTMLAudioElement;
 }
 
 export class SpatialAudioPipeline {
@@ -65,6 +66,34 @@ export class SpatialAudioPipeline {
     }
 
     const stream = new MediaStream([track]);
+
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+
+    // HTMLAudioElement sink is required in Chromium (Brave/Chrome/Edge) to activate WebRTC audio receiving pipeline
+    const audioEl = document.createElement('audio');
+    audioEl.srcObject = stream;
+    audioEl.autoplay = true;
+    (audioEl as any).playsInline = true;
+    audioEl.play().catch((err) => {
+      console.warn('[SpatialAudioPipeline] Auto-play was prevented on audio element:', err);
+    });
+
+    track.onunmute = () => {
+      console.log('[SpatialAudioPipeline] Track unmuted (audio packets flowing) for:', peerUuid);
+    };
+
+    console.log('[SpatialAudioPipeline] Added peer stream for:', peerUuid, {
+      trackId: track.id,
+      trackKind: track.kind,
+      trackEnabled: track.enabled,
+      trackMuted: track.muted,
+      trackReadyState: track.readyState,
+      audioContextState: this.audioContext.state,
+      isChannel: Boolean(initialPos.isChannel),
+    });
+
     const source = this.audioContext.createMediaStreamSource(stream);
     const gain = this.audioContext.createGain();
     const userVol = this.peerVolumes.get(peerUuid) ?? 1.0;
@@ -81,6 +110,7 @@ export class SpatialAudioPipeline {
         gain,
         isSubmerged: false,
         isChannel: true,
+        audioEl,
       });
       return;
     }
@@ -123,6 +153,7 @@ export class SpatialAudioPipeline {
       gain,
       isSubmerged,
       isChannel: false,
+      audioEl,
     });
   }
 
@@ -157,6 +188,11 @@ export class SpatialAudioPipeline {
   public removePeerStream(peerUuid: string): void {
     const peerNode = this.peers.get(peerUuid);
     if (peerNode) {
+      if (peerNode.audioEl) {
+        peerNode.audioEl.pause();
+        peerNode.audioEl.srcObject = null;
+        peerNode.audioEl.remove();
+      }
       peerNode.gain.disconnect();
       peerNode.panner?.disconnect();
       peerNode.filter?.disconnect();

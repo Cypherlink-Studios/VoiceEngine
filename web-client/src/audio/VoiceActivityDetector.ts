@@ -7,7 +7,6 @@ export class VoiceActivityDetector {
   private audioContext: AudioContext;
   private analyser: AnalyserNode;
   private source: MediaStreamAudioSourceNode;
-  private mediaStream: MediaStream;
   private threshold: number; // 0.0 to 1.0
   private hangoverMs: number;
   private callbacks: VADCallbacks;
@@ -23,7 +22,6 @@ export class VoiceActivityDetector {
     threshold = 0.04,
     hangoverMs = 250
   ) {
-    this.mediaStream = stream;
     this.callbacks = callbacks;
     this.threshold = threshold;
     this.hangoverMs = hangoverMs;
@@ -46,6 +44,14 @@ export class VoiceActivityDetector {
 
   public getThreshold(): number {
     return this.threshold;
+  }
+
+  public reset(): void {
+    if (this.hangoverTimer) {
+      clearTimeout(this.hangoverTimer);
+      this.hangoverTimer = null;
+    }
+    this.isSpeaking = false;
   }
 
   private start(): void {
@@ -75,14 +81,12 @@ export class VoiceActivityDetector {
 
         if (!this.isSpeaking) {
           this.isSpeaking = true;
-          this.setTrackMuted(false);
           this.callbacks.onSpeakingChange(true);
         }
       } else if (this.isSpeaking && !this.hangoverTimer) {
         this.hangoverTimer = setTimeout(() => {
           this.isSpeaking = false;
           this.hangoverTimer = null;
-          this.setTrackMuted(true);
           this.callbacks.onSpeakingChange(false);
         }, this.hangoverMs);
       }
@@ -91,13 +95,6 @@ export class VoiceActivityDetector {
     };
 
     this.animationFrameId = requestAnimationFrame(checkAudio);
-  }
-
-  private setTrackMuted(muted: boolean): void {
-    const audioTrack = this.mediaStream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = !muted;
-    }
   }
 
   public stop(): void {

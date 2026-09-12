@@ -106,6 +106,9 @@ export class VoiceSignaling {
 
         // 1. Create Send Transport
         this.sendTransport = this.device.createSendTransport(msg.sendTransportOptions);
+        this.sendTransport.on('connectionstatechange', (state) => {
+          console.log('[VoiceSignaling] Send transport state:', state);
+        });
         this.sendTransport.on('connect', ({ dtlsParameters }, callback) => {
           this.send({
             type: 'connect_transport',
@@ -136,6 +139,9 @@ export class VoiceSignaling {
 
         // 2. Create Receive Transport
         this.recvTransport = this.device.createRecvTransport(msg.recvTransportOptions);
+        this.recvTransport.on('connectionstatechange', (state) => {
+          console.log('[VoiceSignaling] Recv transport state:', state);
+        });
         this.recvTransport.on('connect', ({ dtlsParameters }, callback) => {
           this.send({
             type: 'connect_transport',
@@ -169,6 +175,13 @@ export class VoiceSignaling {
         });
 
         this.consumers.set(msg.peerUuid, consumer);
+        console.log('[VoiceSignaling] Consuming audio from peer:', msg.peerUuid, {
+          consumerId: consumer.id,
+          producerId: consumer.producerId,
+          track: consumer.track,
+          trackEnabled: consumer.track.enabled,
+          trackMuted: consumer.track.muted,
+        });
 
         // Add to Web Audio spatial or stereo graph
         this.pipeline.addPeerStream(msg.peerUuid, consumer.track, {

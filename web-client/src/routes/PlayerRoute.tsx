@@ -213,6 +213,8 @@ export function PlayerRoute() {
     setAnalyser(null);
     setIsConnected(false);
     setIsConnecting(false);
+    setIsMuted(false);
+    setIsSpeaking(false);
     setLocalPlayer(null);
     setPeers([]);
     setChannelMembers([]);
@@ -230,6 +232,7 @@ export function PlayerRoute() {
     setIsMuted(nextMuted);
     if (nextMuted) {
       setIsSpeaking(false);
+      vadRef.current?.reset();
       signalingRef.current?.notifySpeaking(false);
       soundEffects.playMute();
     } else {
