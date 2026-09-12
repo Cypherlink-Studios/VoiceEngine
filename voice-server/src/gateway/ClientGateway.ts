@@ -46,8 +46,12 @@ export class ClientGateway {
 
           switch (msg.type) {
             case 'client_auth': {
-              const tokenRecord = this.tokenStore.validateAndRedeem(msg.token);
+              const tokenKey = (msg.token || '').toUpperCase().trim();
+              const tokenRecord = this.tokenStore.validateAndRedeem(tokenKey);
               if (!tokenRecord) {
+                console.warn(
+                  `[ClientGateway] Rejected token: "${tokenKey}". Registered tokens: [${this.tokenStore.getTokens().join(', ')}]`
+                );
                 ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid or expired token' }));
                 ws.close(4002, 'Invalid token');
                 return;

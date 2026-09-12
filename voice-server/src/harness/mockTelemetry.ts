@@ -124,6 +124,18 @@ export function runMockTelemetry(serverUrl = 'ws://localhost:3000/ws/plugin', se
     }
   });
 
+  ws.on('error', (err) => {
+    console.warn(`[MockTelemetry] Connection error: ${err.message}`);
+  });
+
+  ws.on('close', () => {
+    console.log('[MockTelemetry] Disconnected from server.');
+    if (!process.env.VITEST) {
+      console.log('[MockTelemetry] Retrying connection in 2 seconds...');
+      setTimeout(() => runMockTelemetry(serverUrl, secret), 2000);
+    }
+  });
+
   return ws;
 }
 

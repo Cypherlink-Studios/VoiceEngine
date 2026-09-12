@@ -48,6 +48,46 @@ const sfu = new MediasoupManager();
 let pluginGateway: PluginGateway;
 let clientGateway: ClientGateway;
 
+// Pre-seed mock players so local testing works out of the box
+spatialEngine.updateBatch([
+  {
+    uuid: '00000000-0000-0000-0000-000000000001',
+    username: 'Steve',
+    world: 'world',
+    x: 0,
+    y: 64,
+    z: 0,
+    yaw: 180,
+    pitch: 0,
+    isSneaking: false,
+    isSubmerged: false,
+  },
+  {
+    uuid: '00000000-0000-0000-0000-000000000002',
+    username: 'Alex',
+    world: 'world',
+    x: 8,
+    y: 64,
+    z: 8,
+    yaw: 0,
+    pitch: 0,
+    isSneaking: false,
+    isSubmerged: false,
+  },
+  {
+    uuid: '00000000-0000-0000-0000-000000000003',
+    username: 'Submariner',
+    world: 'world',
+    x: -6,
+    y: 58,
+    z: 6,
+    yaw: 90,
+    pitch: 0,
+    isSneaking: false,
+    isSubmerged: true,
+  },
+]);
+
 // Status & Health Endpoint
 app.get('/health', (_req, res) => {
   res.json({
