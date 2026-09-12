@@ -1,0 +1,31 @@
+# VoiceEngine Spanish Language Bundle (es_ES)
+prefix: "<gradient:#00d2ff:#3a7bd5><b>[VoiceEngine]</b></gradient> "
+prefix_admin: "<gradient:#f12711:#f5af19><b>[VoiceEngine Admin]</b></gradient> "
+
+command:
+  connect:
+    prompt: "<prefix><click:open_url:'<url>'><hover:show_text:'<yellow>Haz clic para abrir el enlace de conexión</yellow>'><u><green>Haz clic aquí para conectar tu micrófono</green></u></hover></click> <gray>(código: <white><token></white>, expira en <time>)</gray>"
+    only_players: "<prefix><red>Solo los jugadores pueden conectarse a VoiceEngine.</red>"
+    no_permission: "<prefix><red>No tienes permiso para usar VoiceEngine.</red>"
+    backend_offline: "<prefix><red>El servidor de voz está desconectado. No se puede generar la sesión.</red>"
+  admin:
+    prompt: "<prefix_admin><click:open_url:'<url>'><hover:show_text:'<gold>Haz clic para abrir el Panel de Administración</gold>'><u><yellow>Haz clic aquí para abrir el Panel de Administración</yellow></u></hover></click> <gray>(código: <white><token></white>, expira en <time>)</gray>"
+    no_permission: "<prefix_admin><red>No tienes permiso para acceder al panel de administración de VoiceEngine.</red>"
+    backend_offline: "<prefix_admin><red>El servidor de voz está desconectado. No se puede generar la sesión administrativa.</red>"
+  reload:
+    success: "<prefix><green>¡Configuración y archivos de idioma recargados exitosamente!</green>"
+    no_permission: "<prefix><red>No tienes permiso para recargar VoiceEngine.</red>"
+  status:
+    header: "<prefix><dark_aqua>--- Estado del Backend de VoiceEngine ---</dark_aqua>"
+    connected: "<gray>Estado: <green>CONECTADO</green></gray>"
+    disconnected: "<gray>Estado: <red>DESCONECTADO</red> <dark_gray>(intentos de reconexión: <yellow><attempts></yellow>)</dark_gray></gray>"
+    uri: "<gray>URI del Servidor: <aqua><uri></aqua></gray>"
+    active_tokens: "<gray>Tokens de Sesión Activos: <gold><count></gold></gray>"
+    no_permission: "<prefix><red>No tienes permiso para inspeccionar el estado de VoiceEngine.</red>"
+
+notification:
+  join: "<prefix><gray>¡El chat de voz por proximidad está activo! Escribe <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> para unirte.</gray>"
+
+error:
+  invalid_syntax: "<prefix><red>Sintaxis inválida: <yellow><syntax></yellow></red>"
+  generic: "<prefix><red>Ocurrió un error al ejecutar este comando.</red>"

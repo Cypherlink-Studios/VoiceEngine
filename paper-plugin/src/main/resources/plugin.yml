@@ -4,15 +4,16 @@ main: com.voiceengine.VoiceEnginePlugin
 api-version: '1.21'
 author: VoiceEngine Team
 description: Zero-mod Proximity Voice Chat Paper plugin
-commands:
-  voice:
-    description: Connect your microphone to VoiceEngine web client
-    permission: voiceengine.use
-    usage: /<command>
 permissions:
   voiceengine.use:
     description: Allows connecting to VoiceEngine
     default: true
   voiceengine.admin:
     description: Allows accessing the VoiceEngine admin portal
+    default: op
+  voiceengine.admin.reload:
+    description: Allows reloading VoiceEngine configuration and translations
+    default: op
+  voiceengine.admin.status:
+    description: Allows viewing VoiceEngine backend connectivity and status
     default: op

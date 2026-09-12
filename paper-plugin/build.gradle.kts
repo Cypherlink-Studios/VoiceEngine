@@ -1,6 +1,6 @@
 plugins {
     `java-library`
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "8.3.7"
 }
 
 group = "com.voiceengine"
@@ -14,6 +14,8 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
+    implementation("org.incendo:cloud-paper:2.0.0")
+    implementation("org.incendo:cloud-annotations:2.0.0")
     compileOnly("com.google.code.gson:gson:2.11.0")
 
     testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
@@ -48,6 +50,7 @@ tasks.jar {
 tasks.shadowJar {
     archiveBaseName.set("VoiceEngine-paper")
     archiveClassifier.set("")
+    relocate("org.incendo.cloud", "com.voiceengine.libs.cloud")
 }
 
 tasks.assemble {

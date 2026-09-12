@@ -1,123 +1,158 @@
 package com.voiceengine;
 
+import com.voiceengine.api.VoiceEngine;
+import com.voiceengine.api.VoiceEngineAPI;
+import com.voiceengine.api.VoiceEngineAPIImpl;
+import com.voiceengine.api.event.PlayerSpeakingStateChangeEvent;
 import com.voiceengine.auth.TokenManager;
-import com.voiceengine.command.VoiceCommand;
+import com.voiceengine.command.CommandService;
+import com.voiceengine.command.VoiceCommands;
+import com.voiceengine.config.VoiceConfig;
+import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
-import com.voiceengine.telemetry.SpatialTelemetryBatch;
+import com.voiceengine.service.TelemetryService;
+import com.voiceengine.service.VisualFeedbackService;
 import com.voiceengine.telemetry.TelemetryCollector;
 import com.voiceengine.visual.SpeechFeedbackHandler;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.event.ClickEvent;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.net.URI;
-import java.time.Duration;
+import java.util.UUID;
 
 public class VoiceEnginePlugin extends JavaPlugin implements Listener {
+    private VoiceConfig voiceConfig;
+    private TranslationService translationService;
     private TokenManager tokenManager;
     private SpeechFeedbackHandler speechFeedbackHandler;
     private TelemetryCollector telemetryCollector;
     private VoiceBackendClient voiceBackendClient;
 
-    private BukkitTask telemetryTask;
-    private BukkitTask visualTask;
+    private TelemetryService telemetryService;
+    private VisualFeedbackService visualFeedbackService;
+    private CommandService commandService;
+    private VoiceEngineAPI api;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        this.voiceConfig = VoiceConfig.fromConfiguration(getConfig());
 
-        String voiceServerUrl = getConfig().getString("voice-server-url", "ws://localhost:3000/ws/plugin");
-        String webClientUrl = getConfig().getString("web-client-url", "http://localhost:5173");
-        String secretKey = getConfig().getString("secret-key", "change-me-to-a-secure-random-secret");
-        int tickRateHz = Math.max(1, Math.min(20, getConfig().getInt("tick-rate-hz", 10)));
-        long tokenTtlMinutes = getConfig().getLong("token-ttl-minutes", 5);
+        // 1. Initialize Localization
+        this.translationService = new TranslationService();
+        this.translationService.load(getDataFolder(), voiceConfig.defaultLocale());
 
-        this.tokenManager = new TokenManager(Duration.ofMinutes(tokenTtlMinutes), 6);
+        // 2. Initialize Core Handlers
+        this.tokenManager = new TokenManager(voiceConfig.tokenTtl(), 6);
         this.speechFeedbackHandler = new SpeechFeedbackHandler();
         this.telemetryCollector = new TelemetryCollector();
 
-        // Connect to Voice Server
-        try {
-            this.voiceBackendClient = new VoiceBackendClient(
-                URI.create(voiceServerUrl),
-                secretKey,
-                speechFeedbackHandler
-            );
-            this.voiceBackendClient.connect();
-        } catch (Exception e) {
-            getLogger().warning("Failed to initialize VoiceBackendClient: " + e.getMessage());
-        }
+        // 3. Connect to Voice Server Backend
+        initVoiceBackendClient();
 
-        // Register Command & Events
-        if (getCommand("voice") != null) {
-            getCommand("voice").setExecutor(new VoiceCommand(
-                tokenManager,
-                webClientUrl,
-                token -> {
-                    if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
-                        voiceBackendClient.registerToken(token);
-                    }
-                },
-                () -> voiceBackendClient != null && voiceBackendClient.isOpen()
-            ));
-        }
+        // 4. Register Public API
+        this.api = new VoiceEngineAPIImpl(tokenManager, speechFeedbackHandler, () -> voiceBackendClient);
+        VoiceEngine.setApi(this.api);
+        getServer().getServicesManager().register(VoiceEngineAPI.class, this.api, this, ServicePriority.Normal);
+
+        // 5. Initialize Schedulers / Services
+        this.telemetryService = new TelemetryService(this, telemetryCollector, () -> voiceBackendClient, voiceConfig.tickRateHz());
+        this.telemetryService.start();
+
+        this.visualFeedbackService = new VisualFeedbackService(this, speechFeedbackHandler);
+        this.visualFeedbackService.start();
+
+        // 6. Initialize Commands via Incendo Cloud v2
+        this.commandService = new CommandService(this, translationService);
+        this.commandService.initialize();
+        this.commandService.registerCommands(new VoiceCommands(
+            tokenManager,
+            () -> voiceConfig,
+            () -> voiceBackendClient,
+            translationService,
+            token -> {
+                if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                    voiceBackendClient.registerToken(token);
+                }
+            },
+            this::reloadPlugin
+        ));
+
+        // 7. Register Bukkit Events
         getServer().getPluginManager().registerEvents(this, this);
-
-        // Schedule Telemetry Streaming
-        long periodTicks = Math.max(1L, 20L / tickRateHz);
-        this.telemetryTask = Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
-            if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
-                SpatialTelemetryBatch batch = telemetryCollector.collectBatch(Bukkit.getOnlinePlayers());
-                voiceBackendClient.sendTelemetry(batch);
-            }
-        }, periodTicks, periodTicks);
-
-        // Schedule In-game visual speech indicators on main thread
-        this.visualTask = Bukkit.getScheduler().runTaskTimer(this, () -> {
-            speechFeedbackHandler.renderVisualIndicators();
-        }, 5L, 5L);
 
         getLogger().info("VoiceEngine plugin enabled successfully!");
     }
 
     @Override
     public void onDisable() {
-        if (telemetryTask != null) {
-            telemetryTask.cancel();
+        if (telemetryService != null) {
+            telemetryService.stop();
         }
-        if (visualTask != null) {
-            visualTask.cancel();
+        if (visualFeedbackService != null) {
+            visualFeedbackService.stop();
         }
         if (voiceBackendClient != null) {
             voiceBackendClient.shutdown();
         }
-        if (speechFeedbackHandler != null) {
-            speechFeedbackHandler.clear();
-        }
+        getServer().getServicesManager().unregisterAll(this);
+        VoiceEngine.setApi(null);
+
         getLogger().info("VoiceEngine plugin disabled.");
+    }
+
+    public void reloadPlugin() {
+        reloadConfig();
+        this.voiceConfig = VoiceConfig.fromConfiguration(getConfig());
+        this.translationService.load(getDataFolder(), voiceConfig.defaultLocale());
+
+        if (telemetryService != null) {
+            telemetryService.updateTickRate(voiceConfig.tickRateHz());
+        }
+
+        // Reconnect backend client if URI or secret changed
+        if (voiceBackendClient == null || !voiceBackendClient.getURI().equals(voiceConfig.voiceServerUri())) {
+            if (voiceBackendClient != null) {
+                voiceBackendClient.shutdown();
+            }
+            initVoiceBackendClient();
+        }
+
+        getLogger().info("VoiceEngine configuration and translations reloaded.");
+    }
+
+    private void initVoiceBackendClient() {
+        try {
+            this.voiceBackendClient = new VoiceBackendClient(
+                voiceConfig.voiceServerUri(),
+                voiceConfig.secretKey(),
+                speechFeedbackHandler,
+                this::handleSpeechEvent
+            );
+            this.voiceBackendClient.connect();
+        } catch (Exception e) {
+            getLogger().warning("Failed to initialize VoiceBackendClient: " + e.getMessage());
+        }
+    }
+
+    private void handleSpeechEvent(UUID playerUuid, boolean speaking) {
+        Bukkit.getScheduler().runTask(this, () -> {
+            Player player = Bukkit.getPlayer(playerUuid);
+            PlayerSpeakingStateChangeEvent event = new PlayerSpeakingStateChangeEvent(playerUuid, player, speaking);
+            Bukkit.getPluginManager().callEvent(event);
+        });
     }
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (getConfig().getBoolean("notify-on-join", true)) {
+        if (voiceConfig != null && voiceConfig.notifyOnJoin()) {
             Bukkit.getScheduler().runTaskLater(this, () -> {
                 if (event.getPlayer().isOnline()) {
-                    event.getPlayer().sendMessage(
-                        Component.text()
-                            .append(Component.text("[VoiceEngine] ", NamedTextColor.AQUA, TextDecoration.BOLD))
-                            .append(Component.text("Proximity voice is active! Type ", NamedTextColor.GRAY))
-                            .append(Component.text("/voice", NamedTextColor.YELLOW, TextDecoration.UNDERLINED)
-                                .clickEvent(ClickEvent.runCommand("/voice")))
-                            .append(Component.text(" to join.", NamedTextColor.GRAY))
-                            .build()
-                    );
+                    translationService.send(event.getPlayer(), "notification.join");
                 }
             }, 40L); // 2 seconds after join
         }
@@ -129,5 +164,17 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
     public SpeechFeedbackHandler getSpeechFeedbackHandler() {
         return speechFeedbackHandler;
+    }
+
+    public VoiceConfig getVoiceConfig() {
+        return voiceConfig;
+    }
+
+    public TranslationService getTranslationService() {
+        return translationService;
+    }
+
+    public VoiceEngineAPI getApi() {
+        return api;
     }
 }

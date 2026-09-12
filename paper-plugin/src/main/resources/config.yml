@@ -17,3 +17,6 @@ token-ttl-minutes: 5
 
 # Show connection prompt in chat when players join
 notify-on-join: true
+
+# Default language locale for players with unsupported client locales (e.g. en_US, es_ES)
+default-locale: "en_US"

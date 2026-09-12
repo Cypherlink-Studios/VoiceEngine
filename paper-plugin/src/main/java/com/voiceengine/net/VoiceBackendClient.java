@@ -25,6 +25,7 @@ public class VoiceBackendClient extends WebSocketClient {
 
     private final String secretKey;
     private final SpeechFeedbackHandler speechFeedbackHandler;
+    private final java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     private volatile boolean intentionalClose = false;
@@ -35,9 +36,19 @@ public class VoiceBackendClient extends WebSocketClient {
         String secretKey,
         SpeechFeedbackHandler speechFeedbackHandler
     ) {
+        this(serverUri, secretKey, speechFeedbackHandler, null);
+    }
+
+    public VoiceBackendClient(
+        URI serverUri,
+        String secretKey,
+        SpeechFeedbackHandler speechFeedbackHandler,
+        java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange
+    ) {
         super(serverUri, createHeaders(secretKey));
         this.secretKey = secretKey;
         this.speechFeedbackHandler = speechFeedbackHandler;
+        this.onSpeakingStateChange = onSpeakingStateChange;
     }
 
     private static Map<String, String> createHeaders(String secretKey) {
@@ -67,7 +78,11 @@ public class VoiceBackendClient extends WebSocketClient {
             if ("speech_status".equals(type)) {
                 String uuidStr = json.get("uuid").getAsString();
                 boolean speaking = json.get("speaking").getAsBoolean();
-                speechFeedbackHandler.setSpeaking(UUID.fromString(uuidStr), speaking);
+                UUID uuid = UUID.fromString(uuidStr);
+                speechFeedbackHandler.setSpeaking(uuid, speaking);
+                if (onSpeakingStateChange != null) {
+                    onSpeakingStateChange.accept(uuid, speaking);
+                }
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[VoiceEngine] Failed to parse message from voice server: " + message, e);
@@ -122,6 +137,10 @@ public class VoiceBackendClient extends WebSocketClient {
                 }
             }
         }, delaySeconds, TimeUnit.SECONDS);
+    }
+
+    public int getReconnectAttempts() {
+        return reconnectAttempts;
     }
 
     public void shutdown() {

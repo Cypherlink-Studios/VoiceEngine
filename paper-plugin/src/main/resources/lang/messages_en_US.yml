@@ -1,0 +1,31 @@
+# VoiceEngine English Language Bundle (en_US)
+prefix: "<gradient:#00d2ff:#3a7bd5><b>[VoiceEngine]</b></gradient> "
+prefix_admin: "<gradient:#f12711:#f5af19><b>[VoiceEngine Admin]</b></gradient> "
+
+command:
+  connect:
+    prompt: "<prefix><click:open_url:'<url>'><hover:show_text:'<yellow>Click to open connection link</yellow>'><u><green>Click here to connect your microphone</green></u></hover></click> <gray>(code: <white><token></white>, expires in <time>)</gray>"
+    only_players: "<prefix><red>Only players can connect to VoiceEngine.</red>"
+    no_permission: "<prefix><red>You do not have permission to use VoiceEngine.</red>"
+    backend_offline: "<prefix><red>Voice backend is offline. Unable to generate session.</red>"
+  admin:
+    prompt: "<prefix_admin><click:open_url:'<url>'><hover:show_text:'<gold>Click to open Admin Portal</gold>'><u><yellow>Click here to open the Admin Portal</yellow></u></hover></click> <gray>(code: <white><token></white>, expires in <time>)</gray>"
+    no_permission: "<prefix_admin><red>You do not have permission to access the VoiceEngine admin portal.</red>"
+    backend_offline: "<prefix_admin><red>Voice backend is offline. Unable to generate admin session.</red>"
+  reload:
+    success: "<prefix><green>Configuration and language files reloaded successfully!</green>"
+    no_permission: "<prefix><red>You do not have permission to reload VoiceEngine.</red>"
+  status:
+    header: "<prefix><dark_aqua>--- VoiceEngine Backend Status ---</dark_aqua>"
+    connected: "<gray>Status: <green>CONNECTED</green></gray>"
+    disconnected: "<gray>Status: <red>DISCONNECTED</red> <dark_gray>(reconnect attempts: <yellow><attempts></yellow>)</dark_gray></gray>"
+    uri: "<gray>Server URI: <aqua><uri></aqua></gray>"
+    active_tokens: "<gray>Active Session Tokens: <gold><count></gold></gray>"
+    no_permission: "<prefix><red>You do not have permission to inspect VoiceEngine status.</red>"
+
+notification:
+  join: "<prefix><gray>Proximity voice is active! Type <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> to join.</gray>"
+
+error:
+  invalid_syntax: "<prefix><red>Invalid syntax: <yellow><syntax></yellow></red>"
+  generic: "<prefix><red>An error occurred while executing this command.</red>"

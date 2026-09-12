@@ -77,6 +77,15 @@ public class TokenManager {
         return (int) tokens.values().stream().filter(t -> !t.isExpired() && !t.redeemed()).count();
     }
 
+    public Optional<SessionToken> getToken(UUID playerUuid) {
+        if (playerUuid == null) {
+            return Optional.empty();
+        }
+        return tokens.values().stream()
+            .filter(t -> t.playerUuid().equals(playerUuid) && !t.isExpired())
+            .findFirst();
+    }
+
     private String generateUniqueCode() {
         for (int attempt = 0; attempt < 100; attempt++) {
             StringBuilder sb = new StringBuilder(tokenLength);
