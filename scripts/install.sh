@@ -97,7 +97,10 @@ fi
 # 3. System Package Provisioning
 # ------------------------------------------------------------------------------
 log_info "Updating package lists..."
-apt-get update -y
+if ! apt-get update -y; then
+    log_warn "apt-get update encountered errors (commonly caused by broken or outdated third-party PPAs)."
+    log_warn "Continuing package installation with available package lists..."
+fi
 
 log_info "Installing system packages and native build toolchain for Mediasoup..."
 apt-get install -y \
