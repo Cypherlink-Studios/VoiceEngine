@@ -2,7 +2,7 @@
   "branding": {
     "serverName": "VoiceEngine Test Server",
     "tagline": "Zero-Mod Proximity Voice Chat",
-    "logoUrl": "https://cdn.discordapp.com/attachments/1259157431020425306/1548061733179097178/LogoVIRTHA3.png?ex=6aa5b056&is=6aa45ed6&hm=60ead99a530c7cb38db748eec56510bf6aa383e3762bf1f7998d939ba97644ab&",
+    "logoUrl": "",
     "backgroundUrl": "",
     "primaryColor": "#6366f1",
     "accentColor": "#22c55e",
@@ -27,13 +27,6 @@
       "name": "Staff Room",
       "description": "Private room for server staff",
       "userLimit": 10,
-      "isDefault": false
-    },
-    {
-      "id": "test",
-      "name": "Testing",
-      "description": "cosas",
-      "userLimit": 0,
       "isDefault": false
     }
   ]
