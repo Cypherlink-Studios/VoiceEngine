@@ -240,6 +240,5 @@ export class VoiceSignaling {
     if (this.ws) {
       this.ws.close();
     }
-    this.pipeline.close();
   }
 }

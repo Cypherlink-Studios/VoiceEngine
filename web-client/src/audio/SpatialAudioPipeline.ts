@@ -139,7 +139,9 @@ export class SpatialAudioPipeline {
     for (const uuid of this.peers.keys()) {
       this.removePeerStream(uuid);
     }
-    this.audioContext.close();
+    if (this.audioContext.state !== 'closed') {
+      this.audioContext.close().catch(() => {});
+    }
   }
 
   private setPannerPosition(panner: PannerNode, x: number, y: number, z: number): void {

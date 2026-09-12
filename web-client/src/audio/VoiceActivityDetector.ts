@@ -104,11 +104,17 @@ export class VoiceActivityDetector {
     this.isRunning = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
     }
     if (this.hangoverTimer) {
       clearTimeout(this.hangoverTimer);
+      this.hangoverTimer = null;
     }
-    this.source.disconnect();
-    this.audioContext.close();
+    try {
+      this.source.disconnect();
+    } catch {}
+    if (this.audioContext.state !== 'closed') {
+      this.audioContext.close().catch(() => {});
+    }
   }
 }

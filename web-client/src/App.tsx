@@ -106,19 +106,28 @@ export default function App() {
   };
 
   const handleDisconnect = () => {
-    signalingRef.current?.disconnect();
-    signalingRef.current = null;
+    if (signalingRef.current) {
+      const sig = signalingRef.current;
+      signalingRef.current = null;
+      sig.disconnect();
+    }
 
-    vadRef.current?.stop();
-    vadRef.current = null;
+    if (vadRef.current) {
+      const vad = vadRef.current;
+      vadRef.current = null;
+      vad.stop();
+    }
 
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
 
-    pipelineRef.current?.close();
-    pipelineRef.current = null;
+    if (pipelineRef.current) {
+      const pipe = pipelineRef.current;
+      pipelineRef.current = null;
+      pipe.close();
+    }
 
     setIsConnected(false);
     setIsConnecting(false);
