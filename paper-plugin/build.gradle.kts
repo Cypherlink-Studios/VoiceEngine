@@ -1,5 +1,6 @@
 plugins {
     `java-library`
+    id("com.gradleup.shadow") version "8.3.6"
 }
 
 group = "com.voiceengine"
@@ -13,10 +14,11 @@ repositories {
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
-    implementation("com.google.code.gson:gson:2.11.0")
+    compileOnly("com.google.code.gson:gson:2.11.0")
 
     testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testImplementation("org.mockito:mockito-core:5.14.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -36,4 +38,18 @@ tasks.withType<JavaCompile> {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.jar {
+    archiveBaseName.set("VoiceEngine-paper")
+    archiveClassifier.set("thin")
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("VoiceEngine-paper")
+    archiveClassifier.set("")
+}
+
+tasks.assemble {
+    dependsOn(tasks.shadowJar)
 }

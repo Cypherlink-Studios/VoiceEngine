@@ -73,6 +73,7 @@ export class ClientGateway {
                 recvTransport,
                 consumers: new Map(),
                 isSpeaking: false,
+                activeChannel: 'proximity',
               };
 
               this.sessions.set(sessionId, session);
@@ -131,7 +132,57 @@ export class ClientGateway {
             case 'speaking': {
               if (!session) return;
               session.isSpeaking = !!msg.speaking;
-              this.pluginGateway.notifySpeechStatus(session.playerUuid, session.isSpeaking);
+              if (!session.activeChannel || session.activeChannel === 'proximity') {
+                this.pluginGateway.notifySpeechStatus(session.playerUuid, session.isSpeaking);
+              } else {
+                this.broadcastChannelSpeaking(session);
+              }
+              break;
+            }
+
+            case 'join_channel': {
+              if (!session) return;
+              const targetChannel =
+                typeof msg.channelId === 'string' && msg.channelId.trim()
+                  ? msg.channelId.trim().toLowerCase()
+                  : 'proximity';
+
+              const prevChannel = session.activeChannel || 'proximity';
+              if (prevChannel === targetChannel) {
+                return;
+              }
+
+              // Close all current consumers
+              for (const [peerUuid, consumer] of session.consumers.entries()) {
+                consumer.close();
+                session.ws.send(
+                  JSON.stringify({
+                    type: 'consumer_closed',
+                    peerUuid,
+                    consumerId: consumer.id,
+                  })
+                );
+              }
+              session.consumers.clear();
+
+              session.activeChannel = targetChannel;
+              console.log(
+                `[ClientGateway] Player ${session.username} switched from "${prevChannel}" to "${targetChannel}"`
+              );
+
+              session.ws.send(
+                JSON.stringify({
+                  type: 'channel_joined',
+                  channelId: targetChannel,
+                })
+              );
+
+              if (prevChannel !== 'proximity') {
+                this.broadcastChannelMembers(prevChannel);
+              }
+              if (targetChannel !== 'proximity') {
+                this.broadcastChannelMembers(targetChannel);
+              }
               break;
             }
           }
@@ -149,44 +200,68 @@ export class ClientGateway {
   }
 
   private startProximityLoop(): void {
-    // Evaluates proximity every 100ms (10 Hz)
+    // Evaluates proximity and channel routing every 100ms (10 Hz)
     this.loopInterval = setInterval(async () => {
       for (const listenerSession of this.playerSessions.values()) {
         if (listenerSession.ws.readyState !== WebSocket.OPEN || !listenerSession.recvTransport) {
           continue;
         }
 
-        const audiblePeers = this.spatialEngine.getAudiblePeersFor(listenerSession.playerUuid);
-        const audiblePeerUuids = new Set(audiblePeers.map((p) => p.peerUuid));
+        const channel = listenerSession.activeChannel || 'proximity';
 
-        // 1. Process Audible Peers
-        for (const peer of audiblePeers) {
-          const speakerSession = this.playerSessions.get(peer.peerUuid);
-          if (!speakerSession || !speakerSession.producer) {
-            continue;
-          }
+        if (channel === 'proximity') {
+          // --- 1. Proximity 3D Audio Routing ---
+          const audiblePeers = this.spatialEngine.getAudiblePeersFor(listenerSession.playerUuid);
+          const activePeerUuids = new Set<string>();
 
-          let consumer = listenerSession.consumers.get(peer.peerUuid);
+          for (const peer of audiblePeers) {
+            const speakerSession = this.playerSessions.get(peer.peerUuid);
+            // Only route if speaker is also in proximity channel and producing audio
+            if (
+              !speakerSession ||
+              !speakerSession.producer ||
+              (speakerSession.activeChannel && speakerSession.activeChannel !== 'proximity')
+            ) {
+              continue;
+            }
 
-          if (!consumer) {
-            // Create new Consumer dynamically
-            try {
-              consumer = await this.sfu.createConsumer(
-                listenerSession.recvTransport,
-                speakerSession.producer.id,
-                this.sfu.getRtpCapabilities()
-              );
+            activePeerUuids.add(peer.peerUuid);
+            let consumer = listenerSession.consumers.get(peer.peerUuid);
 
-              listenerSession.consumers.set(peer.peerUuid, consumer);
+            if (!consumer) {
+              try {
+                consumer = await this.sfu.createConsumer(
+                  listenerSession.recvTransport,
+                  speakerSession.producer.id,
+                  this.sfu.getRtpCapabilities()
+                );
 
+                listenerSession.consumers.set(peer.peerUuid, consumer);
+
+                listenerSession.ws.send(
+                  JSON.stringify({
+                    type: 'new_consumer',
+                    peerUuid: peer.peerUuid,
+                    peerUsername: peer.peerUsername,
+                    consumerId: consumer.id,
+                    producerId: speakerSession.producer.id,
+                    rtpParameters: consumer.rtpParameters,
+                    relX: peer.relX,
+                    relY: peer.relY,
+                    relZ: peer.relZ,
+                    distance: peer.distance,
+                    isSubmerged: peer.isSubmerged,
+                    isChannel: false,
+                  })
+                );
+              } catch (err) {
+                console.error(`[ClientGateway] Failed to create proximity consumer for ${peer.peerUuid}:`, err);
+              }
+            } else {
               listenerSession.ws.send(
                 JSON.stringify({
-                  type: 'new_consumer',
+                  type: 'peer_spatial_update',
                   peerUuid: peer.peerUuid,
-                  peerUsername: peer.peerUsername,
-                  consumerId: consumer.id,
-                  producerId: speakerSession.producer.id,
-                  rtpParameters: consumer.rtpParameters,
                   relX: peer.relX,
                   relY: peer.relY,
                   relZ: peer.relZ,
@@ -194,46 +269,133 @@ export class ClientGateway {
                   isSubmerged: peer.isSubmerged,
                 })
               );
-            } catch (err) {
-              console.error(`[ClientGateway] Failed to create consumer for ${peer.peerUuid}:`, err);
             }
-          } else {
-            // Update relative 3D spatial position
-            listenerSession.ws.send(
-              JSON.stringify({
-                type: 'peer_spatial_update',
-                peerUuid: peer.peerUuid,
-                relX: peer.relX,
-                relY: peer.relY,
-                relZ: peer.relZ,
-                distance: peer.distance,
-                isSubmerged: peer.isSubmerged,
-              })
-            );
           }
-        }
 
-        // 2. Cull Inaudible Consumers
-        for (const [peerUuid, consumer] of listenerSession.consumers.entries()) {
-          if (!audiblePeerUuids.has(peerUuid)) {
-            consumer.close();
-            listenerSession.consumers.delete(peerUuid);
+          // Cull inaudible proximity consumers
+          for (const [peerUuid, consumer] of listenerSession.consumers.entries()) {
+            if (!activePeerUuids.has(peerUuid)) {
+              consumer.close();
+              listenerSession.consumers.delete(peerUuid);
 
-            listenerSession.ws.send(
-              JSON.stringify({
-                type: 'consumer_closed',
-                peerUuid,
-                consumerId: consumer.id,
-              })
-            );
+              listenerSession.ws.send(
+                JSON.stringify({
+                  type: 'consumer_closed',
+                  peerUuid,
+                  consumerId: consumer.id,
+                })
+              );
+            }
+          }
+        } else {
+          // --- 2. Fixed Discord-Style Channel Audio Routing ---
+          const channelPeers = Array.from(this.playerSessions.values()).filter(
+            (p) => p.playerUuid !== listenerSession.playerUuid && (p.activeChannel || 'proximity') === channel
+          );
+          const channelPeerUuids = new Set(channelPeers.map((p) => p.playerUuid));
+
+          for (const speakerSession of channelPeers) {
+            if (!speakerSession.producer) {
+              continue;
+            }
+
+            let consumer = listenerSession.consumers.get(speakerSession.playerUuid);
+            if (!consumer) {
+              try {
+                consumer = await this.sfu.createConsumer(
+                  listenerSession.recvTransport,
+                  speakerSession.producer.id,
+                  this.sfu.getRtpCapabilities()
+                );
+
+                listenerSession.consumers.set(speakerSession.playerUuid, consumer);
+
+                listenerSession.ws.send(
+                  JSON.stringify({
+                    type: 'new_consumer',
+                    peerUuid: speakerSession.playerUuid,
+                    peerUsername: speakerSession.username,
+                    consumerId: consumer.id,
+                    producerId: speakerSession.producer.id,
+                    rtpParameters: consumer.rtpParameters,
+                    isChannel: true,
+                    channelId: channel,
+                  })
+                );
+              } catch (err) {
+                console.error(`[ClientGateway] Failed to create channel consumer for ${speakerSession.playerUuid}:`, err);
+              }
+            }
+          }
+
+          // Cull consumers who left the channel
+          for (const [peerUuid, consumer] of listenerSession.consumers.entries()) {
+            if (!channelPeerUuids.has(peerUuid)) {
+              consumer.close();
+              listenerSession.consumers.delete(peerUuid);
+
+              listenerSession.ws.send(
+                JSON.stringify({
+                  type: 'consumer_closed',
+                  peerUuid,
+                  consumerId: consumer.id,
+                })
+              );
+            }
           }
         }
       }
     }, 100);
   }
 
+  private broadcastChannelMembers(channelId: string): void {
+    const members = Array.from(this.playerSessions.values())
+      .filter((s) => (s.activeChannel || 'proximity') === channelId)
+      .map((s) => ({
+        uuid: s.playerUuid,
+        username: s.username,
+        isSpeaking: s.isSpeaking,
+      }));
+
+    for (const session of this.playerSessions.values()) {
+      if ((session.activeChannel || 'proximity') === channelId && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(
+          JSON.stringify({
+            type: 'channel_members',
+            channelId,
+            members,
+          })
+        );
+      }
+    }
+  }
+
+  private broadcastChannelSpeaking(session: ClientSession): void {
+    const channel = session.activeChannel;
+    if (!channel || channel === 'proximity') return;
+
+    for (const peerSession of this.playerSessions.values()) {
+      if (
+        peerSession.playerUuid !== session.playerUuid &&
+        peerSession.activeChannel === channel &&
+        peerSession.ws.readyState === WebSocket.OPEN
+      ) {
+        peerSession.ws.send(
+          JSON.stringify({
+            type: 'channel_peer_speaking',
+            channelId: channel,
+            peerUuid: session.playerUuid,
+            speaking: session.isSpeaking,
+          })
+        );
+      }
+    }
+  }
+
   private cleanupSession(session: ClientSession): void {
     console.log(`[ClientGateway] Cleaning up session for ${session.username} (${session.playerUuid})`);
+    const channel = session.activeChannel;
+
     this.sessions.delete(session.sessionId);
     this.playerSessions.delete(session.playerUuid);
 
@@ -251,10 +413,39 @@ export class ClientGateway {
     if (session.recvTransport) {
       session.recvTransport.close();
     }
+
+    if (channel && channel !== 'proximity') {
+      this.broadcastChannelMembers(channel);
+    }
   }
 
   public getConnectedClientsCount(): number {
     return this.playerSessions.size;
+  }
+
+  public getChannelStats(): Record<string, number> {
+    const stats: Record<string, number> = { proximity: 0 };
+    for (const session of this.playerSessions.values()) {
+      const channel = session.activeChannel || 'proximity';
+      stats[channel] = (stats[channel] || 0) + 1;
+    }
+    return stats;
+  }
+
+  public getSessionsSummary(): Array<{
+    sessionId: string;
+    playerUuid: string;
+    username: string;
+    activeChannel: string;
+    isSpeaking: boolean;
+  }> {
+    return Array.from(this.playerSessions.values()).map((s) => ({
+      sessionId: s.sessionId,
+      playerUuid: s.playerUuid,
+      username: s.username,
+      activeChannel: s.activeChannel || 'proximity',
+      isSpeaking: s.isSpeaking,
+    }));
   }
 
   public shutdown(): void {

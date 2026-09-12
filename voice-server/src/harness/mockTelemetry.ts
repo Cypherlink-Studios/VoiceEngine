@@ -74,10 +74,11 @@ export function runMockTelemetry(serverUrl = 'ws://localhost:3000/ws/plugin', se
 
     // Register tokens for easy testing
     const tokens = [
-      { token: 'STEVE1', uuid: players[0].uuid, name: players[0].username },
-      { token: 'ALEX01', uuid: players[1].uuid, name: players[1].username },
-      { token: 'SUBM01', uuid: players[2].uuid, name: players[2].username },
-      { token: 'NINJA1', uuid: players[3].uuid, name: players[3].username },
+      { token: 'STEVE1', uuid: players[0].uuid, name: players[0].username, isAdmin: false },
+      { token: 'ALEX01', uuid: players[1].uuid, name: players[1].username, isAdmin: false },
+      { token: 'SUBM01', uuid: players[2].uuid, name: players[2].username, isAdmin: false },
+      { token: 'NINJA1', uuid: players[3].uuid, name: players[3].username, isAdmin: false },
+      { token: 'ADMIN1', uuid: '00000000-0000-0000-0000-000000000099', name: 'ServerAdmin', isAdmin: true },
     ];
 
     for (const t of tokens) {
@@ -88,9 +89,10 @@ export function runMockTelemetry(serverUrl = 'ws://localhost:3000/ws/plugin', se
           playerUuid: t.uuid,
           playerName: t.name,
           expiresAt: Date.now() + 3600000, // 1 hour
+          isAdmin: t.isAdmin,
         })
       );
-      console.log(`[MockTelemetry] Registered test token: ${t.token} -> ${t.name}`);
+      console.log(`[MockTelemetry] Registered test token: ${t.token} -> ${t.name} (admin=${t.isAdmin})`);
     }
 
     let angle = 0;

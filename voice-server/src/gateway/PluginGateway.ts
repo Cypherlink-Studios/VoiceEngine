@@ -63,6 +63,7 @@ export class PluginGateway {
               playerUuid: message.playerUuid,
               playerName: message.playerName,
               expiresAt: message.expiresAt,
+              isAdmin: Boolean(message.isAdmin),
             });
           } else if (message.type === 'telemetry_batch' && Array.isArray(message.players)) {
             this.spatialEngine.updateBatch(message.players);

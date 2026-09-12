@@ -1,0 +1,33 @@
+{
+  "branding": {
+    "serverName": "VoiceEngine Server",
+    "tagline": "Zero-Mod Proximity Voice Chat",
+    "logoUrl": "",
+    "backgroundUrl": "",
+    "primaryColor": "#6366f1",
+    "accentColor": "#22c55e",
+    "welcomeMessage": "Welcome to VoiceEngine! Proximity voice is active."
+  },
+  "voice": {
+    "maxSlots": 100,
+    "maxVoiceDistance": 30,
+    "sneakVoiceDistance": 8,
+    "defaultBitrate": 64000
+  },
+  "fixedChannels": [
+    {
+      "id": "lobby",
+      "name": "General Lobby",
+      "description": "Global voice room without 3D distance",
+      "userLimit": 0,
+      "isDefault": true
+    },
+    {
+      "id": "staff",
+      "name": "Staff Room",
+      "description": "Private room for server staff",
+      "userLimit": 10,
+      "isDefault": false
+    }
+  ]
+}

@@ -3,11 +3,20 @@ import { types as mediasoupTypes } from 'mediasoup-client';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { PeerRadarInfo } from '../components/Radar.js';
 
+export interface ChannelMember {
+  uuid: string;
+  username: string;
+  isSpeaking: boolean;
+}
+
 export interface SignalingCallbacks {
   onAuthenticated: (player: { uuid: string; username: string }) => void;
   onError: (errorMsg: string) => void;
   onPeersUpdated: (peers: PeerRadarInfo[]) => void;
   onDisconnected: () => void;
+  onChannelChanged?: (channelId: string) => void;
+  onChannelMembersUpdated?: (channelId: string, members: ChannelMember[]) => void;
+  onChannelPeerSpeaking?: (channelId: string, peerUuid: string, speaking: boolean) => void;
 }
 
 export class VoiceSignaling {
@@ -149,25 +158,42 @@ export class VoiceSignaling {
 
         this.consumers.set(msg.peerUuid, consumer);
 
-        // Add to Web Audio 3D spatial graph
+        // Add to Web Audio spatial or stereo graph
         this.pipeline.addPeerStream(msg.peerUuid, consumer.track, {
           relX: msg.relX,
           relY: msg.relY,
           relZ: msg.relZ,
           isSubmerged: msg.isSubmerged,
+          isChannel: Boolean(msg.isChannel),
         });
 
-        this.peersInfo.set(msg.peerUuid, {
-          uuid: msg.peerUuid,
-          username: msg.peerUsername,
-          distance: msg.distance,
-          relX: msg.relX,
-          relY: msg.relY,
-          relZ: msg.relZ,
-          isSubmerged: msg.isSubmerged,
-        });
+        if (!msg.isChannel) {
+          this.peersInfo.set(msg.peerUuid, {
+            uuid: msg.peerUuid,
+            username: msg.peerUsername,
+            distance: msg.distance,
+            relX: msg.relX,
+            relY: msg.relY,
+            relZ: msg.relZ,
+            isSubmerged: msg.isSubmerged,
+          });
+          this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+        }
+        break;
+      }
 
-        this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+      case 'channel_joined': {
+        this.callbacks.onChannelChanged?.(msg.channelId);
+        break;
+      }
+
+      case 'channel_members': {
+        this.callbacks.onChannelMembersUpdated?.(msg.channelId, msg.members || []);
+        break;
+      }
+
+      case 'channel_peer_speaking': {
+        this.callbacks.onChannelPeerSpeaking?.(msg.channelId, msg.peerUuid, Boolean(msg.speaking));
         break;
       }
 
@@ -204,6 +230,15 @@ export class VoiceSignaling {
         break;
       }
     }
+  }
+
+  public joinChannel(channelId: string): void {
+    this.peersInfo.clear();
+    this.callbacks.onPeersUpdated([]);
+    this.send({
+      type: 'join_channel',
+      channelId,
+    });
   }
 
   public notifySpeaking(isSpeaking: boolean): void {

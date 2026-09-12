@@ -61,6 +61,23 @@ export class TokenStore {
     return record;
   }
 
+  public validateAndRedeemAdmin(token: string): SessionTokenRecord | null {
+    if (!token) return null;
+    const key = token.toUpperCase().trim();
+    const record = this.tokens.get(key);
+
+    if (!record) return null;
+    if (record.redeemed) return null;
+    if (!record.isAdmin) return null;
+    if (Date.now() > record.expiresAt) {
+      this.tokens.delete(key);
+      return null;
+    }
+
+    record.redeemed = true;
+    return record;
+  }
+
   public cleanExpired(): void {
     const now = Date.now();
     for (const [key, record] of this.tokens.entries()) {

@@ -2,10 +2,15 @@ import { PlayerSpatialState, RelativeSpatialAudio } from '../types.js';
 
 export class SpatialEngine {
   private players = new Map<string, PlayerSpatialState>();
-  private readonly maxDistance: number;
-  private readonly sneakDistance: number;
+  private maxDistance: number;
+  private sneakDistance: number;
 
   constructor(maxDistance = 30.0, sneakDistance = 8.0) {
+    this.maxDistance = maxDistance;
+    this.sneakDistance = sneakDistance;
+  }
+
+  public updateDistances(maxDistance: number, sneakDistance: number): void {
     this.maxDistance = maxDistance;
     this.sneakDistance = sneakDistance;
   }

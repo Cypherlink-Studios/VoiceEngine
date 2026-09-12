@@ -57,7 +57,11 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
         // Register Command & Events
         if (getCommand("voice") != null) {
-            getCommand("voice").setExecutor(new VoiceCommand(tokenManager, webClientUrl));
+            getCommand("voice").setExecutor(new VoiceCommand(tokenManager, webClientUrl, token -> {
+                if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                    voiceBackendClient.registerToken(token);
+                }
+            }));
         }
         getServer().getPluginManager().registerEvents(this, this);
 

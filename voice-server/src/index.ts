@@ -11,6 +11,9 @@ import { SpatialEngine } from './spatial/SpatialEngine.js';
 import { MediasoupManager } from './sfu/MediasoupManager.js';
 import { PluginGateway } from './gateway/PluginGateway.js';
 import { ClientGateway } from './gateway/ClientGateway.js';
+import { SettingsManager } from './config/SettingsManager.js';
+import { AdminAuthManager } from './auth/AdminAuthManager.js';
+import { createApiRouter } from './routes/api.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,10 +46,28 @@ httpServer.on('upgrade', (request, socket, head) => {
 
 // Singletons
 const tokenStore = new TokenStore();
-const spatialEngine = new SpatialEngine(config.maxVoiceDistance, config.sneakVoiceDistance);
+const settingsManager = new SettingsManager();
+const adminAuthManager = new AdminAuthManager();
+const spatialEngine = new SpatialEngine(
+  settingsManager.getSettings().voice.maxVoiceDistance,
+  settingsManager.getSettings().voice.sneakVoiceDistance
+);
 const sfu = new MediasoupManager();
 let pluginGateway: PluginGateway;
 let clientGateway: ClientGateway;
+
+// API Routes
+app.use(
+  '/api',
+  createApiRouter(
+    settingsManager,
+    tokenStore,
+    adminAuthManager,
+    spatialEngine,
+    () => clientGateway,
+    () => pluginGateway
+  )
+);
 
 // Pre-seed mock players so local testing works out of the box
 spatialEngine.updateBatch([
@@ -131,4 +152,4 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-export { app, httpServer, tokenStore, spatialEngine, sfu };
+export { app, httpServer, tokenStore, spatialEngine, sfu, settingsManager, adminAuthManager };

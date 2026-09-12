@@ -1,9 +1,10 @@
 export interface PeerAudioNode {
   source: MediaStreamAudioSourceNode;
-  filter: BiquadFilterNode;
-  panner: PannerNode;
+  filter?: BiquadFilterNode;
+  panner?: PannerNode;
   gain: GainNode;
   isSubmerged: boolean;
+  isChannel?: boolean;
 }
 
 export class SpatialAudioPipeline {
@@ -38,10 +39,24 @@ export class SpatialAudioPipeline {
     }
   }
 
+  public createLocalAnalyser(stream: MediaStream): AnalyserNode {
+    const source = this.audioContext.createMediaStreamSource(stream);
+    const analyser = this.audioContext.createAnalyser();
+    analyser.fftSize = 64;
+    source.connect(analyser);
+    return analyser;
+  }
+
   public addPeerStream(
     peerUuid: string,
     track: MediaStreamTrack,
-    initialPos: { relX: number; relY: number; relZ: number; isSubmerged: boolean }
+    initialPos: {
+      relX?: number;
+      relY?: number;
+      relZ?: number;
+      isSubmerged?: boolean;
+      isChannel?: boolean;
+    }
   ): void {
     if (this.peers.has(peerUuid)) {
       this.removePeerStream(peerUuid);
@@ -49,12 +64,29 @@ export class SpatialAudioPipeline {
 
     const stream = new MediaStream([track]);
     const source = this.audioContext.createMediaStreamSource(stream);
+    const gain = this.audioContext.createGain();
+    gain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+
+    if (initialPos.isChannel) {
+      // Direct Stereo Routing for Fixed Channels (no spatial filtering or panner)
+      source.connect(gain);
+      gain.connect(this.masterGain);
+
+      this.peers.set(peerUuid, {
+        source,
+        gain,
+        isSubmerged: false,
+        isChannel: true,
+      });
+      return;
+    }
 
     // Low-pass filter for underwater acoustic damping
+    const isSubmerged = Boolean(initialPos.isSubmerged);
     const filter = this.audioContext.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(
-      initialPos.isSubmerged ? 600 : 20000,
+      isSubmerged ? 600 : 20000,
       this.audioContext.currentTime
     );
 
@@ -67,10 +99,12 @@ export class SpatialAudioPipeline {
     panner.rolloffFactor = 1.0;
     panner.coneInnerAngle = 360;
 
-    this.setPannerPosition(panner, initialPos.relX, initialPos.relY, initialPos.relZ);
-
-    const gain = this.audioContext.createGain();
-    gain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+    this.setPannerPosition(
+      panner,
+      initialPos.relX ?? 0,
+      initialPos.relY ?? 0,
+      initialPos.relZ ?? 0
+    );
 
     // Routing: Source -> Filter -> Panner -> Gain -> Master
     source.connect(filter);
@@ -83,7 +117,8 @@ export class SpatialAudioPipeline {
       filter,
       panner,
       gain,
-      isSubmerged: initialPos.isSubmerged,
+      isSubmerged,
+      isChannel: false,
     });
   }
 
@@ -95,7 +130,7 @@ export class SpatialAudioPipeline {
     isSubmerged: boolean
   ): void {
     const peerNode = this.peers.get(peerUuid);
-    if (!peerNode) return;
+    if (!peerNode || peerNode.isChannel || !peerNode.panner || !peerNode.filter) return;
 
     // Smooth linear ramp over 100ms interval
     const now = this.audioContext.currentTime;
@@ -119,8 +154,8 @@ export class SpatialAudioPipeline {
     const peerNode = this.peers.get(peerUuid);
     if (peerNode) {
       peerNode.gain.disconnect();
-      peerNode.panner.disconnect();
-      peerNode.filter.disconnect();
+      peerNode.panner?.disconnect();
+      peerNode.filter?.disconnect();
       peerNode.source.disconnect();
       this.peers.delete(peerUuid);
     }

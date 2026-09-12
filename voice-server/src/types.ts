@@ -21,6 +21,7 @@ export interface SessionTokenRecord {
   playerName: string;
   expiresAt: number;
   redeemed: boolean;
+  isAdmin?: boolean;
 }
 
 export interface RelativeSpatialAudio {
@@ -35,6 +36,37 @@ export interface RelativeSpatialAudio {
   relZ: number;
 }
 
+export interface ServerBrandingConfig {
+  serverName: string;
+  tagline: string;
+  logoUrl: string;
+  backgroundUrl: string;
+  primaryColor: string;
+  accentColor: string;
+  welcomeMessage: string;
+}
+
+export interface ServerVoiceConfig {
+  maxSlots: number;
+  maxVoiceDistance: number;
+  sneakVoiceDistance: number;
+  defaultBitrate: number;
+}
+
+export interface FixedChannelConfig {
+  id: string;
+  name: string;
+  description: string;
+  userLimit: number; // 0 = unlimited
+  isDefault?: boolean;
+}
+
+export interface ServerSettings {
+  branding: ServerBrandingConfig;
+  voice: ServerVoiceConfig;
+  fixedChannels: FixedChannelConfig[];
+}
+
 export interface ClientSession {
   sessionId: string;
   playerUuid: string;
@@ -46,4 +78,5 @@ export interface ClientSession {
   // map of peerUuid -> consumer
   consumers: Map<string, mediasoup.types.Consumer>;
   isSpeaking: boolean;
+  activeChannel?: string; // 'proximity' or fixed channel id
 }

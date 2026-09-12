@@ -9,13 +9,25 @@ public record SessionToken(
     String playerName,
     Instant createdAt,
     Instant expiresAt,
-    boolean redeemed
+    boolean redeemed,
+    boolean isAdmin
 ) {
+    public SessionToken(
+        String token,
+        UUID playerUuid,
+        String playerName,
+        Instant createdAt,
+        Instant expiresAt,
+        boolean redeemed
+    ) {
+        this(token, playerUuid, playerName, createdAt, expiresAt, redeemed, false);
+    }
+
     public boolean isExpired() {
         return Instant.now().isAfter(expiresAt);
     }
 
     public SessionToken markRedeemed() {
-        return new SessionToken(token, playerUuid, playerName, createdAt, expiresAt, true);
+        return new SessionToken(token, playerUuid, playerName, createdAt, expiresAt, true, isAdmin);
     }
 }
