@@ -67,7 +67,7 @@ VoiceEngine includes an interactive, autonomous installation script that install
 
 ```bash
 # Clone the repository if you haven't already
-git clone https://github.com/your-org/VoiceEngine.git /opt/VoiceEngine
+git clone https://github.com/Cypherlink-Studios/VoiceEngine.git /opt/VoiceEngine
 cd /opt/VoiceEngine
 
 # Grant execution permissions and run as root/sudo
