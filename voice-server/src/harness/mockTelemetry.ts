@@ -127,6 +127,7 @@ export function runMockTelemetry(serverUrl = 'ws://localhost:3000/ws/plugin', se
   return ws;
 }
 
-if (process.env.RUN_MOCK === 'true') {
+// Run mock telemetry automatically when executed as a script (not during test suites)
+if (!process.env.VITEST && process.env.NODE_ENV !== 'test') {
   runMockTelemetry();
 }

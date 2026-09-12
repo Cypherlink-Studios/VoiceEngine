@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "mock": "RUN_MOCK=true tsx src/harness/mockTelemetry.ts",
+    "mock": "tsx src/harness/mockTelemetry.ts",
     "test": "vitest run"
   },
   "dependencies": {
