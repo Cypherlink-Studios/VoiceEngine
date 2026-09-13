@@ -345,6 +345,7 @@ describe('ClientGateway', () => {
         } else if (msg.type === 'peer_spatial_update' && msg.peerUuid === 'uuid-steve-p') {
           if (msg.isPaused && !alexReceivedPause) {
             alexReceivedPause = true;
+            expect(msg.peerUsername).toBe('SteveP');
             // Now move Steve back within audible range (10m)
             spatialEngine.updatePlayer({
               uuid: 'uuid-steve-p',
@@ -360,6 +361,7 @@ describe('ClientGateway', () => {
             });
           } else if (alexReceivedPause && !msg.isPaused && !alexReceivedResume) {
             alexReceivedResume = true;
+            expect(msg.peerUsername).toBe('SteveP');
             // Now disconnect Steve to verify consumer_closed
             steveWs.close();
           }

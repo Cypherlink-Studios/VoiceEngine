@@ -85,6 +85,12 @@ export class ClientGateway {
                 activeChannel: 'proximity',
               };
 
+              const existingSession = this.playerSessions.get(session.playerUuid);
+              if (existingSession && existingSession.sessionId !== sessionId) {
+                console.log(`[ClientGateway] Cleaning up previous session for ${session.username} upon reconnect.`);
+                this.cleanupSession(existingSession);
+              }
+
               this.sessions.set(sessionId, session);
               this.playerSessions.set(session.playerUuid, session);
 
@@ -280,6 +286,15 @@ export class ClientGateway {
             activePeerUuids.add(peer.peerUuid);
             let consumer = listenerSession.consumers.get(peer.peerUuid);
 
+            // If the consumer is referencing a stale producer from the speaker, clean it up
+            if (consumer && (!consumer.closed && consumer.producerId !== speakerSession.producer.id)) {
+              try {
+                consumer.close();
+              } catch {}
+              listenerSession.consumers.delete(peer.peerUuid);
+              consumer = undefined;
+            }
+
             if (!consumer || consumer.closed) {
               try {
                 consumer = await this.sfu.createConsumer(
@@ -323,6 +338,7 @@ export class ClientGateway {
                 JSON.stringify({
                   type: 'peer_spatial_update',
                   peerUuid: peer.peerUuid,
+                  peerUsername: peer.peerUsername,
                   relX: peer.relX,
                   relY: peer.relY,
                   relZ: peer.relZ,
@@ -370,6 +386,7 @@ export class ClientGateway {
                     JSON.stringify({
                       type: 'peer_spatial_update',
                       peerUuid,
+                      peerUsername: speakerSession.username,
                       distance: 999,
                       relX: 0,
                       relY: 0,

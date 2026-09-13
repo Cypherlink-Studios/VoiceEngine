@@ -33,6 +33,7 @@ export class VoiceSignaling {
   private audioProducer?: mediasoupTypes.Producer;
   private consumers = new Map<string, mediasoupTypes.Consumer>(); // peerUuid -> consumer
   private peersInfo = new Map<string, PeerRadarInfo>(); // peerUuid -> PeerRadarInfo
+  private knownUsernames = new Map<string, string>(); // peerUuid -> username
   private pingInterval?: any;
   private sessionId?: string;
   private peersUpdateRaf: number | null = null;
@@ -209,6 +210,9 @@ export class VoiceSignaling {
         });
 
         if (!msg.isChannel) {
+          if (msg.peerUsername) {
+            this.knownUsernames.set(msg.peerUuid, msg.peerUsername);
+          }
           this.peersInfo.set(msg.peerUuid, {
             uuid: msg.peerUuid,
             username: msg.peerUsername,
@@ -254,6 +258,12 @@ export class VoiceSignaling {
             this.dispatchPeersUpdatedThrottled();
           }
         } else {
+          if (msg.peerUsername) {
+            this.knownUsernames.set(msg.peerUuid, msg.peerUsername);
+          }
+          const resolvedUsername =
+            msg.peerUsername || this.knownUsernames.get(msg.peerUuid) || 'Player';
+
           const current = this.peersInfo.get(msg.peerUuid);
           if (current) {
             current.distance = msg.distance;
@@ -261,10 +271,11 @@ export class VoiceSignaling {
             current.relY = msg.relY;
             current.relZ = msg.relZ;
             current.isSubmerged = msg.isSubmerged;
+            current.username = resolvedUsername;
           } else {
             this.peersInfo.set(msg.peerUuid, {
               uuid: msg.peerUuid,
-              username: msg.peerUsername || 'Player',
+              username: resolvedUsername,
               distance: msg.distance,
               relX: msg.relX,
               relY: msg.relY,
@@ -285,6 +296,7 @@ export class VoiceSignaling {
         }
         this.pipeline.removePeerStream(msg.peerUuid);
         this.peersInfo.delete(msg.peerUuid);
+        this.knownUsernames.delete(msg.peerUuid);
         this.dispatchPeersUpdatedThrottled();
         break;
       }

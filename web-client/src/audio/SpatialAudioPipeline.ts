@@ -60,7 +60,8 @@ export class SpatialAudioPipeline {
     if (typeof document !== 'undefined') {
       this.persistentSinkStream = new MediaStream();
       this.persistentSinkEl = document.createElement('audio');
-      this.persistentSinkEl.muted = true; // Muted to prevent unspatialized direct audio leakage
+      this.persistentSinkEl.muted = false; // Must NOT be muted so Chromium keeps WebRTC audio decoding active
+      this.persistentSinkEl.volume = 0.0001; // Inaudible (-80dB) dummy sink to prevent direct leakage
       this.persistentSinkEl.autoplay = true;
       (this.persistentSinkEl as any).playsInline = true;
       this.persistentSinkEl.srcObject = this.persistentSinkStream;
@@ -95,9 +96,10 @@ export class SpatialAudioPipeline {
   ): void {
     const existing = this.peers.get(peerUuid);
     if (existing) {
-      // If the track is identical, reuse existing node graph and simply unpause
+      // If the track is identical, reuse existing node graph, refresh source and simply unpause
       if (existing.track === track) {
         existing.isPaused = false;
+        this.refreshPeerSource(peerUuid);
         this.applyPeerGain(peerUuid);
         if (initialPos.relX !== undefined && initialPos.relY !== undefined && initialPos.relZ !== undefined) {
           this.updatePeerPosition(
@@ -120,15 +122,21 @@ export class SpatialAudioPipeline {
       this.audioContext.resume().catch(() => {});
     }
 
-    // Keep Chromium WebRTC audio decoding active via single persistent muted sink
+    // Keep Chromium WebRTC audio decoding active via single persistent sink
     if (this.persistentSinkStream && !this.persistentSinkStream.getTracks().includes(track)) {
       try {
         this.persistentSinkStream.addTrack(track);
+        if (this.persistentSinkEl) {
+          // Re-bind srcObject to ensure Chromium registers dynamic track addition
+          this.persistentSinkEl.srcObject = this.persistentSinkStream;
+          this.persistentSinkEl.play().catch(() => {});
+        }
       } catch {}
     }
 
     track.onunmute = () => {
       console.log('[SpatialAudioPipeline] Track unmuted (audio packets flowing) for:', peerUuid);
+      this.refreshPeerSource(peerUuid);
     };
 
     console.log('[SpatialAudioPipeline] Added peer stream for:', peerUuid, {
@@ -206,6 +214,24 @@ export class SpatialAudioPipeline {
     });
   }
 
+  public refreshPeerSource(peerUuid: string): void {
+    const peerNode = this.peers.get(peerUuid);
+    if (!peerNode || !peerNode.track) return;
+    try {
+      peerNode.source.disconnect();
+      const newSource = this.audioContext.createMediaStreamSource(new MediaStream([peerNode.track]));
+      if (peerNode.isChannel || !peerNode.filter) {
+        newSource.connect(peerNode.gain);
+      } else {
+        newSource.connect(peerNode.filter);
+      }
+      peerNode.source = newSource;
+      console.log('[SpatialAudioPipeline] Refreshed MediaStreamAudioSourceNode for:', peerUuid);
+    } catch (err) {
+      console.warn('[SpatialAudioPipeline] Failed to refresh source node for:', peerUuid, err);
+    }
+  }
+
   public updatePeerPosition(
     peerUuid: string,
     relX: number,
@@ -217,8 +243,16 @@ export class SpatialAudioPipeline {
     const peerNode = this.peers.get(peerUuid);
     if (!peerNode || peerNode.isChannel || !peerNode.panner || !peerNode.filter) return;
 
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+
     if (isPaused !== undefined && peerNode.isPaused !== isPaused) {
       peerNode.isPaused = isPaused;
+      if (!isPaused) {
+        // Resuming from distance pause: refresh source node to bypass Chromium mute-stall
+        this.refreshPeerSource(peerUuid);
+      }
       this.applyPeerGain(peerUuid);
     }
 

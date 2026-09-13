@@ -14,7 +14,7 @@ The voice backend SHALL manage WebRTC transports and audio streams using Mediaso
 
 #### Scenario: Dynamic downstream consumer subscription
 - **WHEN** another player enters within audible proximity of a listener
-- **THEN** the SFU SHALL establish an audio consumer if one does not exist, or unpause an existing paused consumer without initiating WebRTC SDP renegotiation.
+- **THEN** the SFU SHALL establish an audio consumer if one does not exist or if the speaker's active producer ID has changed, or unpause an existing paused consumer matching the speaker's active producer ID without initiating WebRTC SDP renegotiation.
 
 #### Scenario: Inaudible player unsubscription
 - **WHEN** a speaking player moves beyond the maximum voice radius of a listener or leaves the dimension
@@ -38,6 +38,10 @@ The server SHALL evaluate player Euclidean distances, server identifiers, and di
 #### Scenario: Environmental submersion flagging
 - **WHEN** a player's telemetry indicates they are underwater
 - **THEN** the backend SHALL include the submerged environmental state flag in spatial updates sent to connected peers.
+
+#### Scenario: Proximity spatial update with peer username and pause indicator
+- **WHEN** spatial updates are dispatched to listening clients during proximity evaluation
+- **THEN** the payload SHALL include the peer's Minecraft username (`peerUsername`), relative coordinates, distance, submersion status, and the pause status flag (`isPaused`).
 
 ### Requirement: Plugin WebSocket Control and Token Verification
 The backend SHALL host an authenticated WebSocket control endpoint supporting concurrent connections from multiple Paper plugins identified by serverId and an optional Velocity proxy plugin to exchange session tokens, positional batches, and speaking state indicators.
