@@ -53,6 +53,10 @@ public class VelocityBackendClient extends WebSocketClient {
         auth.addProperty("role", "velocity");
         auth.addProperty("serverId", "proxy");
         send(GSON.toJson(auth));
+
+        if (onConnected != null) {
+            onConnected.run();
+        }
     }
 
     @Override
@@ -78,7 +82,17 @@ public class VelocityBackendClient extends WebSocketClient {
         }
     }
 
+    private Runnable onConnected;
+
+    public void setOnConnected(Runnable onConnected) {
+        this.onConnected = onConnected;
+    }
+
     public void registerToken(VelocitySessionToken token) {
+        registerToken(token, null, false);
+    }
+
+    public void registerToken(VelocitySessionToken token, String clientIp, boolean isMuted) {
         if (isOpen()) {
             JsonObject json = new JsonObject();
             json.addProperty("type", "register_token");
@@ -87,6 +101,64 @@ public class VelocityBackendClient extends WebSocketClient {
             json.addProperty("playerName", token.playerName());
             json.addProperty("expiresAt", token.expiresAt().toEpochMilli());
             json.addProperty("isAdmin", token.isAdmin());
+            if (clientIp != null) {
+                json.addProperty("clientIp", clientIp);
+            }
+            if (isMuted) {
+                json.addProperty("isMuted", true);
+            }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendPlayerQuit(UUID playerUuid) {
+        if (isOpen() && playerUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "player_quit");
+            json.addProperty("playerUuid", playerUuid.toString());
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendModerationAction(UUID targetUuid, String action, boolean active, String reason, Long expiresAt, String clientIp) {
+        if (isOpen() && targetUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "moderation_action");
+            json.addProperty("targetUuid", targetUuid.toString());
+            json.addProperty("action", action);
+            json.addProperty("active", active);
+            if (reason != null) {
+                json.addProperty("reason", reason);
+            }
+            if (expiresAt != null && expiresAt > 0) {
+                json.addProperty("expiresAt", expiresAt);
+            }
+            if (clientIp != null) {
+                json.addProperty("clientIp", clientIp);
+            }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendActivePunishmentsSync(java.util.List<com.voiceengine.velocity.moderation.PunishmentRecord> punishments) {
+        if (isOpen() && punishments != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "active_punishments_sync");
+            com.google.gson.JsonArray array = new com.google.gson.JsonArray();
+            for (com.voiceengine.velocity.moderation.PunishmentRecord r : punishments) {
+                JsonObject item = new JsonObject();
+                item.addProperty("targetUuid", r.playerUuid().toString());
+                item.addProperty("action", r.punishmentType().name().toLowerCase());
+                item.addProperty("reason", r.reason());
+                if (r.expiresAt() != null) {
+                    item.addProperty("expiresAt", r.expiresAt());
+                }
+                if (r.clientIp() != null) {
+                    item.addProperty("clientIp", r.clientIp());
+                }
+                array.add(item);
+            }
+            json.add("punishments", array);
             send(GSON.toJson(json));
         }
     }

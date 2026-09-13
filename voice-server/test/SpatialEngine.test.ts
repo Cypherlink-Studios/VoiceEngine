@@ -231,4 +231,159 @@ describe('SpatialEngine', () => {
     const audibleForSurvival = engine.getAudiblePeersFor('player-survival');
     expect(audibleForSurvival).toHaveLength(0);
   });
+
+  it('delivers 2D broadcast audio (relX: 0, relY: 0, relZ: 0) to listeners within speaker block radius', () => {
+    const listener: PlayerSpatialState = {
+      uuid: 'listener-1',
+      username: 'ListenerBob',
+      world: 'world',
+      x: 10,
+      y: 64,
+      z: 10,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    const speakerPlayer: PlayerSpatialState = {
+      uuid: 'speaker-player-1',
+      username: 'StaffAlice',
+      world: 'world',
+      x: 500, // Very far away in 3D proximity!
+      y: 64,
+      z: 500,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    engine.updatePlayer(listener);
+    engine.updatePlayer(speakerPlayer);
+
+    // Add an active speaker block near the listener (at 12, 64, 12, radius: 20)
+    engine.updateSpeakers([
+      {
+        id: 'speaker-town-hall',
+        world: 'world',
+        x: 12,
+        y: 64,
+        z: 12,
+        radius: 20,
+        linkedPlayerUuid: 'speaker-player-1',
+        powered: true,
+      },
+    ]);
+
+    const audible = engine.getAudiblePeersFor('listener-1');
+    expect(audible).toHaveLength(1);
+    expect(audible[0].peerUuid).toBe('speaker-player-1');
+    expect(audible[0].isBroadcast).toBe(true);
+    expect(audible[0].relX).toBe(0);
+    expect(audible[0].relY).toBe(0);
+    expect(audible[0].relZ).toBe(0);
+  });
+
+  it('prioritizes 2D megaphone broadcast over direct 3D proximity when within range of both', () => {
+    const listener: PlayerSpatialState = {
+      uuid: 'listener-1',
+      username: 'ListenerBob',
+      world: 'world',
+      x: 10,
+      y: 64,
+      z: 10,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    const speakerPlayer: PlayerSpatialState = {
+      uuid: 'speaker-player-1',
+      username: 'StaffAlice',
+      world: 'world',
+      x: 15, // Close enough for direct 3D proximity (distance 5 blocks)
+      y: 64,
+      z: 10,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    engine.updatePlayer(listener);
+    engine.updatePlayer(speakerPlayer);
+
+    // Also link to an active speaker block right next to listener
+    engine.updateSpeakers([
+      {
+        id: 'speaker-main',
+        world: 'world',
+        x: 10,
+        y: 64,
+        z: 10,
+        radius: 30,
+        linkedPlayerUuid: 'speaker-player-1',
+        powered: true,
+      },
+    ]);
+
+    const audible = engine.getAudiblePeersFor('listener-1');
+    // Exactly 1 entry (not duplicated into both proximity and broadcast)
+    expect(audible).toHaveLength(1);
+    expect(audible[0].peerUuid).toBe('speaker-player-1');
+    expect(audible[0].isBroadcast).toBe(true);
+    expect(audible[0].relX).toBe(0);
+    expect(audible[0].relY).toBe(0);
+    expect(audible[0].relZ).toBe(0);
+  });
+
+  it('does not broadcast from unpowered speaker blocks', () => {
+    const listener: PlayerSpatialState = {
+      uuid: 'listener-1',
+      username: 'ListenerBob',
+      world: 'world',
+      x: 10,
+      y: 64,
+      z: 10,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    const speakerPlayer: PlayerSpatialState = {
+      uuid: 'speaker-player-1',
+      username: 'StaffAlice',
+      world: 'world',
+      x: 500, // Far away
+      y: 64,
+      z: 500,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    engine.updatePlayer(listener);
+    engine.updatePlayer(speakerPlayer);
+
+    // Unpowered speaker
+    engine.updateSpeakers([
+      {
+        id: 'speaker-unpowered',
+        world: 'world',
+        x: 10,
+        y: 64,
+        z: 10,
+        radius: 20,
+        linkedPlayerUuid: 'speaker-player-1',
+        powered: false,
+      },
+    ]);
+
+    const audible = engine.getAudiblePeersFor('listener-1');
+    expect(audible).toHaveLength(0);
+  });
 });

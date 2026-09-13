@@ -1,7 +1,8 @@
-import { PlayerSpatialState, RelativeSpatialAudio } from '../types.js';
+import { PlayerSpatialState, RelativeSpatialAudio, SpeakerBlockState } from '../types.js';
 
 export class SpatialEngine {
   private players = new Map<string, PlayerSpatialState>();
+  private speakers = new Map<string, SpeakerBlockState>();
   private maxDistance: number;
   private sneakDistance: number;
 
@@ -22,11 +23,25 @@ export class SpatialEngine {
     });
   }
 
-  public updateBatch(players: PlayerSpatialState[]): void {
+  public updateBatch(players: PlayerSpatialState[], speakers?: SpeakerBlockState[]): void {
     const now = Date.now();
     for (const p of players) {
       this.players.set(p.uuid, { ...p, lastUpdated: now });
     }
+    if (speakers) {
+      this.updateSpeakers(speakers);
+    }
+  }
+
+  public updateSpeakers(speakers: SpeakerBlockState[]): void {
+    this.speakers.clear();
+    for (const s of speakers) {
+      this.speakers.set(s.id, s);
+    }
+  }
+
+  public getSpeakers(): SpeakerBlockState[] {
+    return Array.from(this.speakers.values());
   }
 
   public removePlayer(uuid: string): void {
@@ -51,9 +66,61 @@ export class SpatialEngine {
     }
 
     const audiblePeers: RelativeSpatialAudio[] = [];
+    const broadcastSpeakers = new Map<string, number>();
 
+    // 1. Check if listener is within radius of any active, powered speaker block
+    for (const speakerBlock of this.speakers.values()) {
+      if (!speakerBlock.powered || !speakerBlock.linkedPlayerUuid) {
+        continue;
+      }
+      if (speakerBlock.linkedPlayerUuid === listenerUuid) {
+        continue; // A player does not receive their own megaphone broadcast
+      }
+
+      const speakerServer = speakerBlock.serverId || 'default';
+      const listenerServer = listener.serverId || 'default';
+      if (speakerServer !== listenerServer || speakerBlock.world !== listener.world) {
+        continue;
+      }
+
+      const dx = speakerBlock.x - listener.x;
+      const dy = speakerBlock.y - listener.y;
+      const dz = speakerBlock.z - listener.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      if (dist <= speakerBlock.radius) {
+        const existing = broadcastSpeakers.get(speakerBlock.linkedPlayerUuid);
+        if (existing === undefined || dist < existing) {
+          broadcastSpeakers.set(speakerBlock.linkedPlayerUuid, dist);
+        }
+      }
+    }
+
+    // Add broadcast audio with relX: 0, relY: 0, relZ: 0 and isBroadcast: true
+    for (const [linkedUuid, dist] of broadcastSpeakers.entries()) {
+      const linkedPlayer = this.players.get(linkedUuid);
+      if (linkedPlayer) {
+        audiblePeers.push({
+          peerUuid: linkedPlayer.uuid,
+          peerUsername: linkedPlayer.username,
+          distance: Math.round(dist * 100) / 100,
+          isAudible: true,
+          isSubmerged: false,
+          relX: 0,
+          relY: 0,
+          relZ: 0,
+          isBroadcast: true,
+        });
+      }
+    }
+
+    // 2. Evaluate direct proximity peers (skipping peers receiving 2D broadcast)
     for (const [peerUuid, speaker] of this.players.entries()) {
       if (peerUuid === listenerUuid) {
+        continue;
+      }
+      if (broadcastSpeakers.has(peerUuid)) {
+        // Megaphone broadcast overrides direct proximity
         continue;
       }
 

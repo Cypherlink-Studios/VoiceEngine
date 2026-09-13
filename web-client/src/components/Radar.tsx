@@ -7,6 +7,7 @@ export interface PeerRadarInfo {
   relZ: number;
   isSpeaking?: boolean;
   isSubmerged?: boolean;
+  isBroadcast?: boolean;
 }
 
 interface RadarProps {
@@ -189,6 +190,16 @@ export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid, 
                       className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-cyan-400 rounded-full border border-slate-900 shadow"
                       title="Submerged"
                     />
+                  )}
+
+                  {/* 2D Speaker Broadcast badge */}
+                  {peer.isBroadcast && (
+                    <span
+                      className="absolute -top-1.5 -left-1.5 px-1 py-0.2 rounded text-[8px] font-black text-violet-300 bg-violet-950/90 border border-violet-500/60 shadow"
+                      title="Megáfono 2D / Speaker Block"
+                    >
+                      📢
+                    </span>
                   )}
                 </div>
 

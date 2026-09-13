@@ -4,7 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
-import { VoiceSignaling, ChannelMember } from '../net/VoiceSignaling.js';
+import { VoiceSignaling, ChannelMember, ModerationNotice } from '../net/VoiceSignaling.js';
 import { Radar, PeerRadarInfo } from '../components/Radar.js';
 import { ControlDock } from '../components/player/ControlDock.js';
 import { ChannelDrawer } from '../components/player/ChannelDrawer.js';
@@ -28,6 +28,7 @@ export function PlayerRoute() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [moderationNotice, setModerationNotice] = useState<ModerationNotice | null>(null);
   const [vadThreshold, setVadThreshold] = useState<number>(() => {
     const saved = localStorage.getItem('voiceengine:vad_threshold');
     const val = saved ? parseFloat(saved) : 0.04;
@@ -222,6 +223,35 @@ export function PlayerRoute() {
         onPingUpdated: (rtt) => {
           setPingMs(rtt);
         },
+        onModerationNotice: (notice) => {
+          setModerationNotice(notice);
+          if (notice.action === 'mute') {
+            setIsMuted(notice.active);
+            isMutedRef.current = notice.active;
+            updateAudioTransmission(isSpeakingRef.current, notice.active, isDeafenedRef.current);
+            if (notice.active) {
+              setIsSpeaking(false);
+              isSpeakingRef.current = false;
+              vadRef.current?.reset();
+              signalingRef.current?.notifySpeaking(false);
+              soundEffects.playMute();
+            } else {
+              soundEffects.playUnmute();
+            }
+          } else if (notice.action === 'deafen') {
+            setIsDeafened(notice.active);
+            isDeafenedRef.current = notice.active;
+            pipelineRef.current?.setDeafened(notice.active);
+            if (notice.active) {
+              soundEffects.playDeafen();
+            } else {
+              soundEffects.playUndeafen();
+            }
+          } else if (notice.action === 'kick' || notice.action === 'ban') {
+            setErrorMsg(notice.reason || `You have been ${notice.action}ed from VoiceEngine.`);
+            handleDisconnect();
+          }
+        },
         onDisconnected: () => {
           handleDisconnect();
         },
@@ -298,9 +328,13 @@ export function PlayerRoute() {
     setActiveChannel('proximity');
     setPingMs(null);
     setPopoverPeer(null);
+    setModerationNotice(null);
   };
 
   const handleToggleMute = () => {
+    if (moderationNotice?.action === 'mute' && moderationNotice.active) {
+      return;
+    }
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
     isMutedRef.current = nextMuted;
@@ -766,6 +800,33 @@ export function PlayerRoute() {
         </div>
       </header>
 
+      {/* Moderation Alert Banner */}
+      {moderationNotice && moderationNotice.active && (
+        <div className="relative z-20 w-full max-w-4xl mx-auto mt-4 px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between shadow-xl backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4 text-amber-400" />
+            </div>
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400 flex items-center gap-1.5">
+                <span>Acción de Moderación</span>
+                <span>•</span>
+                <span>{moderationNotice.action === 'mute' ? 'Silenciado' : moderationNotice.action === 'deafen' ? 'Ensordecido' : moderationNotice.action}</span>
+              </div>
+              <p className="text-slate-200 mt-0.5">{moderationNotice.reason || 'Sanción aplicada por el personal de moderación.'}</p>
+            </div>
+          </div>
+          {moderationNotice.expiresAt && moderationNotice.expiresAt > 0 && (
+            <div className="text-right shrink-0 ml-4">
+              <span className="text-[10px] text-slate-400 uppercase block font-mono">Expira en</span>
+              <span className="font-mono text-amber-400 font-bold">
+                {Math.max(0, Math.ceil((moderationNotice.expiresAt - Date.now()) / 1000))}s
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Main Content Area */}
       <main className="relative z-10 w-full max-w-5xl px-4 flex-1 flex flex-col items-center justify-center py-8">
         {errorMsg && (
@@ -902,6 +963,7 @@ export function PlayerRoute() {
           pingMs={pingMs}
           isPipSupported={isPipSupported}
           isPipActive={pipWindow !== null}
+          isModerationMuted={Boolean(moderationNotice?.action === 'mute' && moderationNotice.active)}
           onToggleMute={handleToggleMute}
           onToggleDeafen={handleToggleDeafen}
           onTogglePip={handleTogglePip}

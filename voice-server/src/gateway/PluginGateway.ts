@@ -2,6 +2,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
 import { TokenStore } from '../auth/TokenStore.js';
 import { SpatialEngine } from '../spatial/SpatialEngine.js';
+import type { ClientGateway } from './ClientGateway.js';
 
 interface SocketMeta {
   role: 'paper' | 'velocity';
@@ -13,6 +14,7 @@ export class PluginGateway {
   private secretKey: string;
   private tokenStore: TokenStore;
   private spatialEngine: SpatialEngine;
+  private clientGateway?: ClientGateway;
   private velocitySocket?: WebSocket;
   private paperSockets = new Map<string, WebSocket>();
   private socketMeta = new Map<WebSocket, SocketMeta>();
@@ -29,6 +31,10 @@ export class PluginGateway {
     this.spatialEngine = spatialEngine;
 
     this.init();
+  }
+
+  public setClientGateway(clientGateway: ClientGateway): void {
+    this.clientGateway = clientGateway;
   }
 
   private init(): void {
@@ -85,14 +91,34 @@ export class PluginGateway {
               playerName: message.playerName,
               expiresAt: message.expiresAt,
               isAdmin: Boolean(message.isAdmin),
+              clientIp: message.clientIp,
+              isMuted: Boolean(message.isMuted),
             });
+          } else if (message.type === 'player_quit') {
+            if (message.playerUuid && this.clientGateway) {
+              this.clientGateway.disconnectPlayer(message.playerUuid);
+            }
+          } else if (message.type === 'moderation_action') {
+            if (this.clientGateway) {
+              this.clientGateway.handleModerationAction(message);
+            }
+          } else if (message.type === 'active_punishments_sync') {
+            if (this.clientGateway && Array.isArray(message.punishments)) {
+              this.clientGateway.syncActivePunishments(message.punishments);
+            }
           } else if (message.type === 'telemetry_batch' && Array.isArray(message.players)) {
             const batchServerId = message.serverId || meta?.serverId || 'default';
             const enrichedPlayers = message.players.map((p: any) => ({
               ...p,
               serverId: p.serverId || batchServerId,
             }));
-            this.spatialEngine.updateBatch(enrichedPlayers);
+            const enrichedSpeakers = Array.isArray(message.speakers)
+              ? message.speakers.map((s: any) => ({
+                  ...s,
+                  serverId: s.serverId || batchServerId,
+                }))
+              : undefined;
+            this.spatialEngine.updateBatch(enrichedPlayers, enrichedSpeakers);
           }
         } catch (err) {
           console.error('[PluginGateway] Failed to handle message:', err);

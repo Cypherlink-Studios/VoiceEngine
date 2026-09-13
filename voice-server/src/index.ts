@@ -140,6 +140,7 @@ export async function startServer(): Promise<void> {
   await sfu.init();
   pluginGateway = new PluginGateway(pluginWss, config.secretKey, tokenStore, spatialEngine);
   clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway, settingsManager);
+  pluginGateway.setClientGateway(clientGateway);
 
   return new Promise((resolve) => {
     httpServer.listen(config.port, config.host, () => {

@@ -5,6 +5,9 @@ import com.velocitypowered.api.proxy.Player;
 import com.voiceengine.velocity.auth.VelocitySessionToken;
 import com.voiceengine.velocity.auth.VelocityTokenManager;
 import com.voiceengine.velocity.config.VelocityVoiceConfig;
+import com.voiceengine.velocity.moderation.DurationParser;
+import com.voiceengine.velocity.moderation.PunishmentRecord;
+import com.voiceengine.velocity.moderation.VelocityModerationService;
 import com.voiceengine.velocity.net.VelocityBackendClient;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -12,6 +15,7 @@ import org.incendo.cloud.annotations.Command;
 import org.incendo.cloud.annotations.CommandDescription;
 import org.incendo.cloud.annotations.Permission;
 
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -23,6 +27,7 @@ public class VelocityVoiceCommands {
     private final Supplier<VelocityBackendClient> clientSupplier;
     private final Consumer<VelocitySessionToken> tokenConsumer;
     private final Runnable reloadAction;
+    private final VelocityModerationService moderationService;
 
     public VelocityVoiceCommands(
         VelocityTokenManager tokenManager,
@@ -31,11 +36,23 @@ public class VelocityVoiceCommands {
         Consumer<VelocitySessionToken> tokenConsumer,
         Runnable reloadAction
     ) {
+        this(tokenManager, configSupplier, clientSupplier, tokenConsumer, reloadAction, null);
+    }
+
+    public VelocityVoiceCommands(
+        VelocityTokenManager tokenManager,
+        Supplier<VelocityVoiceConfig> configSupplier,
+        Supplier<VelocityBackendClient> clientSupplier,
+        Consumer<VelocitySessionToken> tokenConsumer,
+        Runnable reloadAction,
+        VelocityModerationService moderationService
+    ) {
         this.tokenManager = tokenManager;
         this.configSupplier = configSupplier;
         this.clientSupplier = clientSupplier;
         this.tokenConsumer = tokenConsumer;
         this.reloadAction = reloadAction;
+        this.moderationService = moderationService;
     }
 
     @Command("voice|ve|voiceengine|audio")
@@ -53,8 +70,49 @@ public class VelocityVoiceCommands {
             return;
         }
 
+        String clientIp = (player.getRemoteAddress() != null && player.getRemoteAddress().getAddress() != null)
+            ? player.getRemoteAddress().getAddress().getHostAddress()
+            : null;
+
+        if (moderationService != null) {
+            // Check IP ban
+            if (clientIp != null && moderationService.isIpBanned(clientIp)) {
+                player.sendMessage(MINI_MESSAGE.deserialize("<red>Your IP address is banned from VoiceEngine.</red>"));
+                return;
+            }
+
+            // Check player ban
+            Optional<PunishmentRecord> banOpt = moderationService.getActiveBan(player.getUniqueId());
+            if (banOpt.isPresent()) {
+                PunishmentRecord ban = banOpt.get();
+                String time = DurationParser.formatRemaining(ban.expiresAt());
+                player.sendMessage(MINI_MESSAGE.deserialize(
+                    "<red>You are banned from VoiceEngine! Reason: <reason> (Expires in: <time>)</red>",
+                    Placeholder.parsed("reason", ban.reason() != null ? ban.reason() : "Banned by staff"),
+                    Placeholder.parsed("time", time)
+                ));
+                return;
+            }
+        }
+
+        boolean isMuted = false;
+        if (moderationService != null) {
+            Optional<PunishmentRecord> muteOpt = moderationService.getActiveMute(player.getUniqueId());
+            if (muteOpt.isPresent()) {
+                isMuted = true;
+                String time = DurationParser.formatRemaining(muteOpt.get().expiresAt());
+                player.sendMessage(MINI_MESSAGE.deserialize(
+                    "<yellow>Notice: You are currently muted in voice chat (Expires in: <time>). Reason: <reason></yellow>",
+                    Placeholder.parsed("time", time),
+                    Placeholder.parsed("reason", muteOpt.get().reason() != null ? muteOpt.get().reason() : "Muted by staff")
+                ));
+            }
+        }
+
         VelocitySessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getUsername(), false);
-        if (tokenConsumer != null) {
+        if (client != null && client.isOpen()) {
+            client.registerToken(sessionToken, clientIp, isMuted);
+        } else if (tokenConsumer != null) {
             tokenConsumer.accept(sessionToken);
         }
 
@@ -83,8 +141,35 @@ public class VelocityVoiceCommands {
             return;
         }
 
+        String clientIp = (player.getRemoteAddress() != null && player.getRemoteAddress().getAddress() != null)
+            ? player.getRemoteAddress().getAddress().getHostAddress()
+            : null;
+
+        if (moderationService != null) {
+            // Check IP ban
+            if (clientIp != null && moderationService.isIpBanned(clientIp)) {
+                player.sendMessage(MINI_MESSAGE.deserialize("<red>Your IP address is banned from VoiceEngine.</red>"));
+                return;
+            }
+
+            // Check player ban
+            Optional<PunishmentRecord> banOpt = moderationService.getActiveBan(player.getUniqueId());
+            if (banOpt.isPresent()) {
+                PunishmentRecord ban = banOpt.get();
+                String time = DurationParser.formatRemaining(ban.expiresAt());
+                player.sendMessage(MINI_MESSAGE.deserialize(
+                    "<red>You are banned from VoiceEngine! Reason: <reason> (Expires in: <time>)</red>",
+                    Placeholder.parsed("reason", ban.reason() != null ? ban.reason() : "Banned by staff"),
+                    Placeholder.parsed("time", time)
+                ));
+                return;
+            }
+        }
+
         VelocitySessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getUsername(), true);
-        if (tokenConsumer != null) {
+        if (client != null && client.isOpen()) {
+            client.registerToken(sessionToken, clientIp, false);
+        } else if (tokenConsumer != null) {
             tokenConsumer.accept(sessionToken);
         }
 

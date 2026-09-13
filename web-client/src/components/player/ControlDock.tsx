@@ -11,6 +11,7 @@ interface ControlDockProps {
   pingMs: number | null;
   isPipSupported: boolean;
   isPipActive: boolean;
+  isModerationMuted?: boolean;
   onToggleMute: () => void;
   onToggleDeafen: () => void;
   onTogglePip: () => void;
@@ -31,6 +32,7 @@ export function ControlDock({
   pingMs,
   isPipSupported,
   isPipActive,
+  isModerationMuted,
   onToggleMute,
   onToggleDeafen,
   onTogglePip,
@@ -46,13 +48,22 @@ export function ControlDock({
         {/* Left: Mic toggle, Deafen toggle & Waveform */}
         <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start shrink-0">
           <button
-            onClick={onToggleMute}
-            className={`relative flex items-center justify-center w-11 h-11 rounded-xl font-semibold transition-all shadow-lg cursor-pointer ${
-              isMuted
-                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+            onClick={isModerationMuted ? undefined : onToggleMute}
+            disabled={isModerationMuted}
+            className={`relative flex items-center justify-center w-11 h-11 rounded-xl font-semibold transition-all shadow-lg ${
+              isModerationMuted
+                ? 'bg-rose-950/40 text-rose-500 border border-rose-500/30 opacity-60 cursor-not-allowed'
+                : isMuted
+                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 cursor-pointer'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)] cursor-pointer'
             }`}
-            title={isMuted ? 'Desmutear micrófono [M]' : 'Mutear micrófono [M]'}
+            title={
+              isModerationMuted
+                ? 'Micrófono silenciado por moderación del servidor'
+                : isMuted
+                ? 'Desmutear micrófono [M]'
+                : 'Mutear micrófono [M]'
+            }
           >
             {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             {!isMuted && isSpeaking && (

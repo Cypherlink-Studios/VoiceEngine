@@ -8,11 +8,17 @@ import org.bukkit.scheduler.BukkitTask;
 public class VisualFeedbackService implements VoiceEngineService {
     private final Plugin plugin;
     private final SpeechFeedbackHandler feedbackHandler;
+    private final Runnable additionalFeedback;
     private BukkitTask task;
 
     public VisualFeedbackService(Plugin plugin, SpeechFeedbackHandler feedbackHandler) {
+        this(plugin, feedbackHandler, null);
+    }
+
+    public VisualFeedbackService(Plugin plugin, SpeechFeedbackHandler feedbackHandler, Runnable additionalFeedback) {
         this.plugin = plugin;
         this.feedbackHandler = feedbackHandler;
+        this.additionalFeedback = additionalFeedback;
     }
 
     @Override
@@ -20,7 +26,14 @@ public class VisualFeedbackService implements VoiceEngineService {
         if (task != null) {
             task.cancel();
         }
-        this.task = Bukkit.getScheduler().runTaskTimer(plugin, feedbackHandler::renderVisualIndicators, 5L, 5L);
+        this.task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (feedbackHandler != null) {
+                feedbackHandler.renderVisualIndicators();
+            }
+            if (additionalFeedback != null) {
+                additionalFeedback.run();
+            }
+        }, 5L, 5L);
     }
 
     @Override

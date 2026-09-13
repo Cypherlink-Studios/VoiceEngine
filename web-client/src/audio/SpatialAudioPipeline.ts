@@ -6,6 +6,7 @@ export interface PeerAudioNode {
   gain: GainNode;
   isSubmerged: boolean;
   isChannel?: boolean;
+  isBroadcast?: boolean;
   isPaused?: boolean;
 }
 
@@ -92,6 +93,7 @@ export class SpatialAudioPipeline {
       relZ?: number;
       isSubmerged?: boolean;
       isChannel?: boolean;
+      isBroadcast?: boolean;
     }
   ): void {
     const existing = this.peers.get(peerUuid);
@@ -108,7 +110,8 @@ export class SpatialAudioPipeline {
             initialPos.relY,
             initialPos.relZ,
             Boolean(initialPos.isSubmerged),
-            false
+            false,
+            Boolean(initialPos.isBroadcast)
           );
         }
         return;
@@ -147,6 +150,7 @@ export class SpatialAudioPipeline {
       trackReadyState: track.readyState,
       audioContextState: this.audioContext.state,
       isChannel: Boolean(initialPos.isChannel),
+      isBroadcast: Boolean(initialPos.isBroadcast),
     });
 
     const source = this.audioContext.createMediaStreamSource(stream);
@@ -155,8 +159,9 @@ export class SpatialAudioPipeline {
     const isMuted = this.peerMuted.get(peerUuid) ?? false;
     gain.gain.setValueAtTime(isMuted ? 0 : userVol, this.audioContext.currentTime);
 
-    if (initialPos.isChannel) {
-      // Direct Stereo Routing for Fixed Channels (no spatial filtering or panner)
+    const isBroadcast = Boolean(initialPos.isBroadcast);
+    if (initialPos.isChannel || isBroadcast) {
+      // Direct Stereo Routing for Fixed Channels or 2D Broadcast (no spatial filtering or panner)
       source.connect(gain);
       gain.connect(this.masterGain);
 
@@ -165,7 +170,8 @@ export class SpatialAudioPipeline {
         track,
         gain,
         isSubmerged: false,
-        isChannel: true,
+        isChannel: Boolean(initialPos.isChannel),
+        isBroadcast,
         isPaused: false,
       });
       return;
@@ -210,6 +216,7 @@ export class SpatialAudioPipeline {
       gain,
       isSubmerged,
       isChannel: false,
+      isBroadcast: false,
       isPaused: false,
     });
   }
@@ -220,7 +227,7 @@ export class SpatialAudioPipeline {
     try {
       peerNode.source.disconnect();
       const newSource = this.audioContext.createMediaStreamSource(new MediaStream([peerNode.track]));
-      if (peerNode.isChannel || !peerNode.filter) {
+      if (peerNode.isChannel || peerNode.isBroadcast || !peerNode.filter) {
         newSource.connect(peerNode.gain);
       } else {
         newSource.connect(peerNode.filter);
@@ -238,10 +245,11 @@ export class SpatialAudioPipeline {
     relY: number,
     relZ: number,
     isSubmerged: boolean,
-    isPaused?: boolean
+    isPaused?: boolean,
+    isBroadcast?: boolean
   ): void {
     const peerNode = this.peers.get(peerUuid);
-    if (!peerNode || peerNode.isChannel || !peerNode.panner || !peerNode.filter) return;
+    if (!peerNode || peerNode.isChannel) return;
 
     if (this.audioContext.state === 'suspended') {
       this.audioContext.resume().catch(() => {});
@@ -257,6 +265,43 @@ export class SpatialAudioPipeline {
     }
 
     if (peerNode.isPaused) {
+      return;
+    }
+
+    // Dynamic routing transition between 3D Proximity and 2D Broadcast
+    if (isBroadcast !== undefined && Boolean(peerNode.isBroadcast) !== isBroadcast) {
+      peerNode.isBroadcast = isBroadcast;
+      try { peerNode.source.disconnect(); } catch {}
+      try { peerNode.gain.disconnect(); } catch {}
+
+      if (isBroadcast) {
+        // Switch to direct 2D broadcast stereo
+        peerNode.source.connect(peerNode.gain);
+        peerNode.gain.connect(this.masterGain);
+      } else {
+        // Switch back to 3D spatial proximity
+        if (!peerNode.filter) {
+          peerNode.filter = this.audioContext.createBiquadFilter();
+          peerNode.filter.type = 'lowpass';
+          peerNode.filter.frequency.setValueAtTime(isSubmerged ? 600 : 20000, this.audioContext.currentTime);
+        }
+        if (!peerNode.panner) {
+          peerNode.panner = this.audioContext.createPanner();
+          peerNode.panner.panningModel = 'HRTF';
+          peerNode.panner.distanceModel = 'inverse';
+          peerNode.panner.refDistance = 2.0;
+          peerNode.panner.maxDistance = 30.0;
+          peerNode.panner.rolloffFactor = 1.0;
+          peerNode.panner.coneInnerAngle = 360;
+        }
+        peerNode.source.connect(peerNode.filter);
+        peerNode.filter.connect(peerNode.panner);
+        peerNode.panner.connect(peerNode.gain);
+        peerNode.gain.connect(this.proximityBusGain);
+      }
+    }
+
+    if (peerNode.isBroadcast || !peerNode.panner || !peerNode.filter) {
       return;
     }
 

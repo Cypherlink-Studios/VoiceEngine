@@ -63,6 +63,14 @@ public class VoiceBackendClient extends WebSocketClient {
         this.onSpeakingStateChange = onSpeakingStateChange;
     }
 
+    public String getSecretKey() {
+        return secretKey;
+    }
+
+    public String getServerId() {
+        return serverId;
+    }
+
     private static Map<String, String> createHeaders(String secretKey, String serverId) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Authorization", "Bearer " + secretKey);
@@ -127,6 +135,10 @@ public class VoiceBackendClient extends WebSocketClient {
     }
 
     public void registerToken(SessionToken token) {
+        registerToken(token, null);
+    }
+
+    public void registerToken(SessionToken token, String clientIp) {
         if (isOpen()) {
             JsonObject json = new JsonObject();
             json.addProperty("type", "register_token");
@@ -135,6 +147,18 @@ public class VoiceBackendClient extends WebSocketClient {
             json.addProperty("playerName", token.playerName());
             json.addProperty("expiresAt", token.expiresAt().toEpochMilli());
             json.addProperty("isAdmin", token.isAdmin());
+            if (clientIp != null) {
+                json.addProperty("clientIp", clientIp);
+            }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendPlayerQuit(UUID playerUuid) {
+        if (isOpen() && playerUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "player_quit");
+            json.addProperty("playerUuid", playerUuid.toString());
             send(GSON.toJson(json));
         }
     }

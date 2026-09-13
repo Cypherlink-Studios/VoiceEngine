@@ -17,8 +17,10 @@ dependencies {
     implementation("org.incendo:cloud-paper:2.0.0")
     implementation("org.incendo:cloud-annotations:2.0.0")
     compileOnly("com.google.code.gson:gson:2.11.0")
+    compileOnly("org.xerial:sqlite-jdbc:3.49.1.0")
 
     testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    testImplementation("org.xerial:sqlite-jdbc:3.49.1.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.mockito:mockito-core:5.14.2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

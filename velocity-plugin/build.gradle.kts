@@ -18,6 +18,7 @@ dependencies {
     implementation("org.incendo:cloud-velocity:2.0.0")
     implementation("org.incendo:cloud-annotations:2.0.0")
     implementation("org.yaml:snakeyaml:2.2")
+    implementation("org.xerial:sqlite-jdbc:3.49.1.0")
     compileOnly("com.google.code.gson:gson:2.11.0")
 
     testImplementation("com.velocitypowered:velocity-api:3.4.0-SNAPSHOT")

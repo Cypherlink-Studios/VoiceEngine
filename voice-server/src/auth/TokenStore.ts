@@ -70,6 +70,8 @@ export class TokenStore {
     const record = this.tokens.get(key);
 
     if (!record) return null;
+    const isDev = this.devTokens.has(key);
+    if (!isDev && record.redeemed) return null;
     if (Date.now() > record.expiresAt) {
       this.tokens.delete(key);
       return null;
@@ -77,6 +79,28 @@ export class TokenStore {
 
     record.redeemed = true;
     return record;
+  }
+
+  public isIpAllowed(record: SessionTokenRecord, remoteIp?: string): boolean {
+    if (!record.clientIp || !remoteIp) return true;
+    const normBound = this.normalizeIp(record.clientIp);
+    const normRemote = this.normalizeIp(remoteIp);
+    if (this.isLoopback(normBound) || this.isLoopback(normRemote)) return true;
+    return normBound === normRemote;
+  }
+
+  public normalizeIp(ip: string): string {
+    if (!ip) return '';
+    let normalized = ip.trim();
+    if (normalized.startsWith('::ffff:')) {
+      normalized = normalized.substring(7);
+    }
+    return normalized;
+  }
+
+  public isLoopback(ip: string): boolean {
+    const norm = this.normalizeIp(ip);
+    return norm === '127.0.0.1' || norm === '::1' || norm === 'localhost';
   }
 
   public validateAndRedeemAdmin(token: string): SessionTokenRecord | null {

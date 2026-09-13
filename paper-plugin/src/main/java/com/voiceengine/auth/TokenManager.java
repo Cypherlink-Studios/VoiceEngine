@@ -15,7 +15,7 @@ public class TokenManager {
 
     private final SecureRandom random = new SecureRandom();
     private final Map<String, SessionToken> tokens = new ConcurrentHashMap<>();
-    private final Duration ttl;
+    private volatile Duration ttl;
     private final int tokenLength;
 
     public TokenManager() {
@@ -23,8 +23,18 @@ public class TokenManager {
     }
 
     public TokenManager(Duration ttl, int tokenLength) {
-        this.ttl = ttl;
+        this.ttl = ttl != null ? ttl : DEFAULT_TTL;
         this.tokenLength = tokenLength;
+    }
+
+    public void setTtl(Duration ttl) {
+        if (ttl != null && !ttl.isNegative() && !ttl.isZero()) {
+            this.ttl = ttl;
+        }
+    }
+
+    public Duration getTtl() {
+        return ttl;
     }
 
     public SessionToken generateToken(UUID playerUuid, String playerName) {

@@ -9,6 +9,13 @@ export interface ChannelMember {
   isSpeaking: boolean;
 }
 
+export interface ModerationNotice {
+  action: 'mute' | 'deafen' | 'kick' | 'ban' | 'unmute' | 'undeafen';
+  active: boolean;
+  reason?: string;
+  expiresAt?: number;
+}
+
 export interface SignalingCallbacks {
   onAuthenticated: (player: { uuid: string; username: string }) => void;
   onError: (errorMsg: string) => void;
@@ -18,6 +25,7 @@ export interface SignalingCallbacks {
   onChannelMembersUpdated?: (channelId: string, members: ChannelMember[]) => void;
   onChannelPeerSpeaking?: (channelId: string, peerUuid: string, speaking: boolean) => void;
   onPingUpdated?: (pingMs: number) => void;
+  onModerationNotice?: (notice: ModerationNotice) => void;
 }
 
 export class VoiceSignaling {
@@ -62,6 +70,27 @@ export class VoiceSignaling {
     this.callbacks = callbacks;
   }
 
+  private getOrCreateDeviceId(): string {
+    const STORAGE_KEY = 'voiceengine_device_id';
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        let id = window.localStorage.getItem(STORAGE_KEY);
+        if (!id) {
+          id = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : 'dev_' + Math.random().toString(36).substring(2, 15);
+          window.localStorage.setItem(STORAGE_KEY, id);
+        }
+        return id;
+      }
+    } catch (e) {
+      console.warn('[VoiceSignaling] Failed to access localStorage for deviceId:', e);
+    }
+    return typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : 'dev_' + Math.random().toString(36).substring(2, 15);
+  }
+
   public async connect(micStream: MediaStream): Promise<void> {
     await this.pipeline.resume();
 
@@ -70,10 +99,12 @@ export class VoiceSignaling {
 
     this.ws.onopen = async () => {
       this.startPingLoop();
+      const deviceId = this.getOrCreateDeviceId();
       // Send authentication request
       this.send({
         type: 'client_auth',
         token: this.token,
+        deviceId,
       });
     };
 
@@ -181,6 +212,16 @@ export class VoiceSignaling {
         break;
       }
 
+      case 'moderation_notice': {
+        this.callbacks.onModerationNotice?.({
+          action: msg.action,
+          active: Boolean(msg.active),
+          reason: msg.reason,
+          expiresAt: msg.expiresAt,
+        });
+        break;
+      }
+
       case 'new_consumer': {
         if (!this.recvTransport || !this.device) return;
 
@@ -207,6 +248,7 @@ export class VoiceSignaling {
           relZ: msg.relZ,
           isSubmerged: msg.isSubmerged,
           isChannel: Boolean(msg.isChannel),
+          isBroadcast: Boolean(msg.isBroadcast),
         });
 
         if (!msg.isChannel) {
@@ -221,6 +263,7 @@ export class VoiceSignaling {
             relY: msg.relY,
             relZ: msg.relZ,
             isSubmerged: msg.isSubmerged,
+            isBroadcast: Boolean(msg.isBroadcast),
           });
           this.dispatchPeersUpdatedThrottled();
         }
@@ -249,7 +292,8 @@ export class VoiceSignaling {
           msg.relY,
           msg.relZ,
           msg.isSubmerged,
-          Boolean(msg.isPaused)
+          Boolean(msg.isPaused),
+          Boolean(msg.isBroadcast)
         );
 
         if (msg.isPaused) {
@@ -272,6 +316,7 @@ export class VoiceSignaling {
             current.relZ = msg.relZ;
             current.isSubmerged = msg.isSubmerged;
             current.username = resolvedUsername;
+            current.isBroadcast = Boolean(msg.isBroadcast);
           } else {
             this.peersInfo.set(msg.peerUuid, {
               uuid: msg.peerUuid,
@@ -281,6 +326,7 @@ export class VoiceSignaling {
               relY: msg.relY,
               relZ: msg.relZ,
               isSubmerged: msg.isSubmerged,
+              isBroadcast: Boolean(msg.isBroadcast),
             });
           }
           this.dispatchPeersUpdatedThrottled();

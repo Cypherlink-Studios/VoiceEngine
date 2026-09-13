@@ -23,6 +23,8 @@ export interface SessionTokenRecord {
   expiresAt: number;
   redeemed: boolean;
   isAdmin?: boolean;
+  clientIp?: string;
+  isMuted?: boolean;
 }
 
 export interface RelativeSpatialAudio {
@@ -35,6 +37,19 @@ export interface RelativeSpatialAudio {
   relX: number;
   relY: number;
   relZ: number;
+  isBroadcast?: boolean;
+}
+
+export interface SpeakerBlockState {
+  id: string;
+  world: string;
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  linkedPlayerUuid: string | null;
+  powered: boolean;
+  serverId?: string;
 }
 
 export interface ServerBrandingConfig {
@@ -81,4 +96,26 @@ export interface ClientSession {
   consumers: Map<string, mediasoup.types.Consumer>;
   isSpeaking: boolean;
   activeChannel?: string; // 'proximity' or fixed channel id
+  clientIp?: string;
+  deviceId?: string;
+  isMuted?: boolean;
+  isDeafened?: boolean;
+}
+
+export interface ModerationActionPayload {
+  targetUuid: string;
+  action: 'mute' | 'deafen' | 'kick' | 'ban';
+  active: boolean;
+  reason?: string;
+  expiresAt?: number;
+  clientIp?: string;
+  deviceId?: string;
+}
+
+export interface ModerationNoticeFrame {
+  type: 'moderation_notice';
+  action: 'mute' | 'deafen' | 'kick' | 'ban';
+  active: boolean;
+  reason?: string;
+  expiresAt?: number;
 }

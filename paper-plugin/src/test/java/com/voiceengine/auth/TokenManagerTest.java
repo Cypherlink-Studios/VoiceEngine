@@ -77,4 +77,15 @@ class TokenManagerTest {
         // token2 should be valid
         assertTrue(tokenManager.validateToken(token2.token()).isPresent());
     }
+
+    @Test
+    void testDynamicTtlUpdate() {
+        assertEquals(Duration.ofMinutes(5), tokenManager.getTtl());
+        tokenManager.setTtl(Duration.ofMinutes(10));
+        assertEquals(Duration.ofMinutes(10), tokenManager.getTtl());
+
+        SessionToken token = tokenManager.generateToken(testPlayerUuid, testPlayerName);
+        Duration actualDuration = Duration.between(token.createdAt(), token.expiresAt());
+        assertEquals(10, actualDuration.toMinutes());
+    }
 }

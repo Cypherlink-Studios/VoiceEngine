@@ -22,6 +22,7 @@ public class VoiceCommands {
     private final Supplier<VoiceBackendClient> clientSupplier;
     private final TranslationService translationService;
     private final Consumer<SessionToken> tokenConsumer;
+    private final java.util.function.BiConsumer<SessionToken, String> ipTokenConsumer;
     private final Runnable reloadAction;
 
     public VoiceCommands(
@@ -32,12 +33,25 @@ public class VoiceCommands {
         Consumer<SessionToken> tokenConsumer,
         Runnable reloadAction
     ) {
+        this(tokenManager, configSupplier, clientSupplier, translationService, tokenConsumer, reloadAction, null);
+    }
+
+    public VoiceCommands(
+        TokenManager tokenManager,
+        Supplier<VoiceConfig> configSupplier,
+        Supplier<VoiceBackendClient> clientSupplier,
+        TranslationService translationService,
+        Consumer<SessionToken> tokenConsumer,
+        Runnable reloadAction,
+        java.util.function.BiConsumer<SessionToken, String> ipTokenConsumer
+    ) {
         this.tokenManager = tokenManager;
         this.configSupplier = configSupplier;
         this.clientSupplier = clientSupplier;
         this.translationService = translationService;
         this.tokenConsumer = tokenConsumer;
         this.reloadAction = reloadAction;
+        this.ipTokenConsumer = ipTokenConsumer;
     }
 
     @Command("voice")
@@ -59,7 +73,10 @@ public class VoiceCommands {
         }
 
         SessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getName(), false);
-        if (tokenConsumer != null) {
+        String clientIp = player.getAddress() != null && player.getAddress().getAddress() != null ? player.getAddress().getAddress().getHostAddress() : null;
+        if (ipTokenConsumer != null) {
+            ipTokenConsumer.accept(sessionToken, clientIp);
+        } else if (tokenConsumer != null) {
             tokenConsumer.accept(sessionToken);
         }
 
@@ -91,7 +108,10 @@ public class VoiceCommands {
         }
 
         SessionToken sessionToken = tokenManager.generateToken(player.getUniqueId(), player.getName(), true);
-        if (tokenConsumer != null) {
+        String clientIp = player.getAddress() != null && player.getAddress().getAddress() != null ? player.getAddress().getAddress().getHostAddress() : null;
+        if (ipTokenConsumer != null) {
+            ipTokenConsumer.accept(sessionToken, clientIp);
+        } else if (tokenConsumer != null) {
             tokenConsumer.accept(sessionToken);
         }
 

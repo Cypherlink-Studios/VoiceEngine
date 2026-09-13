@@ -1,10 +1,11 @@
 import { WebSocket, WebSocketServer } from 'ws';
+import { IncomingMessage } from 'http';
 import { v4 as uuidv4 } from 'uuid';
 import { TokenStore } from '../auth/TokenStore.js';
 import { SpatialEngine } from '../spatial/SpatialEngine.js';
 import { MediasoupManager } from '../sfu/MediasoupManager.js';
 import { PluginGateway } from './PluginGateway.js';
-import { ClientSession } from '../types.js';
+import { ClientSession, ModerationActionPayload } from '../types.js';
 import { SettingsManager } from '../config/SettingsManager.js';
 import { config } from '../config.js';
 import * as mediasoup from 'mediasoup';
@@ -20,6 +21,13 @@ export class ClientGateway {
   private sessions = new Map<string, ClientSession>(); // sessionId -> ClientSession
   private playerSessions = new Map<string, ClientSession>(); // playerUuid -> ClientSession
   private loopInterval?: NodeJS.Timeout;
+  private connectionHandler?: (ws: WebSocket, req?: IncomingMessage) => void;
+
+  private bannedUuids = new Map<string, { reason?: string; expiresAt?: number }>();
+  private bannedIps = new Map<string, { reason?: string; expiresAt?: number }>();
+  private bannedDevices = new Map<string, { reason?: string; expiresAt?: number }>();
+  private mutedUuids = new Map<string, { reason?: string; expiresAt?: number }>();
+  private deafenedUuids = new Map<string, { reason?: string; expiresAt?: number }>();
 
   constructor(
     wss: WebSocketServer,
@@ -41,9 +49,12 @@ export class ClientGateway {
   }
 
   private init(): void {
-    this.wss.on('connection', (ws: WebSocket) => {
+    this.connectionHandler = (ws: WebSocket, req?: IncomingMessage) => {
       let session: ClientSession | null = null;
       let clientRtpCapabilities: mediasoup.types.RtpCapabilities | null = null;
+
+      const rawIp = (req?.headers?.['x-forwarded-for'] as string) || req?.socket?.remoteAddress || '';
+      const clientIp = rawIp.split(',')[0].trim();
 
       ws.on('message', async (data: Buffer | string) => {
         try {
@@ -51,6 +62,13 @@ export class ClientGateway {
 
           switch (msg.type) {
             case 'client_auth': {
+              const deviceId = typeof msg.deviceId === 'string' ? msg.deviceId.trim() : undefined;
+              if (deviceId && this.isDeviceBanned(deviceId)) {
+                ws.send(JSON.stringify({ type: 'auth_error', message: 'Device is banned from VoiceEngine' }));
+                ws.close(4003, 'Device banned');
+                return;
+              }
+
               const tokenKey = (msg.token || '').toUpperCase().trim();
               const tokenRecord = this.tokenStore.validateAndRedeem(tokenKey);
               if (!tokenRecord) {
@@ -66,12 +84,32 @@ export class ClientGateway {
                 return;
               }
 
+              // IP binding check
+              if (!this.tokenStore.isIpAllowed(tokenRecord, clientIp)) {
+                console.warn(
+                  `[ClientGateway] IP mismatch for player ${tokenRecord.playerName}. Bound IP: ${tokenRecord.clientIp}, Remote IP: ${clientIp}`
+                );
+                ws.send(JSON.stringify({ type: 'auth_error', message: 'IP_MISMATCH: Token bound to different IP address' }));
+                ws.close(4003, 'IP_MISMATCH');
+                return;
+              }
+
+              // Ban check for player UUID or IP
+              if (this.isPlayerBanned(tokenRecord.playerUuid) || this.isIpBanned(clientIp)) {
+                ws.send(JSON.stringify({ type: 'auth_error', message: 'Banned from VoiceEngine' }));
+                ws.close(4003, 'Banned');
+                return;
+              }
+
               clientRtpCapabilities = msg.rtpCapabilities;
               const sessionId = uuidv4();
 
               // Create Mediasoup Transports
               const sendTransport = await this.sfu.createWebRtcTransport();
               const recvTransport = await this.sfu.createWebRtcTransport();
+
+              const isMuted = Boolean(tokenRecord.isMuted) || this.isPlayerMuted(tokenRecord.playerUuid);
+              const isDeafened = this.isPlayerDeafened(tokenRecord.playerUuid);
 
               session = {
                 sessionId,
@@ -83,6 +121,10 @@ export class ClientGateway {
                 consumers: new Map(),
                 isSpeaking: false,
                 activeChannel: 'proximity',
+                clientIp,
+                deviceId,
+                isMuted,
+                isDeafened,
               };
 
               const existingSession = this.playerSessions.get(session.playerUuid);
@@ -117,6 +159,27 @@ export class ClientGateway {
                   },
                 })
               );
+
+              if (isMuted) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'moderation_notice',
+                    action: 'mute',
+                    active: true,
+                    reason: 'Microphone muted by server moderation',
+                  })
+                );
+              }
+              if (isDeafened) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'moderation_notice',
+                    action: 'deafen',
+                    active: true,
+                    reason: 'Audio output deafened by server moderation',
+                  })
+                );
+              }
               break;
             }
 
@@ -140,7 +203,41 @@ export class ClientGateway {
               });
 
               session.producer = producer;
+              if (session.isMuted) {
+                await producer.pause();
+                ws.send(
+                  JSON.stringify({
+                    type: 'moderation_notice',
+                    action: 'mute',
+                    active: true,
+                    reason: 'Microphone muted by server moderation',
+                  })
+                );
+              }
               ws.send(JSON.stringify({ type: 'produced', producerId: producer.id }));
+              break;
+            }
+
+            case 'pause_producer': {
+              if (!session || !session.producer) return;
+              await session.producer.pause();
+              break;
+            }
+
+            case 'resume_producer': {
+              if (!session || !session.producer) return;
+              if (session.isMuted) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'moderation_notice',
+                    action: 'mute',
+                    active: true,
+                    reason: 'Microphone muted by server moderation',
+                  })
+                );
+                return;
+              }
+              await session.producer.resume();
               break;
             }
 
@@ -254,7 +351,8 @@ export class ClientGateway {
           this.cleanupSession(session);
         }
       });
-    });
+    };
+    this.wss.on('connection', this.connectionHandler);
   }
 
   private startProximityLoop(): void {
@@ -303,6 +401,10 @@ export class ClientGateway {
                   this.sfu.getRtpCapabilities()
                 );
 
+                if (listenerSession.isDeafened) {
+                  await consumer.pause();
+                }
+
                 listenerSession.consumers.set(peer.peerUuid, consumer);
 
                 listenerSession.ws.send(
@@ -319,14 +421,15 @@ export class ClientGateway {
                     distance: peer.distance,
                     isSubmerged: peer.isSubmerged,
                     isChannel: false,
+                    isBroadcast: peer.isBroadcast || false,
                   })
                 );
               } catch (err) {
                 console.error(`[ClientGateway] Failed to create proximity consumer for ${peer.peerUuid}:`, err);
               }
             } else {
-              // If consumer was paused due to distance, resume RTP transmission
-              if (consumer.paused) {
+              // If consumer was paused due to distance, resume RTP transmission if not deafened
+              if (consumer.paused && !listenerSession.isDeafened) {
                 try {
                   await consumer.resume();
                 } catch (err) {
@@ -344,7 +447,8 @@ export class ClientGateway {
                   relZ: peer.relZ,
                   distance: peer.distance,
                   isSubmerged: peer.isSubmerged,
-                  isPaused: false,
+                  isPaused: consumer.paused,
+                  isBroadcast: peer.isBroadcast || false,
                 })
               );
             }
@@ -435,6 +539,10 @@ export class ClientGateway {
                   this.sfu.getRtpCapabilities()
                 );
 
+                if (listenerSession.isDeafened) {
+                  await consumer.pause();
+                }
+
                 listenerSession.consumers.set(speakerSession.playerUuid, consumer);
 
                 listenerSession.ws.send(
@@ -452,7 +560,7 @@ export class ClientGateway {
               } catch (err) {
                 console.error(`[ClientGateway] Failed to create channel consumer for ${speakerSession.playerUuid}:`, err);
               }
-            } else if (consumer.paused) {
+            } else if (consumer.paused && !listenerSession.isDeafened) {
               try {
                 await consumer.resume();
               } catch {}
@@ -647,9 +755,221 @@ export class ClientGateway {
     }));
   }
 
+  public isPlayerBanned(uuid: string): boolean {
+    const ban = this.bannedUuids.get(uuid);
+    if (!ban) return false;
+    if (ban.expiresAt && ban.expiresAt > 0 && Date.now() > ban.expiresAt) {
+      this.bannedUuids.delete(uuid);
+      return false;
+    }
+    return true;
+  }
+
+  public isIpBanned(ip?: string): boolean {
+    if (!ip) return false;
+    const norm = this.tokenStore.normalizeIp(ip);
+    const ban = this.bannedIps.get(norm);
+    if (!ban) return false;
+    if (ban.expiresAt && ban.expiresAt > 0 && Date.now() > ban.expiresAt) {
+      this.bannedIps.delete(norm);
+      return false;
+    }
+    return true;
+  }
+
+  public isDeviceBanned(deviceId?: string): boolean {
+    if (!deviceId) return false;
+    const ban = this.bannedDevices.get(deviceId);
+    if (!ban) return false;
+    if (ban.expiresAt && ban.expiresAt > 0 && Date.now() > ban.expiresAt) {
+      this.bannedDevices.delete(deviceId);
+      return false;
+    }
+    return true;
+  }
+
+  public isPlayerMuted(uuid: string): boolean {
+    const mute = this.mutedUuids.get(uuid);
+    if (!mute) return false;
+    if (mute.expiresAt && mute.expiresAt > 0 && Date.now() > mute.expiresAt) {
+      this.mutedUuids.delete(uuid);
+      return false;
+    }
+    return true;
+  }
+
+  public isPlayerDeafened(uuid: string): boolean {
+    const deafen = this.deafenedUuids.get(uuid);
+    if (!deafen) return false;
+    if (deafen.expiresAt && deafen.expiresAt > 0 && Date.now() > deafen.expiresAt) {
+      this.deafenedUuids.delete(uuid);
+      return false;
+    }
+    return true;
+  }
+
+  public async handleModerationAction(payload: ModerationActionPayload): Promise<void> {
+    const { targetUuid, action, active, reason, expiresAt, clientIp, deviceId } = payload;
+
+    switch (action) {
+      case 'kick': {
+        const session = this.playerSessions.get(targetUuid);
+        if (session) {
+          if (session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(
+              JSON.stringify({
+                type: 'moderation_notice',
+                action: 'kick',
+                active: true,
+                reason: reason || 'Kicked by staff',
+              })
+            );
+            session.ws.close(4003, 'Kicked by staff');
+          }
+          this.cleanupSession(session);
+        }
+        break;
+      }
+
+      case 'ban': {
+        if (active) {
+          this.bannedUuids.set(targetUuid, { reason, expiresAt });
+          if (clientIp) {
+            this.bannedIps.set(this.tokenStore.normalizeIp(clientIp), { reason, expiresAt });
+          }
+          if (deviceId) {
+            this.bannedDevices.set(deviceId, { reason, expiresAt });
+          }
+
+          const session = this.playerSessions.get(targetUuid);
+          if (session) {
+            if (session.clientIp) {
+              this.bannedIps.set(this.tokenStore.normalizeIp(session.clientIp), { reason, expiresAt });
+            }
+            if (session.deviceId) {
+              this.bannedDevices.set(session.deviceId, { reason, expiresAt });
+            }
+
+            if (session.ws.readyState === WebSocket.OPEN) {
+              session.ws.send(
+                JSON.stringify({
+                  type: 'moderation_notice',
+                  action: 'ban',
+                  active: true,
+                  reason: reason || 'Banned by staff',
+                  expiresAt,
+                })
+              );
+              session.ws.close(4003, 'Banned');
+            }
+            this.cleanupSession(session);
+          }
+        } else {
+          this.bannedUuids.delete(targetUuid);
+          if (clientIp) {
+            this.bannedIps.delete(this.tokenStore.normalizeIp(clientIp));
+          }
+          if (deviceId) {
+            this.bannedDevices.delete(deviceId);
+          }
+        }
+        break;
+      }
+
+      case 'mute': {
+        if (active) {
+          this.mutedUuids.set(targetUuid, { reason, expiresAt });
+        } else {
+          this.mutedUuids.delete(targetUuid);
+        }
+
+        const session = this.playerSessions.get(targetUuid);
+        if (session) {
+          session.isMuted = active;
+          if (session.producer) {
+            try {
+              if (active) {
+                await session.producer.pause();
+              } else {
+                await session.producer.resume();
+              }
+            } catch (err) {
+              console.error(`[ClientGateway] Error toggling producer mute for ${targetUuid}:`, err);
+            }
+          }
+          if (session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(
+              JSON.stringify({
+                type: 'moderation_notice',
+                action: 'mute',
+                active,
+                reason: reason || 'Muted by moderation',
+                expiresAt,
+              })
+            );
+          }
+        }
+        break;
+      }
+
+      case 'deafen': {
+        if (active) {
+          this.deafenedUuids.set(targetUuid, { reason, expiresAt });
+        } else {
+          this.deafenedUuids.delete(targetUuid);
+        }
+
+        const session = this.playerSessions.get(targetUuid);
+        if (session) {
+          session.isDeafened = active;
+          for (const consumer of session.consumers.values()) {
+            try {
+              if (active) {
+                await consumer.pause();
+              } else {
+                await consumer.resume();
+              }
+            } catch (err) {
+              console.error(`[ClientGateway] Error toggling consumer deafen for ${targetUuid}:`, err);
+            }
+          }
+          if (session.ws.readyState === WebSocket.OPEN) {
+            session.ws.send(
+              JSON.stringify({
+                type: 'moderation_notice',
+                action: 'deafen',
+                active,
+                reason: reason || 'Deafened by moderation',
+                expiresAt,
+              })
+            );
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  public async syncActivePunishments(punishments: any[]): Promise<void> {
+    for (const p of punishments) {
+      await this.handleModerationAction({
+        targetUuid: p.targetUuid,
+        action: p.action,
+        active: true,
+        reason: p.reason,
+        expiresAt: p.expiresAt,
+        clientIp: p.clientIp,
+        deviceId: p.deviceId,
+      });
+    }
+  }
+
   public shutdown(): void {
     if (this.loopInterval) {
       clearInterval(this.loopInterval);
+    }
+    if (this.connectionHandler) {
+      this.wss.off('connection', this.connectionHandler);
     }
     for (const session of this.sessions.values()) {
       this.cleanupSession(session);

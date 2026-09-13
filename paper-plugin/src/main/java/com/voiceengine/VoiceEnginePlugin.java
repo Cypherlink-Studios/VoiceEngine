@@ -19,8 +19,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import com.voiceengine.command.SpeakerCommands;
+import com.voiceengine.speaker.SpeakerManager;
 
 import java.util.UUID;
 
@@ -31,6 +34,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private SpeechFeedbackHandler speechFeedbackHandler;
     private TelemetryCollector telemetryCollector;
     private VoiceBackendClient voiceBackendClient;
+    private SpeakerManager speakerManager;
 
     private TelemetryService telemetryService;
     private VisualFeedbackService visualFeedbackService;
@@ -50,6 +54,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.tokenManager = new TokenManager(voiceConfig.tokenTtl(), 6);
         this.speechFeedbackHandler = new SpeechFeedbackHandler();
         this.telemetryCollector = new TelemetryCollector();
+        this.speakerManager = new SpeakerManager(getDataFolder());
+        this.speakerManager.load();
 
         // 3. Connect to Voice Server Backend
         initVoiceBackendClient();
@@ -60,30 +66,52 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         getServer().getServicesManager().register(VoiceEngineAPI.class, this.api, this, ServicePriority.Normal);
 
         // 5. Initialize Schedulers / Services
-        this.telemetryService = new TelemetryService(this, telemetryCollector, () -> voiceBackendClient, () -> voiceConfig.serverId(), voiceConfig.tickRateHz());
+        this.telemetryService = new TelemetryService(
+            this,
+            telemetryCollector,
+            () -> voiceBackendClient,
+            () -> voiceConfig.serverId(),
+            () -> speakerManager.getActiveSpeakerStates(voiceConfig.serverId()),
+            voiceConfig.tickRateHz()
+        );
         this.telemetryService.start();
 
-        this.visualFeedbackService = new VisualFeedbackService(this, speechFeedbackHandler);
+        this.visualFeedbackService = new VisualFeedbackService(
+            this,
+            speechFeedbackHandler,
+            () -> speakerManager.renderVisualIndicators(speechFeedbackHandler)
+        );
         this.visualFeedbackService.start();
 
         // 6. Initialize Commands via Incendo Cloud v2
+        this.commandService = new CommandService(this, translationService);
+        this.commandService.initialize();
+
+        SpeakerCommands speakerCommands = new SpeakerCommands(speakerManager, translationService);
         if (isProxyMode()) {
             getLogger().info("[VoiceEngine] Proxy mode active (server: " + voiceConfig.serverId() + "). Local /voice commands delegated to Velocity.");
+            this.commandService.registerCommands(speakerCommands);
         } else {
-            this.commandService = new CommandService(this, translationService);
-            this.commandService.initialize();
-            this.commandService.registerCommands(new VoiceCommands(
-                tokenManager,
-                () -> voiceConfig,
-                () -> voiceBackendClient,
-                translationService,
-                token -> {
-                    if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
-                        voiceBackendClient.registerToken(token);
+            this.commandService.registerCommands(
+                new VoiceCommands(
+                    tokenManager,
+                    () -> voiceConfig,
+                    () -> voiceBackendClient,
+                    translationService,
+                    token -> {
+                        if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                            voiceBackendClient.registerToken(token);
+                        }
+                    },
+                    this::reloadPlugin,
+                    (token, clientIp) -> {
+                        if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                            voiceBackendClient.registerToken(token, clientIp);
+                        }
                     }
-                },
-                this::reloadPlugin
-            ));
+                ),
+                speakerCommands
+            );
         }
 
         // 7. Register Bukkit Events
@@ -112,6 +140,9 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         if (voiceBackendClient != null) {
             voiceBackendClient.shutdown();
         }
+        if (speakerManager != null) {
+            speakerManager.save();
+        }
         getServer().getServicesManager().unregisterAll(this);
         VoiceEngine.setApi(null);
 
@@ -123,16 +154,28 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.voiceConfig = VoiceConfig.fromConfiguration(getConfig());
         this.translationService.load(getDataFolder(), voiceConfig.defaultLocale());
 
+        if (tokenManager != null) {
+            tokenManager.setTtl(voiceConfig.tokenTtl());
+        }
+
         if (telemetryService != null) {
             telemetryService.updateTickRate(voiceConfig.tickRateHz());
         }
 
-        // Reconnect backend client if URI or secret changed
-        if (voiceBackendClient == null || !voiceBackendClient.getURI().equals(voiceConfig.voiceServerUri())) {
+        // Reconnect backend client if URI, secret key, or server identifier changed
+        boolean uriChanged = voiceBackendClient == null || !voiceBackendClient.getURI().equals(voiceConfig.voiceServerUri());
+        boolean secretChanged = voiceBackendClient == null || !voiceBackendClient.getSecretKey().equals(voiceConfig.secretKey());
+        boolean serverIdChanged = voiceBackendClient == null || !voiceBackendClient.getServerId().equals(voiceConfig.serverId());
+
+        if (uriChanged || secretChanged || serverIdChanged) {
             if (voiceBackendClient != null) {
                 voiceBackendClient.shutdown();
             }
             initVoiceBackendClient();
+        }
+
+        if (speakerManager != null) {
+            speakerManager.load();
         }
 
         getLogger().info("VoiceEngine configuration and translations reloaded.");
@@ -170,6 +213,17 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                 }
             }, 40L); // 2 seconds after join
         }
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+            voiceBackendClient.sendPlayerQuit(event.getPlayer().getUniqueId());
+        }
+    }
+
+    public SpeakerManager getSpeakerManager() {
+        return speakerManager;
     }
 
     public TokenManager getTokenManager() {

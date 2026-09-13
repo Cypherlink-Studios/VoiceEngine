@@ -40,6 +40,8 @@ public class VoiceEngineVelocityPlugin {
     private VelocityTokenManager tokenManager;
     private VelocityBackendClient backendClient;
     private ServerPostConnectListener postConnectListener;
+    private com.voiceengine.velocity.moderation.ModerationDatabase moderationDatabase;
+    private com.voiceengine.velocity.moderation.VelocityModerationService moderationService;
 
     @Inject
     public VoiceEngineVelocityPlugin(
@@ -62,15 +64,28 @@ public class VoiceEngineVelocityPlugin {
         // 2. Initialize token manager (5 min TTL, 6 chars)
         this.tokenManager = new VelocityTokenManager(voiceConfig.tokenTtl(), 6);
 
-        // 3. Connect to Voice Server backend
+        // 3. Initialize Moderation Database & Service
+        try {
+            this.moderationDatabase = new com.voiceengine.velocity.moderation.ModerationDatabase(dataDirectory.resolve("moderation.db").toFile());
+            this.moderationDatabase.init();
+            this.moderationService = new com.voiceengine.velocity.moderation.VelocityModerationService(
+                moderationDatabase,
+                () -> backendClient,
+                logger
+            );
+        } catch (Exception e) {
+            logger.error("Failed to initialize ModerationDatabase: {}", e.getMessage(), e);
+        }
+
+        // 4. Connect to Voice Server backend
         initBackendClient();
 
-        // 4. Register Listeners
+        // 5. Register Listeners
         this.postConnectListener = new ServerPostConnectListener(() -> voiceConfig, () -> backendClient);
         server.getEventManager().register(this, postConnectListener);
-        server.getEventManager().register(this, new DisconnectListener(postConnectListener));
+        server.getEventManager().register(this, new DisconnectListener(postConnectListener, () -> backendClient));
 
-        // 5. Initialize Commands via Incendo Cloud Velocity
+        // 6. Initialize Commands via Incendo Cloud Velocity
         try {
             VelocityCommandManager<CommandSource> commandManager = new VelocityCommandManager<>(
                 pluginContainer,
@@ -93,8 +108,16 @@ public class VoiceEngineVelocityPlugin {
                         backendClient.registerToken(token);
                     }
                 },
-                this::reloadPlugin
+                this::reloadPlugin,
+                moderationService
             ));
+
+            if (moderationService != null) {
+                annotationParser.parse(new com.voiceengine.velocity.command.VelocityModerationCommands(
+                    server,
+                    moderationService
+                ));
+            }
         } catch (Exception e) {
             logger.error("Failed to initialize Cloud Velocity command manager: {}", e.getMessage(), e);
         }
@@ -106,6 +129,9 @@ public class VoiceEngineVelocityPlugin {
     public void onProxyShutdown(ProxyShutdownEvent event) {
         if (backendClient != null) {
             backendClient.shutdown();
+        }
+        if (moderationDatabase != null) {
+            moderationDatabase.close();
         }
         logger.info("VoiceEngine Velocity proxy plugin disabled.");
     }
@@ -137,6 +163,9 @@ public class VoiceEngineVelocityPlugin {
                 voiceConfig.secretKey(),
                 logger
             );
+            if (moderationService != null) {
+                this.backendClient.setOnConnected(() -> moderationService.syncToBackend(backendClient));
+            }
             this.backendClient.connect();
         } catch (Exception e) {
             logger.warn("Failed to initialize VelocityBackendClient: {}", e.getMessage());
@@ -153,5 +182,9 @@ public class VoiceEngineVelocityPlugin {
 
     public VelocityBackendClient getBackendClient() {
         return backendClient;
+    }
+
+    public com.voiceengine.velocity.moderation.VelocityModerationService getModerationService() {
+        return moderationService;
     }
 }
