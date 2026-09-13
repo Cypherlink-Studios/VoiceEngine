@@ -25,7 +25,7 @@ public class SpeakerCommands {
         this.translationService = translationService;
     }
 
-    @Command("voice speaker create <id> [radius]")
+    @Command("voice|ve|voiceengine|audio speaker create <id> [radius]")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Create a new speaker block at targeted block")
     public void onCreate(
@@ -69,7 +69,7 @@ public class SpeakerCommands {
         }
     }
 
-    @Command("voice speaker remove <id>")
+    @Command("voice|ve|voiceengine|audio speaker remove <id>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Remove a registered speaker block")
     public void onRemove(CommandSourceStack stack, @Argument("id") String id) {
@@ -85,7 +85,7 @@ public class SpeakerCommands {
         }
     }
 
-    @Command("voice speaker link <id> <player>")
+    @Command("voice|ve|voiceengine|audio speaker link <id> <player>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Link a player's microphone to a speaker block")
     public void onLink(
@@ -114,7 +114,7 @@ public class SpeakerCommands {
         }
     }
 
-    @Command("voice speaker unlink <id>")
+    @Command("voice|ve|voiceengine|audio speaker unlink <id>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Unlink voice transmission from a speaker block")
     public void onUnlink(CommandSourceStack stack, @Argument("id") String id) {
@@ -130,7 +130,7 @@ public class SpeakerCommands {
         }
     }
 
-    @Command("voice speaker redstone <id> <requireRedstone>")
+    @Command("voice|ve|voiceengine|audio speaker redstone <id> <requireRedstone>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Toggle redstone activation requirement for a speaker block")
     public void onRedstone(
@@ -151,7 +151,7 @@ public class SpeakerCommands {
         }
     }
 
-    @Command("voice speaker list")
+    @Command("voice|ve|voiceengine|audio speaker list")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("List all registered speaker blocks")
     public void onList(CommandSourceStack stack) {

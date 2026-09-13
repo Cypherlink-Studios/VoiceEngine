@@ -54,7 +54,7 @@ public class VoiceCommands {
         this.ipTokenConsumer = ipTokenConsumer;
     }
 
-    @Command("voice")
+    @Command("voice|ve|voiceengine|audio")
     @Permission("voiceengine.use")
     @CommandDescription("Connect your microphone to VoiceEngine web client")
     public void onVoiceConnect(CommandSourceStack stack) {
@@ -89,7 +89,7 @@ public class VoiceCommands {
         );
     }
 
-    @Command("voice admin")
+    @Command("voice|ve|voiceengine|audio admin")
     @Permission("voiceengine.admin")
     @CommandDescription("Open the VoiceEngine Admin Portal")
     public void onVoiceAdmin(CommandSourceStack stack) {
@@ -124,7 +124,7 @@ public class VoiceCommands {
         );
     }
 
-    @Command("voice reload")
+    @Command("voice|ve|voiceengine|audio reload")
     @Permission("voiceengine.admin.reload")
     @CommandDescription("Reload VoiceEngine configuration and language bundles")
     public void onVoiceReload(CommandSourceStack stack) {
@@ -138,7 +138,7 @@ public class VoiceCommands {
         translationService.send(sender, "command.reload.success");
     }
 
-    @Command("voice status")
+    @Command("voice|ve|voiceengine|audio status")
     @Permission("voiceengine.admin.status")
     @CommandDescription("View VoiceEngine backend connectivity and status")
     public void onVoiceStatus(CommandSourceStack stack) {

@@ -55,7 +55,7 @@ public class VelocityVoiceCommands {
         this.moderationService = moderationService;
     }
 
-    @Command("voice|ve|voiceengine|audio")
+    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity")
     @Permission("voiceengine.use")
     @CommandDescription("Connect your microphone to VoiceEngine web client")
     public void onVoiceConnect(CommandSource source) {
@@ -126,7 +126,7 @@ public class VelocityVoiceCommands {
         ));
     }
 
-    @Command("voice|ve|voiceengine|audio admin")
+    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity admin")
     @Permission("voiceengine.admin")
     @CommandDescription("Open the VoiceEngine Admin Portal")
     public void onVoiceAdmin(CommandSource source) {
@@ -183,7 +183,7 @@ public class VelocityVoiceCommands {
         ));
     }
 
-    @Command("voice|ve|voiceengine|audio reload")
+    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity reload")
     @Permission("voiceengine.admin.reload")
     @CommandDescription("Reload VoiceEngine Velocity proxy configuration")
     public void onVoiceReload(CommandSource source) {
@@ -193,7 +193,7 @@ public class VelocityVoiceCommands {
         source.sendMessage(MINI_MESSAGE.deserialize("<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <green>Velocity proxy configuration reloaded successfully!</green>"));
     }
 
-    @Command("voice|ve|voiceengine|audio status")
+    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity status")
     @Permission("voiceengine.admin.status")
     @CommandDescription("Inspect backend connection status and active tokens")
     public void onVoiceStatus(CommandSource source) {
