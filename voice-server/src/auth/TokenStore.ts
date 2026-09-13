@@ -1,11 +1,14 @@
 import { SessionTokenRecord } from '../types.js';
+import { config } from '../config.js';
 
 export class TokenStore {
   private tokens = new Map<string, SessionTokenRecord>();
   private devTokens = new Set<string>();
 
-  constructor() {
-    this.registerDevTokens();
+  constructor(enableDevTokens: boolean = config.enableDevTokens) {
+    if (enableDevTokens) {
+      this.registerDevTokens();
+    }
   }
 
   /**

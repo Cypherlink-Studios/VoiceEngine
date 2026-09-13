@@ -45,7 +45,7 @@ httpServer.on('upgrade', (request, socket, head) => {
 });
 
 // Singletons
-const tokenStore = new TokenStore();
+const tokenStore = new TokenStore(config.enableDevTokens);
 const settingsManager = new SettingsManager();
 const adminAuthManager = new AdminAuthManager();
 const spatialEngine = new SpatialEngine(
@@ -69,45 +69,50 @@ app.use(
   )
 );
 
-// Pre-seed mock players so local testing works out of the box
-spatialEngine.updateBatch([
-  {
-    uuid: '00000000-0000-0000-0000-000000000001',
-    username: 'Steve',
-    world: 'world',
-    x: 0,
-    y: 64,
-    z: 0,
-    yaw: 180,
-    pitch: 0,
-    isSneaking: false,
-    isSubmerged: false,
-  },
-  {
-    uuid: '00000000-0000-0000-0000-000000000002',
-    username: 'Alex',
-    world: 'world',
-    x: 8,
-    y: 64,
-    z: 8,
-    yaw: 0,
-    pitch: 0,
-    isSneaking: false,
-    isSubmerged: false,
-  },
-  {
-    uuid: '00000000-0000-0000-0000-000000000003',
-    username: 'Submariner',
-    world: 'world',
-    x: -6,
-    y: 58,
-    z: 6,
-    yaw: 90,
-    pitch: 0,
-    isSneaking: false,
-    isSubmerged: true,
-  },
-]);
+// Pre-seed mock players so local testing works out of the box (disabled in production)
+if (config.enableDevTokens) {
+  spatialEngine.updateBatch([
+    {
+      uuid: '00000000-0000-0000-0000-000000000001',
+      username: 'Steve',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 180,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    },
+    {
+      uuid: '00000000-0000-0000-0000-000000000002',
+      username: 'Alex',
+      world: 'world',
+      x: 8,
+      y: 64,
+      z: 8,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    },
+    {
+      uuid: '00000000-0000-0000-0000-000000000003',
+      username: 'Submariner',
+      world: 'world',
+      x: -6,
+      y: 58,
+      z: 6,
+      yaw: 90,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: true,
+    },
+  ]);
+  console.log('[VoiceServer] Development mode: Hardcoded dev join tokens and mock players enabled.');
+} else {
+  console.log('[VoiceServer] Production mode: Hardcoded dev join tokens and mock players disabled.');
+}
 
 // Status & Health Endpoint
 app.get('/health', (_req, res) => {

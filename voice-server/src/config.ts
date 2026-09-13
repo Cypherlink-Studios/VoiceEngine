@@ -5,6 +5,11 @@ export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
   host: process.env.HOST || '0.0.0.0',
   secretKey: process.env.SECRET_KEY || 'change-me-to-a-secure-random-secret',
+  isProduction: process.env.NODE_ENV === 'production',
+  enableDevTokens: process.env.ENABLE_DEV_TOKENS !== undefined
+    ? process.env.ENABLE_DEV_TOKENS === 'true'
+    : process.env.NODE_ENV !== 'production',
+
   
   // Proximity settings (in blocks)
   maxVoiceDistance: parseFloat(process.env.MAX_VOICE_DISTANCE || '30.0'),

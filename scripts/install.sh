@@ -232,6 +232,9 @@ RTC_MIN_PORT=40000
 RTC_MAX_PORT=40100
 LISTEN_IP=0.0.0.0
 ANNOUNCED_IP=${VOICE_IP}
+
+# Development join tokens (disabled in production)
+ENABLE_DEV_TOKENS=false
 EOF
 log_success "Created voice-server/.env configuration file."
 

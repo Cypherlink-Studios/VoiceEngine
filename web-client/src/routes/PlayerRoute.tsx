@@ -497,7 +497,7 @@ export function PlayerRoute() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="CODE (e.g. STEVE1)"
+                  placeholder="ENTER JOIN CODE"
                   value={tokenInput}
                   onChange={(e) => setTokenInput(e.target.value.toUpperCase())}
                   className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-center text-sm font-mono tracking-widest text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all uppercase"
