@@ -14,11 +14,15 @@ The voice backend SHALL manage WebRTC transports and audio streams using Mediaso
 
 #### Scenario: Dynamic downstream consumer subscription
 - **WHEN** another player enters within audible proximity of a listener
-- **THEN** the SFU SHALL establish an audio consumer to forward the nearby player's audio stream to the listener's web client.
+- **THEN** the SFU SHALL establish an audio consumer if one does not exist, or unpause an existing paused consumer without initiating WebRTC SDP renegotiation.
 
 #### Scenario: Inaudible player unsubscription
 - **WHEN** a speaking player moves beyond the maximum voice radius of a listener or leaves the dimension
-- **THEN** the SFU SHALL close or pause the downstream consumer to conserve client and server network bandwidth.
+- **THEN** the SFU SHALL pause downstream consumer RTP forwarding rather than destroying the consumer transport, conserving network bandwidth while avoiding SDP renegotiation.
+
+#### Scenario: Explicit session termination and channel change culling
+- **WHEN** a player disconnects from the voice server or changes active audio channels
+- **THEN** the SFU SHALL close and remove the associated consumers and notify connected clients with a `consumer_closed` message.
 
 ### Requirement: Spatial Proximity Culling and State Dispatch
 The server SHALL evaluate player Euclidean distances, server identifiers, and dimensions from plugin telemetry at each tick cycle, updating audio routing and dispatching relative spatial positions to listening clients.
@@ -51,7 +55,7 @@ The backend SHALL host an authenticated WebSocket control endpoint supporting co
 - **THEN** the backend SHALL dispatch speech_status indicators to the specific Paper backend socket where the player is currently situated based on spatial telemetry.
 
 ### Requirement: Fixed Channel Stereo Audio Routing
-The backend SFU SHALL route audio for players inside the same fixed channel in stereo according to the channel's configured scope (global across the network or restricted to the current server).
+The backend SFU SHALL route audio for players inside the same fixed channel in stereo according to the channel's configured scope (global across the network or restricted to the current server), strictly isolated from the proximity 3D routing cycle.
 
 #### Scenario: Routing audio within a fixed channel
 - **WHEN** two or more connected players are joined to the same fixed channel configured with global scope (default)
@@ -60,6 +64,10 @@ The backend SFU SHALL route audio for players inside the same fixed channel in s
 #### Scenario: Routing audio within a server-scoped fixed channel
 - **WHEN** players are joined to a fixed channel configured with server-isolated scope
 - **THEN** the SFU SHALL only forward speech between players who are currently connected to the same backend server identifier.
+
+#### Scenario: Mutual exclusion between proximity and channel routing
+- **WHEN** a client is in `proximity` mode
+- **THEN** the server routing cycle SHALL execute proximity spatial routing and SHALL NOT evaluate the client as a member of a fixed channel, preventing duplicate or thrashing consumer generation.
 
 ### Requirement: Server Settings Persistence and Public Configuration API
 The backend SHALL maintain a persistent `data/settings.json` file and expose a public endpoint `GET /api/config/public` returning brand settings and active fixed channels.

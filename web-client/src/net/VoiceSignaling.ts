@@ -35,6 +35,19 @@ export class VoiceSignaling {
   private peersInfo = new Map<string, PeerRadarInfo>(); // peerUuid -> PeerRadarInfo
   private pingInterval?: any;
   private sessionId?: string;
+  private peersUpdateRaf: number | null = null;
+
+  private dispatchPeersUpdatedThrottled(): void {
+    if (this.peersUpdateRaf !== null) return;
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      this.peersUpdateRaf = window.requestAnimationFrame(() => {
+        this.peersUpdateRaf = null;
+        this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+      });
+    } else {
+      this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+    }
+  }
 
   constructor(
     wsUrl: string,
@@ -205,7 +218,7 @@ export class VoiceSignaling {
             relZ: msg.relZ,
             isSubmerged: msg.isSubmerged,
           });
-          this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+          this.dispatchPeersUpdatedThrottled();
         }
         break;
       }
@@ -231,17 +244,35 @@ export class VoiceSignaling {
           msg.relX,
           msg.relY,
           msg.relZ,
-          msg.isSubmerged
+          msg.isSubmerged,
+          Boolean(msg.isPaused)
         );
 
-        const current = this.peersInfo.get(msg.peerUuid);
-        if (current) {
-          current.distance = msg.distance;
-          current.relX = msg.relX;
-          current.relY = msg.relY;
-          current.relZ = msg.relZ;
-          current.isSubmerged = msg.isSubmerged;
-          this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+        if (msg.isPaused) {
+          if (this.peersInfo.has(msg.peerUuid)) {
+            this.peersInfo.delete(msg.peerUuid);
+            this.dispatchPeersUpdatedThrottled();
+          }
+        } else {
+          const current = this.peersInfo.get(msg.peerUuid);
+          if (current) {
+            current.distance = msg.distance;
+            current.relX = msg.relX;
+            current.relY = msg.relY;
+            current.relZ = msg.relZ;
+            current.isSubmerged = msg.isSubmerged;
+          } else {
+            this.peersInfo.set(msg.peerUuid, {
+              uuid: msg.peerUuid,
+              username: msg.peerUsername || 'Player',
+              distance: msg.distance,
+              relX: msg.relX,
+              relY: msg.relY,
+              relZ: msg.relZ,
+              isSubmerged: msg.isSubmerged,
+            });
+          }
+          this.dispatchPeersUpdatedThrottled();
         }
         break;
       }
@@ -254,7 +285,7 @@ export class VoiceSignaling {
         }
         this.pipeline.removePeerStream(msg.peerUuid);
         this.peersInfo.delete(msg.peerUuid);
-        this.callbacks.onPeersUpdated(Array.from(this.peersInfo.values()));
+        this.dispatchPeersUpdatedThrottled();
         break;
       }
     }
@@ -262,7 +293,7 @@ export class VoiceSignaling {
 
   public joinChannel(channelId: string): void {
     this.peersInfo.clear();
-    this.callbacks.onPeersUpdated([]);
+    this.dispatchPeersUpdatedThrottled();
     this.send({
       type: 'join_channel',
       channelId,
@@ -315,6 +346,10 @@ export class VoiceSignaling {
 
   public disconnect(): void {
     this.stopPingLoop();
+    if (this.peersUpdateRaf !== null && typeof window !== 'undefined') {
+      window.cancelAnimationFrame(this.peersUpdateRaf);
+      this.peersUpdateRaf = null;
+    }
     if (this.audioProducer) {
       try {
         this.audioProducer.close();

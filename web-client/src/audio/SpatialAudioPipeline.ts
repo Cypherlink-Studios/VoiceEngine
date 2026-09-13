@@ -1,11 +1,12 @@
 export interface PeerAudioNode {
   source: MediaStreamAudioSourceNode;
+  track: MediaStreamTrack;
   filter?: BiquadFilterNode;
   panner?: PannerNode;
   gain: GainNode;
   isSubmerged: boolean;
   isChannel?: boolean;
-  audioEl?: HTMLAudioElement;
+  isPaused?: boolean;
 }
 
 export class SpatialAudioPipeline {
@@ -18,6 +19,11 @@ export class SpatialAudioPipeline {
   private peerMuted = new Map<string, boolean>();
   private isDeafenedState = false;
   private isDuckingState = false;
+
+  // Single persistent hidden sink to keep Chromium WebRTC audio decoder active
+  // without creating/destroying WASAPI audio sessions per peer in Windows
+  private persistentSinkEl: HTMLAudioElement | null = null;
+  private persistentSinkStream: MediaStream | null = null;
 
   private loopbackSource: MediaStreamAudioSourceNode | null = null;
   private loopbackDelay: DelayNode | null = null;
@@ -50,6 +56,16 @@ export class SpatialAudioPipeline {
       // Legacy Web Audio API fallback
       listener.setOrientation(0, 0, -1, 0, 1, 0);
     }
+
+    if (typeof document !== 'undefined') {
+      this.persistentSinkStream = new MediaStream();
+      this.persistentSinkEl = document.createElement('audio');
+      this.persistentSinkEl.muted = true; // Muted to prevent unspatialized direct audio leakage
+      this.persistentSinkEl.autoplay = true;
+      (this.persistentSinkEl as any).playsInline = true;
+      this.persistentSinkEl.srcObject = this.persistentSinkStream;
+      this.persistentSinkEl.play().catch(() => {});
+    }
   }
 
   public async resume(): Promise<void> {
@@ -77,7 +93,24 @@ export class SpatialAudioPipeline {
       isChannel?: boolean;
     }
   ): void {
-    if (this.peers.has(peerUuid)) {
+    const existing = this.peers.get(peerUuid);
+    if (existing) {
+      // If the track is identical, reuse existing node graph and simply unpause
+      if (existing.track === track) {
+        existing.isPaused = false;
+        this.applyPeerGain(peerUuid);
+        if (initialPos.relX !== undefined && initialPos.relY !== undefined && initialPos.relZ !== undefined) {
+          this.updatePeerPosition(
+            peerUuid,
+            initialPos.relX,
+            initialPos.relY,
+            initialPos.relZ,
+            Boolean(initialPos.isSubmerged),
+            false
+          );
+        }
+        return;
+      }
       this.removePeerStream(peerUuid);
     }
 
@@ -87,14 +120,12 @@ export class SpatialAudioPipeline {
       this.audioContext.resume().catch(() => {});
     }
 
-    // HTMLAudioElement sink is required in Chromium (Brave/Chrome/Edge) to activate WebRTC audio receiving pipeline
-    const audioEl = document.createElement('audio');
-    audioEl.srcObject = stream;
-    audioEl.autoplay = true;
-    (audioEl as any).playsInline = true;
-    audioEl.play().catch((err) => {
-      console.warn('[SpatialAudioPipeline] Auto-play was prevented on audio element:', err);
-    });
+    // Keep Chromium WebRTC audio decoding active via single persistent muted sink
+    if (this.persistentSinkStream && !this.persistentSinkStream.getTracks().includes(track)) {
+      try {
+        this.persistentSinkStream.addTrack(track);
+      } catch {}
+    }
 
     track.onunmute = () => {
       console.log('[SpatialAudioPipeline] Track unmuted (audio packets flowing) for:', peerUuid);
@@ -123,10 +154,11 @@ export class SpatialAudioPipeline {
 
       this.peers.set(peerUuid, {
         source,
+        track,
         gain,
         isSubmerged: false,
         isChannel: true,
-        audioEl,
+        isPaused: false,
       });
       return;
     }
@@ -164,12 +196,13 @@ export class SpatialAudioPipeline {
 
     this.peers.set(peerUuid, {
       source,
+      track,
       filter,
       panner,
       gain,
       isSubmerged,
       isChannel: false,
-      audioEl,
+      isPaused: false,
     });
   }
 
@@ -178,10 +211,20 @@ export class SpatialAudioPipeline {
     relX: number,
     relY: number,
     relZ: number,
-    isSubmerged: boolean
+    isSubmerged: boolean,
+    isPaused?: boolean
   ): void {
     const peerNode = this.peers.get(peerUuid);
     if (!peerNode || peerNode.isChannel || !peerNode.panner || !peerNode.filter) return;
+
+    if (isPaused !== undefined && peerNode.isPaused !== isPaused) {
+      peerNode.isPaused = isPaused;
+      this.applyPeerGain(peerUuid);
+    }
+
+    if (peerNode.isPaused) {
+      return;
+    }
 
     // Smooth linear ramp over 100ms interval
     const now = this.audioContext.currentTime;
@@ -204,10 +247,10 @@ export class SpatialAudioPipeline {
   public removePeerStream(peerUuid: string): void {
     const peerNode = this.peers.get(peerUuid);
     if (peerNode) {
-      if (peerNode.audioEl) {
-        peerNode.audioEl.pause();
-        peerNode.audioEl.srcObject = null;
-        peerNode.audioEl.remove();
+      if (this.persistentSinkStream && peerNode.track) {
+        try {
+          this.persistentSinkStream.removeTrack(peerNode.track);
+        } catch {}
       }
       peerNode.gain.disconnect();
       peerNode.panner?.disconnect();
@@ -270,8 +313,9 @@ export class SpatialAudioPipeline {
     if (!peerNode) return;
     const isMuted = this.peerMuted.get(peerUuid) ?? false;
     const userVol = this.peerVolumes.get(peerUuid) ?? 1.0;
-    const finalGain = isMuted ? 0 : userVol;
-    peerNode.gain.gain.setValueAtTime(finalGain, this.audioContext.currentTime);
+    const isPaused = Boolean(peerNode.isPaused);
+    const targetGain = (isMuted || isPaused) ? 0 : userVol;
+    peerNode.gain.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.03);
   }
 
   public setDeafened(deafened: boolean): void {
@@ -351,6 +395,15 @@ export class SpatialAudioPipeline {
     this.stopLoopback();
     for (const uuid of this.peers.keys()) {
       this.removePeerStream(uuid);
+    }
+    if (this.persistentSinkEl) {
+      this.persistentSinkEl.pause();
+      this.persistentSinkEl.srcObject = null;
+      this.persistentSinkEl = null;
+    }
+    if (this.persistentSinkStream) {
+      this.persistentSinkStream.getTracks().forEach((t) => t.stop());
+      this.persistentSinkStream = null;
     }
     if (this.audioContext.state !== 'closed') {
       this.audioContext.close().catch(() => {});

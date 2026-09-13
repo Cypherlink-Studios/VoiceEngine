@@ -216,5 +216,165 @@ describe('ClientGateway', () => {
       });
     });
   });
+
+  it('pauses proximity consumer when peer moves out of range and resumes when returning', async () => {
+    tokenStore.registerToken({
+      token: 'STEVE_P',
+      playerUuid: 'uuid-steve-p',
+      playerName: 'SteveP',
+      expiresAt: Date.now() + 60000,
+    });
+    tokenStore.registerToken({
+      token: 'ALEX_P',
+      playerUuid: 'uuid-alex-p',
+      playerName: 'AlexP',
+      expiresAt: Date.now() + 60000,
+    });
+
+    // Steve is at (0, 64, 0), Alex is at (10, 64, 0) -> distance 10m (audible)
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-steve-p',
+      username: 'SteveP',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-alex-p',
+      username: 'AlexP',
+      world: 'world',
+      x: 10,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+
+    const steveWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const alexWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    let alexReceivedNewConsumer = false;
+    let alexReceivedPause = false;
+    let alexReceivedResume = false;
+    let alexReceivedConsumerClosed = false;
+
+    await new Promise<void>((resolve) => {
+      let steveReady = false;
+      let alexReady = false;
+
+      const checkBothReady = () => {
+        if (steveReady && alexReady) {
+          // Both connected, wait for initial routing
+        }
+      };
+
+      steveWs.on('open', () => {
+        steveWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'STEVE_P',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      steveWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          // Produce mock audio
+          steveWs.send(
+            JSON.stringify({
+              type: 'produce',
+              kind: 'audio',
+              rtpParameters: {
+                codecs: [
+                  {
+                    mimeType: 'audio/opus',
+                    clockRate: 48000,
+                    channels: 2,
+                    payloadType: 111,
+                  },
+                ],
+                encodings: [{ ssrc: 11111111 }],
+              },
+            })
+          );
+        } else if (msg.type === 'produced') {
+          steveReady = true;
+          checkBothReady();
+        }
+      });
+
+      alexWs.on('open', () => {
+        alexWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'ALEX_P',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      alexWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          alexReady = true;
+          checkBothReady();
+        } else if (msg.type === 'new_consumer' && msg.peerUuid === 'uuid-steve-p') {
+          alexReceivedNewConsumer = true;
+          // Now move Steve far away to distance 100m (>30m)
+          spatialEngine.updatePlayer({
+            uuid: 'uuid-steve-p',
+            username: 'SteveP',
+            world: 'world',
+            x: 100,
+            y: 64,
+            z: 0,
+            yaw: 0,
+            pitch: 0,
+            isSneaking: false,
+            isSubmerged: false,
+          });
+        } else if (msg.type === 'peer_spatial_update' && msg.peerUuid === 'uuid-steve-p') {
+          if (msg.isPaused && !alexReceivedPause) {
+            alexReceivedPause = true;
+            // Now move Steve back within audible range (10m)
+            spatialEngine.updatePlayer({
+              uuid: 'uuid-steve-p',
+              username: 'SteveP',
+              world: 'world',
+              x: 10,
+              y: 64,
+              z: 0,
+              yaw: 0,
+              pitch: 0,
+              isSneaking: false,
+              isSubmerged: false,
+            });
+          } else if (alexReceivedPause && !msg.isPaused && !alexReceivedResume) {
+            alexReceivedResume = true;
+            // Now disconnect Steve to verify consumer_closed
+            steveWs.close();
+          }
+        } else if (msg.type === 'consumer_closed' && msg.peerUuid === 'uuid-steve-p') {
+          alexReceivedConsumerClosed = true;
+          alexWs.close();
+          resolve();
+        }
+      });
+    });
+
+    expect(alexReceivedNewConsumer).toBe(true);
+    expect(alexReceivedPause).toBe(true);
+    expect(alexReceivedResume).toBe(true);
+    expect(alexReceivedConsumerClosed).toBe(true);
+  });
 });
 
