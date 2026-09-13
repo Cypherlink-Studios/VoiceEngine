@@ -7,6 +7,23 @@ import { config } from '../config.js';
 
 const execFileAsync = promisify(execFile);
 
+function getExecutionEnv(): NodeJS.ProcessEnv {
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const extraPaths = [
+    path.join(localAppData, 'Python', 'pythoncore-3.14-64', 'Scripts'),
+    path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-9.0.1-full_build', 'bin'),
+  ].filter((p) => fs.existsSync(p));
+
+  const currentPath = process.env.PATH || process.env.Path || '';
+  const combined = [...extraPaths, currentPath].join(path.delimiter);
+
+  return {
+    ...process.env,
+    PATH: combined,
+    Path: combined,
+  };
+}
+
 export interface CachedMediaMetadata {
   hash: string;
   sourceUrl: string;
@@ -95,7 +112,7 @@ export class MediaCacheService {
     }
 
     // Determine if this is a YouTube/SoundCloud URL or direct audio stream
-    const isPlatformUrl = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be|soundcloud\.com)/i.test(url);
+    const isPlatformUrl = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*(youtube\.com|youtu\.be|soundcloud\.com)/i.test(url);
     const targetFile = path.join(this.cacheDir, `${hash}.mp3`);
 
     if (isPlatformUrl) {
@@ -132,6 +149,10 @@ export class MediaCacheService {
     if (!res.ok) {
       throw new Error(`Failed to download audio from ${url}: HTTP ${res.status}`);
     }
+    const contentType = res.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      throw new Error(`The provided URL returned HTML webpage content instead of an audio stream (${contentType}). If this is a streaming platform (like YouTube or SoundCloud), verify the link and domain format.`);
+    }
     const buffer = Buffer.from(await res.arrayBuffer());
     fs.writeFileSync(destPath, buffer);
   }
@@ -149,7 +170,7 @@ export class MediaCacheService {
         '-o',
         destPath,
         url,
-      ]);
+      ], { env: getExecutionEnv() });
     } catch (err: unknown) {
       // If yt-dlp is not installed or fails, throw informative error
       const msg = err instanceof Error ? err.message : String(err);
