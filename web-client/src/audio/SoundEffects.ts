@@ -81,6 +81,24 @@ export class SoundEffects {
     ]);
   }
 
+  public playDeafen(): void {
+    // Descending tones to signal deafening / isolation
+    this.playToneSequence([
+      { freq: 493.88, duration: 0.08, type: 'sine' },
+      { freq: 370.0, duration: 0.08, type: 'sine' },
+      { freq: 246.94, duration: 0.14, type: 'sine' },
+    ]);
+  }
+
+  public playUndeafen(): void {
+    // Ascending bright tones to signal recovery
+    this.playToneSequence([
+      { freq: 246.94, duration: 0.08, type: 'sine' },
+      { freq: 370.0, duration: 0.08, type: 'sine' },
+      { freq: 493.88, duration: 0.14, type: 'sine' },
+    ]);
+  }
+
   private playToneSequence(tones: Array<{ freq: number; duration: number; type: OscillatorType }>): void {
     if (!this.enabled || !this.ctx || !this.sfxGain || this.ctx.state === 'closed') return;
     try {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check } from 'lucide-react';
+import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check, Eye, EyeOff, Radio } from 'lucide-react';
 import { soundEffects } from '../../audio/SoundEffects.js';
 import { ChannelMember } from '../../net/VoiceSignaling.js';
 import { PeerRadarInfo } from '../Radar.js';
@@ -20,6 +20,12 @@ export interface SettingsModalProps {
   audioConstraints: AudioConstraintsConfig;
   onUpdateConstraints: (constraints: AudioConstraintsConfig) => void;
   analyserNode: AnalyserNode | null;
+  vadThreshold: number;
+  onChangeVadThreshold?: (threshold: number) => void;
+  isLoopbackActive: boolean;
+  onToggleLoopback: () => void;
+  streamerMode: boolean;
+  onToggleStreamerMode: (enabled: boolean) => void;
   // Player volumes
   peers: PeerRadarInfo[];
   channelMembers: ChannelMember[];
@@ -48,6 +54,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   audioConstraints,
   onUpdateConstraints,
   analyserNode,
+  vadThreshold,
+  onChangeVadThreshold,
+  isLoopbackActive,
+  onToggleLoopback,
+  streamerMode,
+  onToggleStreamerMode,
   peers,
   channelMembers,
   peerVolumes,
@@ -99,15 +111,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       return;
     }
 
-    const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
+    const dataArray = new Float32Array(analyserNode.fftSize || 512);
     const updateLevel = () => {
-      analyserNode.getByteFrequencyData(dataArray);
-      let sum = 0;
+      analyserNode.getFloatTimeDomainData(dataArray);
+      let sumSquares = 0;
       for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+        sumSquares += dataArray[i] * dataArray[i];
       }
-      const avg = sum / (dataArray.length || 1);
-      const normalized = Math.min(100, Math.round((avg / 255) * 160));
+      const rms = Math.sqrt(sumSquares / dataArray.length);
+      // Normalized to 0-100% based on max expected RMS of ~0.15
+      const normalized = Math.min(100, Math.round((rms / 0.15) * 100));
       setMicLevel(normalized);
       animFrameRef.current = requestAnimationFrame(updateLevel);
     };
@@ -117,6 +130,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [isOpen, analyserNode, activeTab]);
+
+  const thresholdPercent = Math.min(100, Math.round((vadThreshold / 0.15) * 100));
+  const isSpeechActive = micLevel >= thresholdPercent && micLevel > 3;
 
   if (!isOpen) return null;
 
@@ -233,20 +249,93 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ))}
                 </select>
 
-                {/* Microphone Level Visualizer */}
-                <div className="pt-2 space-y-1.5">
-                  <div className="flex justify-between text-xs text-slate-400">
-                    <span>Prueba de Entrada (Habla para probar)</span>
-                    <span className="font-mono text-emerald-400">{micLevel}%</span>
+                {/* Microphone Level Visualizer & VAD Calibration */}
+                <div className="pt-2 space-y-2.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300 font-medium">Calibración de Entrada y Umbral VAD</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                          isSpeechActive
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                            : 'bg-slate-800 text-slate-400 border border-white/10'
+                        }`}
+                      >
+                        {isSpeechActive ? 'Voz Transmitiendo' : 'Silencio'}
+                      </span>
+                      <span className="font-mono text-emerald-400 text-xs">{micLevel}%</span>
+                    </div>
                   </div>
-                  <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/10 p-0.5">
+
+                  {/* Level bar with VAD threshold marker */}
+                  <div className="relative h-3.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/10 p-0.5">
+                    {/* Active volume bar */}
                     <div
                       className="h-full rounded-full transition-all duration-75"
                       style={{
                         width: `${micLevel}%`,
-                        backgroundColor: micLevel > 80 ? '#f43f5e' : micLevel > 40 ? '#22c55e' : '#38bdf8',
+                        backgroundColor: isSpeechActive ? '#10b981' : '#38bdf8',
                       }}
                     />
+                    {/* Threshold vertical marker */}
+                    <div
+                      className="absolute top-0 bottom-0 w-1 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] z-10"
+                      style={{ left: `${thresholdPercent}%` }}
+                      title={`Umbral VAD actual: ${thresholdPercent}%`}
+                    />
+                  </div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-500">
+                    <span>Mín (0%)</span>
+                    <span className="text-amber-400/90 font-mono">▲ Marcador de Umbral ({thresholdPercent}%)</span>
+                    <span>Máx (100%)</span>
+                  </div>
+
+                  {/* Interactive VAD Calibration Slider */}
+                  {onChangeVadThreshold && (
+                    <div className="pt-2">
+                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+                        <span className="font-medium text-slate-300">Ajuste de Umbral (Sensibilidad):</span>
+                        <span className="font-mono text-amber-400 font-semibold">{thresholdPercent}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.005"
+                        max="0.15"
+                        step="0.005"
+                        value={vadThreshold}
+                        onChange={(e) => onChangeVadThreshold(parseFloat(e.target.value))}
+                        className="w-full accent-amber-500 cursor-pointer"
+                        title={`Umbral VAD: ${thresholdPercent}%`}
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                        <span>Mayor sensibilidad (0%)</span>
+                        <span>Filtro de ruido agresivo (100%)</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loopback Mic Test Button */}
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10 mt-1">
+                    <div className="pr-3">
+                      <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                        <Radio className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Prueba de Auto-Escucha (Loopback)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Escúchate con 180ms de retraso sin transmitir a otros para ajustar tu micrófono.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onToggleLoopback}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
+                        isLoopbackActive
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
+                      }`}
+                    >
+                      {isLoopbackActive ? 'Detener Prueba' : 'Iniciar Prueba'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -468,20 +557,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
+              {/* Streamer Mode & Privacy */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Privacidad & Modo Streamer
+                </h3>
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-3 pr-4">
+                    <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
+                      {streamerMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium text-slate-200">Modo Streamer (Anti-Sniping)</div>
+                      <div className="text-xs text-slate-400">
+                        Oculta tokens de sesión, URLs con credenciales y coordenadas relativas de jugadores en el radar.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => onToggleStreamerMode(!streamerMode)}
+                    className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${
+                      streamerMode ? 'bg-indigo-500' : 'bg-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${
+                        streamerMode ? 'translate-x-7' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Keyboard shortcuts */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Atajos de Teclado
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
-                    <span className="text-sm text-slate-300">Mutear / Desmutear</span>
+                    <span className="text-sm text-slate-300">Mutear Mic</span>
                     <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
                       M
                     </kbd>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
-                    <span className="text-sm text-slate-300">Cerrar Menús / Modales</span>
+                    <span className="text-sm text-slate-300">Ensordecer</span>
+                    <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
+                      D
+                    </kbd>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
+                    <span className="text-sm text-slate-300">Cerrar Menús</span>
                     <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
                       Esc
                     </kbd>

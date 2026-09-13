@@ -14,17 +14,20 @@ interface RadarProps {
   maxRange?: number;
   localUsername?: string;
   localUuid?: string;
+  size?: number;
   onPeerClick?: (peer: PeerRadarInfo) => void;
 }
 
-export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid, onPeerClick }: RadarProps) {
-  const size = 320;
+export function Radar({ peers, maxRange = 30, localUsername = 'You', localUuid, size = 320, onPeerClick }: RadarProps) {
   const center = size / 2;
-  const radius = size / 2 - 24;
+  const radius = size / 2 - (size < 300 ? 18 : 24);
 
   return (
     <div className="relative flex flex-col items-center select-none">
-      <div className="relative w-[320px] h-[320px] bg-slate-950/85 backdrop-blur-md rounded-full border border-white/10 shadow-[0_0_35px_rgba(0,0,0,0.5)] overflow-hidden">
+      <div
+        className="relative bg-slate-950/85 backdrop-blur-md rounded-full border border-white/10 shadow-[0_0_35px_rgba(0,0,0,0.5)] overflow-hidden"
+        style={{ width: `${size}px`, height: `${size}px` }}
+      >
         {/* Radar Background Glow */}
         <div
           className="absolute inset-0 rounded-full opacity-20 pointer-events-none"

@@ -5,6 +5,11 @@ export interface PlayerVolumePopoverProps {
   peerUsername: string;
   volume: number; // 0.0 - 2.0
   isMuted: boolean;
+  distance?: number;
+  relX?: number;
+  relY?: number;
+  relZ?: number;
+  streamerMode?: boolean;
   onVolumeChange: (peerUuid: string, volume: number) => void;
   onMuteToggle: (peerUuid: string, isMuted: boolean) => void;
   onClose: () => void;
@@ -16,6 +21,11 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
   peerUsername,
   volume,
   isMuted,
+  distance,
+  relX,
+  relY,
+  relZ,
+  streamerMode = false,
   onVolumeChange,
   onMuteToggle,
   onClose,
@@ -25,7 +35,7 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
 
   return (
     <div
-      className={`bg-slate-950/95 backdrop-blur-xl border border-white/15 rounded-2xl p-4 shadow-2xl text-white min-w-[240px] z-50 animate-in fade-in zoom-in-95 duration-150 ${className}`}
+      className={`bg-slate-950/95 backdrop-blur-xl border border-white/15 rounded-2xl p-4 shadow-2xl text-white min-w-[250px] z-50 animate-in fade-in zoom-in-95 duration-150 ${className}`}
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
@@ -39,7 +49,16 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
               (e.target as HTMLImageElement).src = 'https://mc-heads.net/avatar/MHF_Steve/28';
             }}
           />
-          <div className="truncate font-medium text-sm text-slate-100">{peerUsername}</div>
+          <div className="min-w-0">
+            <div className="truncate font-medium text-sm text-slate-100">{peerUsername}</div>
+            {distance !== undefined && (
+              <div className="text-[10px] font-mono text-slate-400">
+                {streamerMode
+                  ? `~${Math.round(distance)}m • coords ocultas`
+                  : `${Math.round(distance)}m (${relX?.toFixed(0)}, ${relY?.toFixed(0)}, ${relZ?.toFixed(0)})`}
+              </div>
+            )}
+          </div>
         </div>
         <button
           onClick={onClose}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
 import { VoiceSignaling, ChannelMember } from '../net/VoiceSignaling.js';
@@ -9,6 +10,8 @@ import { ControlDock } from '../components/player/ControlDock.js';
 import { ChannelDrawer } from '../components/player/ChannelDrawer.js';
 import { SettingsModal, AudioConstraintsConfig } from '../components/player/SettingsModal.js';
 import { PlayerVolumePopover } from '../components/player/PlayerVolumePopover.js';
+import { QrCompanionModal } from '../components/player/QrCompanionModal.js';
+import { PipOverlay } from '../components/player/PipOverlay.js';
 import { soundEffects } from '../audio/SoundEffects.js';
 import { useBrand } from '../components/layout/BrandProvider.js';
 
@@ -24,13 +27,27 @@ export function PlayerRoute() {
   const [localPlayer, setLocalPlayer] = useState<{ uuid: string; username: string } | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [vadThreshold, setVadThreshold] = useState(0.04);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [vadThreshold, setVadThreshold] = useState<number>(() => {
+    const saved = localStorage.getItem('voiceengine:vad_threshold');
+    const val = saved ? parseFloat(saved) : 0.04;
+    return isNaN(val) ? 0.04 : val;
+  });
   const [masterVolume, setMasterVolume] = useState(1.0);
   const [peers, setPeers] = useState<PeerRadarInfo[]>([]);
 
   const [activeChannel, setActiveChannel] = useState<string>('proximity');
   const [channelMembers, setChannelMembers] = useState<ChannelMember[]>([]);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
+
+  // UX & Diagnostics State
+  const [isLoopbackActive, setIsLoopbackActive] = useState(false);
+  const [streamerMode, setStreamerMode] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:streamer_mode') === 'true'
+  );
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
 
   // Audio Device Selection & Constraints
   const [selectedInputId, setSelectedInputId] = useState<string>(
@@ -77,12 +94,25 @@ export function PlayerRoute() {
 
   // Modals and Popovers
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [popoverPeer, setPopoverPeer] = useState<{ uuid: string; username: string } | null>(null);
+  const [popoverPeer, setPopoverPeer] = useState<PeerRadarInfo | null>(null);
 
   const signalingRef = useRef<VoiceSignaling | null>(null);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
   const pipelineRef = useRef<SpatialAudioPipeline | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const sendStreamRef = useRef<MediaStream | null>(null);
+  const sendTrackRef = useRef<MediaStreamTrack | null>(null);
+  const isMutedRef = useRef(false);
+  const isDeafenedRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+
+  const updateAudioTransmission = (speaking: boolean, muted: boolean, deafened: boolean) => {
+    const canTransmit = speaking && !muted && !deafened;
+    if (sendTrackRef.current) {
+      sendTrackRef.current.enabled = canTransmit;
+    }
+    pipelineRef.current?.setLoopbackGated(canTransmit);
+  };
 
   useEffect(() => {
     const token = searchParams.get('token') || searchParams.get('code');
@@ -112,6 +142,15 @@ export function PlayerRoute() {
       });
       micStreamRef.current = stream;
 
+      // Clone microphone track for WebRTC transmission so the raw track remains enabled
+      // for continuous VAD detection and local visual analyser processing.
+      const rawTrack = stream.getAudioTracks()[0];
+      const sendTrack = rawTrack.clone();
+      sendTrack.enabled = false;
+      sendTrackRef.current = sendTrack;
+      const sendStream = new MediaStream([sendTrack]);
+      sendStreamRef.current = sendStream;
+
       // 2. Initialize Audio Pipeline, Analyser, Preferences & VAD
       const pipeline = new SpatialAudioPipeline();
       pipelineRef.current = pipeline;
@@ -135,7 +174,9 @@ export function PlayerRoute() {
         {
           onSpeakingChange: (speaking) => {
             setIsSpeaking(speaking);
+            isSpeakingRef.current = speaking;
             signalingRef.current?.notifySpeaking(speaking);
+            updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
           },
           onVolumeChange: () => {},
         },
@@ -171,9 +212,12 @@ export function PlayerRoute() {
           }
         },
         onChannelPeerSpeaking: (_channelId, peerUuid, speaking) => {
-          setChannelMembers((prev) =>
-            prev.map((m) => (m.uuid === peerUuid ? { ...m, isSpeaking: speaking } : m))
-          );
+          setChannelMembers((prev) => {
+            const updated = prev.map((m) => (m.uuid === peerUuid ? { ...m, isSpeaking: speaking } : m));
+            const anyChannelSpeaking = updated.some((m) => m.isSpeaking);
+            pipelineRef.current?.setRadioDucking(anyChannelSpeaking);
+            return updated;
+          });
         },
         onPingUpdated: (rtt) => {
           setPingMs(rtt);
@@ -184,7 +228,7 @@ export function PlayerRoute() {
       });
 
       signalingRef.current = signaling;
-      await signaling.connect(stream);
+      await signaling.connect(sendStream);
     } catch (err: unknown) {
       console.error('[PlayerRoute] Connection failed:', err);
       const message = err instanceof Error ? err.message : 'Microphone access denied or connection failed.';
@@ -193,8 +237,21 @@ export function PlayerRoute() {
     }
   };
 
+  const triggerHaptic = (pattern: number | number[] = 40) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch {}
+    }
+  };
+
   const handleDisconnect = () => {
     soundEffects.playDisconnect();
+
+    if (pipWindow) {
+      pipWindow.close();
+      setPipWindow(null);
+    }
 
     signalingRef.current?.disconnect();
     signalingRef.current = null;
@@ -202,10 +259,24 @@ export function PlayerRoute() {
     vadRef.current?.stop();
     vadRef.current = null;
 
+    if (sendTrackRef.current) {
+      sendTrackRef.current.stop();
+      sendTrackRef.current = null;
+    }
+
+    if (sendStreamRef.current) {
+      sendStreamRef.current.getTracks().forEach((t) => t.stop());
+      sendStreamRef.current = null;
+    }
+
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
     }
+
+    isMutedRef.current = false;
+    isDeafenedRef.current = false;
+    isSpeakingRef.current = false;
 
     pipelineRef.current?.close();
     pipelineRef.current = null;
@@ -214,6 +285,9 @@ export function PlayerRoute() {
     setIsConnected(false);
     setIsConnecting(false);
     setIsMuted(false);
+    setIsDeafened(false);
+    setIsLoopbackActive(false);
+    setIsQrModalOpen(false);
     setIsSpeaking(false);
     setLocalPlayer(null);
     setPeers([]);
@@ -224,19 +298,126 @@ export function PlayerRoute() {
   };
 
   const handleToggleMute = () => {
-    if (!micStreamRef.current) return;
     const nextMuted = !isMuted;
-    micStreamRef.current.getAudioTracks().forEach((t) => {
-      t.enabled = !nextMuted;
-    });
     setIsMuted(nextMuted);
+    isMutedRef.current = nextMuted;
+
+    updateAudioTransmission(isSpeakingRef.current, nextMuted, isDeafenedRef.current);
+
     if (nextMuted) {
       setIsSpeaking(false);
+      isSpeakingRef.current = false;
       vadRef.current?.reset();
       signalingRef.current?.notifySpeaking(false);
       soundEffects.playMute();
+      triggerHaptic(30);
     } else {
+      if (isDeafened) {
+        setIsDeafened(false);
+        isDeafenedRef.current = false;
+        pipelineRef.current?.setDeafened(false);
+      }
       soundEffects.playUnmute();
+      triggerHaptic(40);
+    }
+  };
+
+  const handleToggleDeafen = () => {
+    const nextDeafened = !isDeafened;
+    setIsDeafened(nextDeafened);
+    isDeafenedRef.current = nextDeafened;
+    pipelineRef.current?.setDeafened(nextDeafened);
+
+    if (nextDeafened) {
+      setIsMuted(true);
+      isMutedRef.current = true;
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
+      vadRef.current?.reset();
+      signalingRef.current?.notifySpeaking(false);
+      updateAudioTransmission(false, true, true);
+      soundEffects.playDeafen();
+      triggerHaptic([30, 40, 30]);
+    } else {
+      setIsMuted(false);
+      isMutedRef.current = false;
+      updateAudioTransmission(isSpeakingRef.current, false, false);
+      soundEffects.playUndeafen();
+      triggerHaptic(40);
+    }
+  };
+
+  const handleToggleLoopback = () => {
+    if (!pipelineRef.current || !micStreamRef.current) return;
+    if (isLoopbackActive) {
+      pipelineRef.current.stopLoopback();
+      setIsLoopbackActive(false);
+    } else {
+      const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
+      pipelineRef.current.startLoopback(micStreamRef.current, 0.18, canTransmit);
+      setIsLoopbackActive(true);
+    }
+  };
+
+  const handleToggleStreamerMode = (enabled: boolean) => {
+    setStreamerMode(enabled);
+    localStorage.setItem('voiceengine:streamer_mode', String(enabled));
+  };
+
+  const handleTogglePip = async () => {
+    if (!isPipSupported) return;
+    if (pipWindow) {
+      pipWindow.close();
+      setPipWindow(null);
+      return;
+    }
+
+    try {
+      const pip = await (window as any).documentPictureInPicture.requestWindow({
+        width: 320,
+        height: 420,
+      });
+
+      // Copy document stylesheets to floating PiP window
+      [...document.styleSheets].forEach((styleSheet) => {
+        try {
+          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+          const style = pip.document.createElement('style');
+          style.textContent = cssRules;
+          pip.document.head.appendChild(style);
+        } catch {
+          if (styleSheet.href) {
+            const link = pip.document.createElement('link');
+            link.rel = 'stylesheet';
+            link.type = styleSheet.type;
+            link.media = styleSheet.media;
+            link.href = styleSheet.href;
+            pip.document.head.appendChild(link);
+          }
+        }
+      });
+
+      pip.document.body.className = 'bg-slate-950 text-slate-100 overflow-hidden m-0 p-0 select-none';
+
+      pip.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'm' || e.key === 'M') {
+          e.preventDefault();
+          handleToggleMute();
+        } else if (e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          handleToggleDeafen();
+        } else if (e.key === 'Escape') {
+          pip.close();
+        }
+      });
+
+      pip.addEventListener('pagehide', () => {
+        setPipWindow(null);
+      });
+
+      setPipWindow(pip);
+    } catch (err) {
+      console.warn('[PlayerRoute] Failed to open Document Picture-in-Picture:', err);
     }
   };
 
@@ -258,15 +439,29 @@ export function PlayerRoute() {
           if (micStreamRef.current) {
             micStreamRef.current.getTracks().forEach((t) => t.stop());
           }
-          micStreamRef.current = newStream;
-          if (isMuted) {
-            newTrack.enabled = false;
+          if (sendTrackRef.current) {
+            sendTrackRef.current.stop();
           }
-          await signalingRef.current?.replaceMicrophoneTrack(newTrack);
+          if (sendStreamRef.current) {
+            sendStreamRef.current.getTracks().forEach((t) => t.stop());
+          }
+          micStreamRef.current = newStream;
+
+          const newSendTrack = newTrack.clone();
+          const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
+          newSendTrack.enabled = canTransmit;
+          sendTrackRef.current = newSendTrack;
+          const newSendStream = new MediaStream([newSendTrack]);
+          sendStreamRef.current = newSendStream;
+
+          await signalingRef.current?.replaceMicrophoneTrack(newSendTrack);
 
           if (pipelineRef.current) {
             const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
             setAnalyser(newAnalyser);
+            if (isLoopbackActive) {
+              pipelineRef.current.startLoopback(newStream, 0.18, canTransmit);
+            }
           }
 
           if (vadRef.current) {
@@ -276,7 +471,9 @@ export function PlayerRoute() {
               {
                 onSpeakingChange: (speaking) => {
                   setIsSpeaking(speaking);
+                  isSpeakingRef.current = speaking;
                   signalingRef.current?.notifySpeaking(speaking);
+                  updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
                 },
                 onVolumeChange: () => {},
               },
@@ -354,6 +551,7 @@ export function PlayerRoute() {
 
   const handleChangeVadThreshold = (thresh: number) => {
     setVadThreshold(thresh);
+    localStorage.setItem('voiceengine:vad_threshold', String(thresh));
     vadRef.current?.setThreshold(thresh);
   };
 
@@ -364,12 +562,16 @@ export function PlayerRoute() {
     signalingRef.current?.joinChannel(channelId);
   };
 
-  // Keyboard Shortcuts (M for mute with input suppression, Esc to close overlays)
+  // Keyboard Shortcuts (M for mute, D for deafen, Esc to close overlays)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (popoverPeer) {
           setPopoverPeer(null);
+          return;
+        }
+        if (isQrModalOpen) {
+          setIsQrModalOpen(false);
           return;
         }
         if (isSettingsOpen) {
@@ -378,22 +580,60 @@ export function PlayerRoute() {
         }
       }
 
-      if (e.key === 'm' || e.key === 'M') {
-        const activeEl = document.activeElement;
-        const isInput =
-          activeEl instanceof HTMLInputElement ||
-          activeEl instanceof HTMLTextAreaElement ||
-          (activeEl as HTMLElement)?.isContentEditable;
-        if (!isInput && isConnected) {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        (activeEl as HTMLElement)?.isContentEditable;
+
+      if (!isInput && isConnected) {
+        if (e.key === 'm' || e.key === 'M') {
           e.preventDefault();
           handleToggleMute();
+        } else if (e.key === 'd' || e.key === 'D') {
+          e.preventDefault();
+          handleToggleDeafen();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isConnected, isMuted, popoverPeer, isSettingsOpen]);
+  }, [isConnected, isMuted, isDeafened, popoverPeer, isSettingsOpen, isQrModalOpen]);
+
+  // Screen Wake Lock API for Mobile Companion Mode
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+
+    const requestLock = async () => {
+      if ('wakeLock' in navigator && isConnected) {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        } catch (err) {
+          console.warn('[PlayerRoute] Screen Wake Lock failed:', err);
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isConnected) {
+        requestLock();
+      }
+    };
+
+    if (isConnected) {
+      requestLock();
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
+        wakeLockSentinel = null;
+      }
+    };
+  }, [isConnected]);
 
   return (
     <div className="relative min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center select-none overflow-x-hidden">
@@ -443,27 +683,40 @@ export function PlayerRoute() {
         </div>
 
         {/* User Identity / Status */}
-        {isConnected && localPlayer ? (
-          <div className="flex items-center gap-3 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/10 shadow-md">
-            <img
-              src={`https://mc-heads.net/avatar/${localPlayer.uuid}/24`}
-              alt={localPlayer.username}
-              className="w-6 h-6 rounded border border-white/20"
-            />
-            <div className="text-left">
-              <div className="text-xs font-semibold text-white leading-tight">{localPlayer.username}</div>
-              <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Connected</span>
+        <div className="flex items-center gap-3">
+          {streamerMode && (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold text-indigo-300 bg-indigo-500/20 border border-indigo-500/40 shadow-sm"
+              title="Modo Streamer activado: tokens y datos sensibles ocultos"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Modo Streamer</span>
+            </div>
+          )}
+          {isConnected && localPlayer ? (
+            <div className="flex items-center gap-3 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-white/10 shadow-md">
+              <img
+                src={`https://mc-heads.net/avatar/${localPlayer.uuid}/24`}
+                alt={localPlayer.username}
+                className="w-6 h-6 rounded border border-white/20"
+              />
+              <div className="text-left">
+                <div className="text-xs font-semibold text-white leading-tight">
+                  {streamerMode ? 'Jugador' : localPlayer.username}
+                </div>
+                <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Connected</span>
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="text-xs text-slate-400 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Zero-Mod Proximity Audio</span>
-          </div>
-        )}
+          ) : (
+            <div className="text-xs text-slate-400 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Zero-Mod Proximity Audio</span>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -539,7 +792,7 @@ export function PlayerRoute() {
                 maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
                 localUsername={localPlayer?.username}
                 localUuid={localPlayer?.uuid}
-                onPeerClick={(peer) => setPopoverPeer({ uuid: peer.uuid, username: peer.username })}
+                onPeerClick={(peer) => setPopoverPeer(peer)}
               />
             </div>
 
@@ -551,7 +804,16 @@ export function PlayerRoute() {
                 channelMembers={channelMembers}
                 proximityPeersCount={peers.length}
                 onSelectChannel={handleSelectChannel}
-                onMemberClick={(member) => setPopoverPeer({ uuid: member.uuid, username: member.username })}
+                onMemberClick={(member) =>
+                  setPopoverPeer({
+                    uuid: member.uuid,
+                    username: member.username,
+                    distance: 0,
+                    relX: 0,
+                    relY: 0,
+                    relZ: 0,
+                  })
+                }
               />
             </div>
           </div>
@@ -569,6 +831,11 @@ export function PlayerRoute() {
             peerUsername={popoverPeer.username}
             volume={peerVolumes[popoverPeer.uuid] ?? 1.0}
             isMuted={peerMuted[popoverPeer.uuid] ?? false}
+            distance={popoverPeer.distance}
+            relX={popoverPeer.relX}
+            relY={popoverPeer.relY}
+            relZ={popoverPeer.relZ}
+            streamerMode={streamerMode}
             onVolumeChange={handleSetPeerVolume}
             onMuteToggle={handleSetPeerMuted}
             onClose={() => setPopoverPeer(null)}
@@ -580,18 +847,58 @@ export function PlayerRoute() {
       {isConnected && (
         <ControlDock
           isMuted={isMuted}
+          isDeafened={isDeafened}
           isSpeaking={isSpeaking}
           masterVolume={masterVolume}
           vadThreshold={vadThreshold}
           analyser={analyser}
           pingMs={pingMs}
+          isPipSupported={isPipSupported}
+          isPipActive={pipWindow !== null}
           onToggleMute={handleToggleMute}
+          onToggleDeafen={handleToggleDeafen}
+          onTogglePip={handleTogglePip}
+          onOpenQrCompanion={() => setIsQrModalOpen(true)}
           onChangeMasterVolume={handleChangeMasterVolume}
           onChangeVadThreshold={handleChangeVadThreshold}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDisconnect={handleDisconnect}
         />
       )}
+
+      {/* Mobile Companion QR Modal */}
+      <QrCompanionModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
+        sessionUrl={
+          typeof window !== 'undefined'
+            ? `${window.location.origin}${window.location.pathname}?token=${tokenInput.trim().toUpperCase()}`
+            : ''
+        }
+        streamerMode={streamerMode}
+      />
+
+      {/* Document Picture-in-Picture Native Floating Overlay Portal */}
+      {pipWindow &&
+        createPortal(
+          <PipOverlay
+            localPlayer={localPlayer}
+            isMuted={isMuted}
+            isDeafened={isDeafened}
+            isSpeaking={isSpeaking}
+            pingMs={pingMs}
+            peers={activeChannel === 'proximity' ? peers : []}
+            streamerMode={streamerMode}
+            onToggleMute={handleToggleMute}
+            onToggleDeafen={handleToggleDeafen}
+            onClose={() => {
+              pipWindow.close();
+              setPipWindow(null);
+            }}
+            onPeerClick={(peer) => setPopoverPeer(peer)}
+          />,
+          pipWindow.document.body
+        )}
 
       {/* Settings Modal (Devices, Volumes, Preferences) */}
       <SettingsModal
@@ -604,6 +911,12 @@ export function PlayerRoute() {
         audioConstraints={audioConstraints}
         onUpdateConstraints={handleUpdateConstraints}
         analyserNode={analyser}
+        vadThreshold={vadThreshold}
+        onChangeVadThreshold={handleChangeVadThreshold}
+        isLoopbackActive={isLoopbackActive}
+        onToggleLoopback={handleToggleLoopback}
+        streamerMode={streamerMode}
+        onToggleStreamerMode={handleToggleStreamerMode}
         peers={peers}
         channelMembers={channelMembers}
         peerVolumes={peerVolumes}

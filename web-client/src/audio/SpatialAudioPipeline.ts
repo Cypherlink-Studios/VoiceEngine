@@ -11,15 +11,31 @@ export interface PeerAudioNode {
 export class SpatialAudioPipeline {
   private audioContext: AudioContext;
   private masterGain: GainNode;
+  private proximityBusGain: GainNode;
+  private deafenGain: GainNode;
   private peers = new Map<string, PeerAudioNode>();
   private peerVolumes = new Map<string, number>();
   private peerMuted = new Map<string, boolean>();
+  private isDeafenedState = false;
+  private isDuckingState = false;
+
+  private loopbackSource: MediaStreamAudioSourceNode | null = null;
+  private loopbackDelay: DelayNode | null = null;
+  private loopbackGain: GainNode | null = null;
+  private isLoopbackActive = false;
 
   constructor() {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
     this.masterGain = this.audioContext.createGain();
-    this.masterGain.connect(this.audioContext.destination);
+    this.proximityBusGain = this.audioContext.createGain();
+    this.deafenGain = this.audioContext.createGain();
+
+    // Route: proximityBusGain -> masterGain; fixed channels directly -> masterGain
+    // Master routing: masterGain -> deafenGain -> destination
+    this.proximityBusGain.connect(this.masterGain);
+    this.masterGain.connect(this.deafenGain);
+    this.deafenGain.connect(this.audioContext.destination);
 
     // Set listener defaults (facing forward along -Z, up along +Y)
     const listener = this.audioContext.listener;
@@ -140,11 +156,11 @@ export class SpatialAudioPipeline {
       initialPos.relZ ?? 0
     );
 
-    // Routing: Source -> Filter -> Panner -> Gain -> Master
+    // Routing: Source -> Filter -> Panner -> Gain -> Proximity Bus
     source.connect(filter);
     filter.connect(panner);
     panner.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.proximityBusGain);
 
     this.peers.set(peerUuid, {
       source,
@@ -258,11 +274,81 @@ export class SpatialAudioPipeline {
     peerNode.gain.gain.setValueAtTime(finalGain, this.audioContext.currentTime);
   }
 
+  public setDeafened(deafened: boolean): void {
+    this.isDeafenedState = deafened;
+    this.deafenGain.gain.setTargetAtTime(
+      deafened ? 0 : 1.0,
+      this.audioContext.currentTime,
+      0.03
+    );
+  }
+
+  public isDeafened(): boolean {
+    return this.isDeafenedState;
+  }
+
+  public setRadioDucking(ducking: boolean): void {
+    this.isDuckingState = ducking;
+    this.proximityBusGain.gain.setTargetAtTime(
+      ducking ? 0.35 : 1.0,
+      this.audioContext.currentTime,
+      0.06
+    );
+  }
+
+  public isRadioDucking(): boolean {
+    return this.isDuckingState;
+  }
+
+  public startLoopback(stream: MediaStream, delaySeconds: number = 0.18, isCurrentlyTransmitting: boolean = false): void {
+    this.stopLoopback();
+    try {
+      this.loopbackSource = this.audioContext.createMediaStreamSource(stream);
+      this.loopbackDelay = this.audioContext.createDelay(1.0);
+      this.loopbackDelay.delayTime.setValueAtTime(delaySeconds, this.audioContext.currentTime);
+      this.loopbackGain = this.audioContext.createGain();
+      const initialGain = isCurrentlyTransmitting ? 0.8 : 0.0;
+      this.loopbackGain.gain.setValueAtTime(initialGain, this.audioContext.currentTime);
+
+      this.loopbackSource.connect(this.loopbackDelay);
+      this.loopbackDelay.connect(this.loopbackGain);
+      this.loopbackGain.connect(this.audioContext.destination);
+      this.isLoopbackActive = true;
+    } catch (err) {
+      console.warn('[SpatialAudioPipeline] Failed to start loopback:', err);
+    }
+  }
+
+  public setLoopbackGated(isOpen: boolean): void {
+    if (this.loopbackGain && this.isLoopbackActive) {
+      const targetGain = isOpen ? 0.8 : 0.0;
+      this.loopbackGain.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.015);
+    }
+  }
+
+  public stopLoopback(): void {
+    if (!this.isLoopbackActive) return;
+    try {
+      this.loopbackSource?.disconnect();
+      this.loopbackDelay?.disconnect();
+      this.loopbackGain?.disconnect();
+    } catch {}
+    this.loopbackSource = null;
+    this.loopbackDelay = null;
+    this.loopbackGain = null;
+    this.isLoopbackActive = false;
+  }
+
+  public isLoopbackRunning(): boolean {
+    return this.isLoopbackActive;
+  }
+
   public getContext(): AudioContext {
     return this.audioContext;
   }
 
   public close(): void {
+    this.stopLoopback();
     for (const uuid of this.peers.keys()) {
       this.removePeerStream(uuid);
     }
