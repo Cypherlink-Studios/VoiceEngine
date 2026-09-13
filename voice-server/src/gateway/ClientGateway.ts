@@ -204,6 +204,16 @@ export class ClientGateway {
               );
               break;
             }
+
+            case 'client_disconnect': {
+              if (session) {
+                this.cleanupSession(session);
+                if (ws.readyState === WebSocket.OPEN) {
+                  ws.close(1000, 'Client disconnected');
+                }
+              }
+              break;
+            }
           }
         } catch (err) {
           console.error('[ClientGateway] Error handling client message:', err);
@@ -425,31 +435,76 @@ export class ClientGateway {
     }
   }
 
-  private cleanupSession(session: ClientSession): void {
+  public cleanupSession(session: ClientSession): void {
+    if (!this.sessions.has(session.sessionId) && !this.playerSessions.has(session.playerUuid)) {
+      return;
+    }
+
     console.log(`[ClientGateway] Cleaning up session for ${session.username} (${session.playerUuid})`);
     const channel = session.activeChannel;
+
+    if (session.isSpeaking) {
+      session.isSpeaking = false;
+      this.pluginGateway.notifySpeechStatus(session.playerUuid, false);
+    }
 
     this.sessions.delete(session.sessionId);
     this.playerSessions.delete(session.playerUuid);
 
     for (const consumer of session.consumers.values()) {
-      consumer.close();
+      try {
+        consumer.close();
+      } catch {}
     }
     session.consumers.clear();
 
     if (session.producer) {
-      session.producer.close();
+      try {
+        session.producer.close();
+      } catch {}
     }
     if (session.sendTransport) {
-      session.sendTransport.close();
+      try {
+        session.sendTransport.close();
+      } catch {}
     }
     if (session.recvTransport) {
-      session.recvTransport.close();
+      try {
+        session.recvTransport.close();
+      } catch {}
     }
 
     if (channel && channel !== 'proximity') {
       this.broadcastChannelMembers(channel);
     }
+  }
+
+  public disconnectSession(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      this.cleanupSession(session);
+      if (session.ws.readyState === WebSocket.OPEN) {
+        try {
+          session.ws.close(1000, 'Session disconnected via beacon/api');
+        } catch {}
+      }
+      return true;
+    }
+    return false;
+  }
+
+  public disconnectPlayer(playerUuid: string): boolean {
+    const session = this.playerSessions.get(playerUuid);
+    if (session) {
+      this.cleanupSession(session);
+      if (session.ws.readyState === WebSocket.OPEN) {
+        try {
+          session.ws.close(1000, 'Session disconnected via beacon/api');
+        } catch {}
+      }
+      return true;
+    }
+    return false;
   }
 
   public getConnectedClientsCount(): number {

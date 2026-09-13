@@ -21,6 +21,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.text({ type: ['text/plain', 'application/json'] }));
 
 const httpServer = createServer(app);
 

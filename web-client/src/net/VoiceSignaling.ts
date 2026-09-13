@@ -34,6 +34,7 @@ export class VoiceSignaling {
   private consumers = new Map<string, mediasoupTypes.Consumer>(); // peerUuid -> consumer
   private peersInfo = new Map<string, PeerRadarInfo>(); // peerUuid -> PeerRadarInfo
   private pingInterval?: any;
+  private sessionId?: string;
 
   constructor(
     wsUrl: string,
@@ -100,6 +101,8 @@ export class VoiceSignaling {
 
       case 'auth_success': {
         if (!this.device) return;
+
+        this.sessionId = msg.sessionId;
 
         // Load router RTP capabilities into device
         await this.device.load({ routerRtpCapabilities: msg.routerRtpCapabilities });
@@ -306,25 +309,44 @@ export class VoiceSignaling {
     }
   }
 
+  public getSessionId(): string | undefined {
+    return this.sessionId;
+  }
+
   public disconnect(): void {
     this.stopPingLoop();
     if (this.audioProducer) {
-      this.audioProducer.close();
+      try {
+        this.audioProducer.close();
+      } catch {}
     }
     for (const consumer of this.consumers.values()) {
-      consumer.close();
+      try {
+        consumer.close();
+      } catch {}
     }
     this.consumers.clear();
     this.peersInfo.clear();
 
     if (this.sendTransport) {
-      this.sendTransport.close();
+      try {
+        this.sendTransport.close();
+      } catch {}
     }
     if (this.recvTransport) {
-      this.recvTransport.close();
+      try {
+        this.recvTransport.close();
+      } catch {}
     }
-    if (this.ws) {
-      this.ws.close();
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+      try {
+        if (this.ws.readyState === WebSocket.OPEN) {
+          this.send({ type: 'client_disconnect' });
+        }
+      } catch {}
+      try {
+        this.ws.close(1000, 'Client disconnected');
+      } catch {}
     }
   }
 }

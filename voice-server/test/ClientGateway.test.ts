@@ -142,5 +142,79 @@ describe('ClientGateway', () => {
       });
     });
   });
+
+  it('handles client_disconnect frame and cleans up session immediately', async () => {
+    tokenStore.registerToken({
+      token: 'DISC1',
+      playerUuid: 'uuid-alex',
+      playerName: 'Alex',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'DISC1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          expect(clientGateway.getConnectedClientsCount()).toBe(1);
+          // Send explicit client_disconnect
+          ws.send(JSON.stringify({ type: 'client_disconnect' }));
+        }
+      });
+
+      ws.on('close', () => {
+        expect(clientGateway.getConnectedClientsCount()).toBe(0);
+        resolve();
+      });
+    });
+  });
+
+  it('allows disconnecting session via disconnectSession and disconnectPlayer helper methods', async () => {
+    tokenStore.registerToken({
+      token: 'DISC2',
+      playerUuid: 'uuid-player2',
+      playerName: 'Player2',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'DISC2',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          expect(clientGateway.getConnectedClientsCount()).toBe(1);
+          const disconnected = clientGateway.disconnectPlayer('uuid-player2');
+          expect(disconnected).toBe(true);
+          expect(clientGateway.getConnectedClientsCount()).toBe(0);
+        }
+      });
+
+      ws.on('close', () => {
+        resolve();
+      });
+    });
+  });
 });
 

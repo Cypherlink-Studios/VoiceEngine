@@ -92,5 +92,36 @@ export function createApiRouter(
     });
   });
 
+  // Client Session Teardown / Beacon Disconnect Endpoint
+  router.post('/session/disconnect', (req: Request, res: Response) => {
+    let payload = req.body;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = {};
+      }
+    }
+
+    const { sessionId, playerUuid } = payload || {};
+    const clientGateway = getClientGateway();
+
+    if (!clientGateway) {
+      res.status(503).json({ success: false, message: 'ClientGateway is not initialized' });
+      return;
+    }
+
+    let disconnected = false;
+    if (typeof sessionId === 'string' && sessionId.trim()) {
+      disconnected = clientGateway.disconnectSession(sessionId.trim());
+    }
+
+    if (!disconnected && typeof playerUuid === 'string' && playerUuid.trim()) {
+      disconnected = clientGateway.disconnectPlayer(playerUuid.trim());
+    }
+
+    res.json({ success: true, disconnected });
+  });
+
   return router;
 }

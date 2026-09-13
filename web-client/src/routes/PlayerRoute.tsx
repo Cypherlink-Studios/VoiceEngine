@@ -246,7 +246,10 @@ export function PlayerRoute() {
   };
 
   const handleDisconnect = () => {
-    soundEffects.playDisconnect();
+    const wasActive = !!(signalingRef.current || micStreamRef.current || pipelineRef.current);
+    if (wasActive) {
+      soundEffects.playDisconnect();
+    }
 
     if (pipWindow) {
       pipWindow.close();
@@ -634,6 +637,50 @@ export function PlayerRoute() {
       }
     };
   }, [isConnected]);
+
+  // Page Lifecycle Sensor: Warn on leave/close while connected & cleanly terminate voicechat session
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isConnected) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    const handlePageDismiss = () => {
+      // 1. Guaranteed server teardown via sendBeacon (immune to abrupt page unload)
+      try {
+        const sessionId = signalingRef.current?.getSessionId();
+        const playerUuid = localPlayer?.uuid;
+        if (sessionId || playerUuid) {
+          const payload = JSON.stringify({ sessionId, playerUuid });
+          const blob = new Blob([payload], { type: 'application/json' });
+          navigator.sendBeacon?.('/api/session/disconnect', blob);
+        }
+      } catch {
+        // beacon fallback ignore
+      }
+
+      // 2. Synchronous client cleanup: stop mic hardware tracks, close audio context, PiP and WebSocket
+      handleDisconnect();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageDismiss);
+    window.addEventListener('unload', handlePageDismiss);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageDismiss);
+      window.removeEventListener('unload', handlePageDismiss);
+
+      // Clean up if component unmounts while connected (e.g. navigating to another route)
+      handleDisconnect();
+    };
+  }, [isConnected, localPlayer]);
 
   return (
     <div className="relative min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col items-center select-none overflow-x-hidden">

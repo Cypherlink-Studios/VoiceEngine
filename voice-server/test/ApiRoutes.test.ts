@@ -33,6 +33,7 @@ describe('API Routes & Admin Auth', () => {
 
     app = express();
     app.use(express.json());
+    app.use(express.text({ type: ['text/plain', 'application/json'] }));
 
     const mockClientGateway = {
       getConnectedClientsCount: () => 2,
@@ -41,6 +42,8 @@ describe('API Routes & Admin Auth', () => {
         { sessionId: 's1', playerUuid: 'u1', username: 'Steve', activeChannel: 'proximity', isSpeaking: false },
         { sessionId: 's2', playerUuid: 'u2', username: 'Alex', activeChannel: 'lobby', isSpeaking: true },
       ],
+      disconnectSession: (sessionId: string) => sessionId === 's1',
+      disconnectPlayer: (playerUuid: string) => playerUuid === 'u1',
     } as any;
 
     const mockPluginGateway = {
@@ -211,5 +214,40 @@ describe('API Routes & Admin Auth', () => {
       body: JSON.stringify({ token: 'STEVE1' }),
     });
     expect(resSteve.status).toBe(401);
+  });
+
+  it('POST /api/session/disconnect handles JSON and beacon text bodies', async () => {
+    // 1. Disconnect by sessionId (JSON)
+    const res1 = await fetch(`${baseUrl}/api/session/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: 's1' }),
+    });
+    expect(res1.status).toBe(200);
+    const data1 = await res1.json();
+    expect(data1.success).toBe(true);
+    expect(data1.disconnected).toBe(true);
+
+    // 2. Disconnect by playerUuid (text/plain like sendBeacon)
+    const res2 = await fetch(`${baseUrl}/api/session/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ playerUuid: 'u1' }),
+    });
+    expect(res2.status).toBe(200);
+    const data2 = await res2.json();
+    expect(data2.success).toBe(true);
+    expect(data2.disconnected).toBe(true);
+
+    // 3. Unknown session returns disconnected false
+    const res3 = await fetch(`${baseUrl}/api/session/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: 'unknown' }),
+    });
+    expect(res3.status).toBe(200);
+    const data3 = await res3.json();
+    expect(data3.success).toBe(true);
+    expect(data3.disconnected).toBe(false);
   });
 });
