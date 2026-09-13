@@ -252,7 +252,7 @@ sudo ufw enable
    chmod +x gradlew
    ./gradlew build
    ```
-2. Copy the artifact `paper-plugin/build/libs/paper-plugin-1.0.0-SNAPSHOT.jar` into your Paper server's `plugins/` directory.
+2. Copy the artifact `paper-plugin/build/libs/VoiceEngine-paper-1.0.0-SNAPSHOT.jar` into your Paper server's `plugins/` directory.
 3. Start or restart your Paper server once to generate `plugins/VoiceEngine/config.yml` (or create it manually) and update the configuration:
    ```yaml
    # Local WebSocket connection to the voice backend

@@ -51,6 +51,7 @@ tasks.shadowJar {
     archiveBaseName.set("VoiceEngine-paper")
     archiveClassifier.set("")
     relocate("org.incendo.cloud", "com.voiceengine.libs.cloud")
+    relocate("org.java_websocket", "com.voiceengine.libs.websocket")
 }
 
 tasks.assemble {
