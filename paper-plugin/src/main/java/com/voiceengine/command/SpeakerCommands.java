@@ -8,6 +8,7 @@ import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.incendo.cloud.annotation.specifier.Quoted;
 import org.incendo.cloud.annotation.specifier.Range;
 import org.incendo.cloud.annotations.Argument;
 import org.incendo.cloud.annotations.Command;
@@ -158,7 +159,7 @@ public class SpeakerCommands {
     public void onSpeakerPlay(
         CommandSourceStack stack,
         @Argument("id") String id,
-        @Argument("source") String source,
+        @Argument("source") @Quoted String source,
         @Flag("loop") boolean loop
     ) {
         boolean bound = speakerManager.bindAudio(id, source, loop);

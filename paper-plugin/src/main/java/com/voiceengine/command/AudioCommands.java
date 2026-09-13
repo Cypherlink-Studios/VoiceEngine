@@ -8,12 +8,15 @@ import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
+import org.incendo.cloud.annotation.specifier.Quoted;
 import org.incendo.cloud.annotation.specifier.Range;
 import org.incendo.cloud.annotations.Argument;
 import org.incendo.cloud.annotations.Command;
 import org.incendo.cloud.annotations.CommandDescription;
 import org.incendo.cloud.annotations.Flag;
 import org.incendo.cloud.annotations.Permission;
+import org.incendo.cloud.annotations.suggestion.Suggestions;
+import org.incendo.cloud.context.CommandContext;
 
 import java.util.Collection;
 import java.util.List;
@@ -27,13 +30,20 @@ public class AudioCommands {
         this.translationService = translationService;
     }
 
+    @Suggestions("mediaFiles")
+    public List<String> suggestMediaFiles(CommandContext<CommandSourceStack> context, String input) {
+        return audioManager.getAvailableMediaFiles().stream()
+            .map(MediaFileInfo::relativePath)
+            .toList();
+    }
+
     @Command("voice|ve|voiceengine|audio audio play <id> <source> <x> <y> <z> [radius]")
     @Permission("voiceengine.admin.audio")
     @CommandDescription("Play 3D spatial audio at specific coordinates")
     public void onPlay(
         CommandSourceStack stack,
         @Argument("id") String id,
-        @Argument("source") String source,
+        @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source,
         @Argument("x") double x,
         @Argument("y") double y,
         @Argument("z") double z,
@@ -76,7 +86,7 @@ public class AudioCommands {
     public void onBroadcast(
         CommandSourceStack stack,
         @Argument("id") String id,
-        @Argument("source") String source,
+        @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source,
         @Flag("loop") boolean loop
     ) {
         AudioEmitter emitter = audioManager.playBroadcast(id, source, loop, 1.0);
@@ -92,7 +102,7 @@ public class AudioCommands {
     @CommandDescription("Play a 2D one-shot sound effect globally")
     public void onSfx2D(
         CommandSourceStack stack,
-        @Argument("source") String source
+        @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source
     ) {
         String sfxId = audioManager.playSfx(source, null, null, null, null, null);
         translationService.send(stack.getSender(), "command.audio.sfx_started",
@@ -106,7 +116,7 @@ public class AudioCommands {
     @CommandDescription("Play a 3D one-shot sound effect at coordinates")
     public void onSfx3D(
         CommandSourceStack stack,
-        @Argument("source") String source,
+        @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source,
         @Argument("x") double x,
         @Argument("y") double y,
         @Argument("z") double z,
