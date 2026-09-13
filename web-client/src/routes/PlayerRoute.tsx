@@ -93,6 +93,27 @@ export function PlayerRoute() {
   });
   const [pingMs, setPingMs] = useState<number | null>(null);
 
+  // Media & Music Volume
+  const [mediaVolume, setMediaVolume] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem('voiceengine:media_volume') || '1.0');
+    return isNaN(v) ? 1.0 : v;
+  });
+  const [mediaMuted, setMediaMuted] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:media_muted') === 'true'
+  );
+
+  const handleSetMediaVolume = (volume: number) => {
+    setMediaVolume(volume);
+    localStorage.setItem('voiceengine:media_volume', String(volume));
+    pipelineRef.current?.setMediaVolume(volume);
+  };
+
+  const handleToggleMediaMuted = (muted: boolean) => {
+    setMediaMuted(muted);
+    localStorage.setItem('voiceengine:media_muted', String(muted));
+    pipelineRef.current?.setMediaMuted(muted);
+  };
+
   // Modals and Popovers
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [popoverPeer, setPopoverPeer] = useState<PeerRadarInfo | null>(null);
@@ -156,6 +177,8 @@ export function PlayerRoute() {
       const pipeline = new SpatialAudioPipeline();
       pipelineRef.current = pipeline;
       pipeline.setMasterVolume(masterVolume);
+      pipeline.setMediaVolume(mediaVolume);
+      pipeline.setMediaMuted(mediaMuted);
       pipeline.loadPreferences(peerVolumes, peerMuted);
 
       if (selectedOutputId) {
@@ -1038,6 +1061,10 @@ export function PlayerRoute() {
         onToggleSfx={handleToggleSfx}
         onSetSfxVolume={handleSetSfxVolume}
         pingMs={pingMs}
+        mediaVolume={mediaVolume}
+        onSetMediaVolume={handleSetMediaVolume}
+        mediaMuted={mediaMuted}
+        onToggleMediaMuted={handleToggleMediaMuted}
       />
     </div>
   );

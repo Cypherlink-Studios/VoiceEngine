@@ -7,6 +7,7 @@ import { MediasoupManager } from '../sfu/MediasoupManager.js';
 import { PluginGateway } from './PluginGateway.js';
 import { ClientSession, ModerationActionPayload } from '../types.js';
 import { SettingsManager } from '../config/SettingsManager.js';
+import { AudioEmitterManager } from '../media/AudioEmitterManager.js';
 import { config } from '../config.js';
 import * as mediasoup from 'mediasoup';
 
@@ -17,6 +18,7 @@ export class ClientGateway {
   private sfu: MediasoupManager;
   private pluginGateway: PluginGateway;
   private settingsManager?: SettingsManager;
+  private audioEmitterManager?: AudioEmitterManager;
 
   private sessions = new Map<string, ClientSession>(); // sessionId -> ClientSession
   private playerSessions = new Map<string, ClientSession>(); // playerUuid -> ClientSession
@@ -35,7 +37,8 @@ export class ClientGateway {
     spatialEngine: SpatialEngine,
     sfu: MediasoupManager,
     pluginGateway: PluginGateway,
-    settingsManager?: SettingsManager
+    settingsManager?: SettingsManager,
+    audioEmitterManager?: AudioEmitterManager
   ) {
     this.wss = wss;
     this.tokenStore = tokenStore;
@@ -43,10 +46,18 @@ export class ClientGateway {
     this.sfu = sfu;
     this.pluginGateway = pluginGateway;
     this.settingsManager = settingsManager;
+    this.audioEmitterManager = audioEmitterManager;
+
+    if (this.audioEmitterManager) {
+      this.audioEmitterManager.onEvent((event, emitter) => {
+        this.broadcastAudioEvent(event, emitter);
+      });
+    }
 
     this.init();
     this.startProximityLoop();
   }
+
 
   private init(): void {
     this.connectionHandler = (ws: WebSocket, req?: IncomingMessage) => {
@@ -180,8 +191,18 @@ export class ClientGateway {
                   })
                 );
               }
+
+              if (this.audioEmitterManager) {
+                ws.send(
+                  JSON.stringify({
+                    type: 'audio_state',
+                    emitters: this.audioEmitterManager.getActiveEmitters(),
+                  })
+                );
+              }
               break;
             }
+
 
             case 'connect_transport': {
               if (!session) return;
@@ -330,6 +351,18 @@ export class ClientGateway {
               );
               break;
             }
+
+            case 'time_sync': {
+              ws.send(
+                JSON.stringify({
+                  type: 'time_sync_response',
+                  clientTime: msg.clientTime,
+                  serverTime: Date.now(),
+                })
+              );
+              break;
+            }
+
 
             case 'client_disconnect': {
               if (session) {
@@ -583,6 +616,63 @@ export class ClientGateway {
                 })
               );
             }
+          }
+        }
+
+        // --- 3. Spatial Audio Emitter Routing ---
+        if (this.audioEmitterManager && listenerSession.ws.readyState === WebSocket.OPEN) {
+          const listener = this.spatialEngine.getPlayer(listenerSession.playerUuid);
+          const activeEmitters = this.audioEmitterManager.getActiveEmitters();
+          for (const emitter of activeEmitters) {
+            if (!emitter.spatial || !emitter.position) {
+              continue;
+            }
+
+            if (!listener) {
+              continue;
+            }
+
+            const emitterWorld = emitter.world || 'world';
+            if (listener.world !== emitterWorld) {
+              listenerSession.ws.send(
+                JSON.stringify({
+                  type: 'emitter_spatial_update',
+                  id: emitter.id,
+                  inRange: false,
+                  distance: 9999,
+                  relX: 0,
+                  relY: 0,
+                  relZ: -9999,
+                })
+              );
+              continue;
+            }
+
+            const dx = emitter.position.x - listener.x;
+            const dy = emitter.position.y - listener.y;
+            const dz = emitter.position.z - listener.z;
+            const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const inRange = distance <= emitter.radius;
+
+            const rad = (listener.yaw * Math.PI) / 180.0;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+
+            const localX = dx * cos - dz * sin;
+            const localZ = dx * sin + dz * cos;
+            const localY = dy;
+
+            listenerSession.ws.send(
+              JSON.stringify({
+                type: 'emitter_spatial_update',
+                id: emitter.id,
+                inRange,
+                distance: Math.round(distance * 100) / 100,
+                relX: Math.round(localX * 100) / 100,
+                relY: Math.round(localY * 100) / 100,
+                relZ: Math.round(localZ * 100) / 100,
+              })
+            );
           }
         }
       }
@@ -962,6 +1052,36 @@ export class ClientGateway {
         deviceId: p.deviceId,
       });
     }
+  }
+
+  public broadcastAudioEvent(event: string, emitter: any): void {
+    const payload = JSON.stringify({
+      type: 'audio_event',
+      event,
+      emitter,
+    });
+    for (const session of this.sessions.values()) {
+      if (session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(payload);
+      }
+    }
+  }
+
+  public broadcastAudioState(): void {
+    if (!this.audioEmitterManager) return;
+    const payload = JSON.stringify({
+      type: 'audio_state',
+      emitters: this.audioEmitterManager.getActiveEmitters(),
+    });
+    for (const session of this.sessions.values()) {
+      if (session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(payload);
+      }
+    }
+  }
+
+  public getAudioEmitterManager(): AudioEmitterManager | undefined {
+    return this.audioEmitterManager;
   }
 
   public shutdown(): void {

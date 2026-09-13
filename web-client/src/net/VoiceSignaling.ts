@@ -1,6 +1,7 @@
 import { Device } from 'mediasoup-client';
 import { types as mediasoupTypes } from 'mediasoup-client';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
+import { MediaPipeline } from '../audio/MediaPipeline.js';
 import { PeerRadarInfo } from '../components/Radar.js';
 
 export interface ChannelMember {
@@ -33,6 +34,7 @@ export class VoiceSignaling {
   private token: string;
   private callbacks: SignalingCallbacks;
   private pipeline: SpatialAudioPipeline;
+  private mediaPipeline: MediaPipeline;
 
   private ws?: WebSocket;
   private device?: Device;
@@ -68,6 +70,11 @@ export class VoiceSignaling {
     this.token = token;
     this.pipeline = pipeline;
     this.callbacks = callbacks;
+    this.mediaPipeline = new MediaPipeline(pipeline, (data) => this.send(data));
+  }
+
+  public getMediaPipeline(): MediaPipeline {
+    return this.mediaPipeline;
   }
 
   private getOrCreateDeviceId(): string {
@@ -99,6 +106,7 @@ export class VoiceSignaling {
 
     this.ws.onopen = async () => {
       this.startPingLoop();
+      this.mediaPipeline.setWsSend((data) => this.send(data));
       const deviceId = this.getOrCreateDeviceId();
       // Send authentication request
       this.send({
@@ -124,6 +132,7 @@ export class VoiceSignaling {
 
     this.ws.onclose = () => {
       this.stopPingLoop();
+      this.mediaPipeline.destroy();
       console.log('[VoiceSignaling] WebSocket closed.');
       this.callbacks.onDisconnected();
     };
@@ -131,6 +140,26 @@ export class VoiceSignaling {
 
   private async handleMessage(msg: any, micStream: MediaStream): Promise<void> {
     switch (msg.type) {
+      case 'time_sync_response': {
+        this.mediaPipeline.handleTimeSyncResponse(msg);
+        break;
+      }
+
+      case 'audio_state': {
+        this.mediaPipeline.handleAudioState(msg.emitters || []);
+        break;
+      }
+
+      case 'audio_event': {
+        this.mediaPipeline.handleAudioEvent(msg.event, msg.emitter);
+        break;
+      }
+
+      case 'emitter_spatial_update': {
+        this.mediaPipeline.handleSpatialUpdate(msg);
+        break;
+      }
+
       case 'pong': {
         if (typeof msg.timestamp === 'number') {
           const rtt = Math.max(0, Date.now() - msg.timestamp);

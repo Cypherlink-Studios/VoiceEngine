@@ -22,6 +22,8 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import com.voiceengine.audio.AudioManager;
+import com.voiceengine.command.AudioCommands;
 import com.voiceengine.command.SpeakerCommands;
 import com.voiceengine.speaker.SpeakerManager;
 
@@ -35,6 +37,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private TelemetryCollector telemetryCollector;
     private VoiceBackendClient voiceBackendClient;
     private SpeakerManager speakerManager;
+    private AudioManager audioManager;
 
     private TelemetryService telemetryService;
     private VisualFeedbackService visualFeedbackService;
@@ -54,8 +57,15 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.tokenManager = new TokenManager(voiceConfig.tokenTtl(), 6);
         this.speechFeedbackHandler = new SpeechFeedbackHandler();
         this.telemetryCollector = new TelemetryCollector();
-        this.speakerManager = new SpeakerManager(getDataFolder());
+        this.audioManager = new AudioManager(
+            getDataFolder(),
+            () -> voiceBackendClient,
+            voiceConfig.audioPersistenceEnabled(),
+            voiceConfig.audioParticlesEnabled()
+        );
+        this.speakerManager = new SpeakerManager(getDataFolder(), () -> audioManager);
         this.speakerManager.load();
+        this.audioManager.load();
 
         // 3. Connect to Voice Server Backend
         initVoiceBackendClient();
@@ -79,7 +89,10 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.visualFeedbackService = new VisualFeedbackService(
             this,
             speechFeedbackHandler,
-            () -> speakerManager.renderVisualIndicators(speechFeedbackHandler)
+            () -> {
+                speakerManager.renderVisualIndicators(speechFeedbackHandler);
+                audioManager.renderParticles();
+            }
         );
         this.visualFeedbackService.start();
 
@@ -88,9 +101,10 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.commandService.initialize();
 
         SpeakerCommands speakerCommands = new SpeakerCommands(speakerManager, translationService);
+        AudioCommands audioCommands = new AudioCommands(audioManager, translationService);
         if (isProxyMode()) {
             getLogger().info("[VoiceEngine] Proxy mode active (server: " + voiceConfig.serverId() + "). Local /voice commands delegated to Velocity.");
-            this.commandService.registerCommands(speakerCommands);
+            this.commandService.registerCommands(speakerCommands, audioCommands);
         } else {
             this.commandService.registerCommands(
                 new VoiceCommands(
@@ -110,7 +124,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                         }
                     }
                 ),
-                speakerCommands
+                speakerCommands,
+                audioCommands
             );
         }
 
@@ -143,6 +158,9 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         if (speakerManager != null) {
             speakerManager.save();
         }
+        if (audioManager != null) {
+            audioManager.save();
+        }
         getServer().getServicesManager().unregisterAll(this);
         VoiceEngine.setApi(null);
 
@@ -174,6 +192,12 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             initVoiceBackendClient();
         }
 
+        if (audioManager != null) {
+            audioManager.setPersistenceEnabled(voiceConfig.audioPersistenceEnabled());
+            audioManager.setParticlesEnabled(voiceConfig.audioParticlesEnabled());
+            audioManager.load();
+        }
+
         if (speakerManager != null) {
             speakerManager.load();
         }
@@ -190,6 +214,11 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                 speechFeedbackHandler,
                 this::handleSpeechEvent
             );
+            this.voiceBackendClient.setAudioResponseConsumer(json -> {
+                if (json.has("message")) {
+                    getLogger().info("[VoiceEngine Audio] " + json.get("message").getAsString());
+                }
+            });
             this.voiceBackendClient.connect();
         } catch (Exception e) {
             getLogger().warning("Failed to initialize VoiceBackendClient: " + e.getMessage());
@@ -244,5 +273,9 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
     public VoiceEngineAPI getApi() {
         return api;
+    }
+
+    public AudioManager getAudioManager() {
+        return audioManager;
     }
 }

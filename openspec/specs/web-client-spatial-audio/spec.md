@@ -28,10 +28,10 @@ The client SHALL process local microphone input using client-side Voice Activity
 - **THEN** the client SHALL mute or pause the upstream track to eliminate background noise.
 
 ### Requirement: Binaural 3D Spatial Audio Rendering
-The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations.
+The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations, or bypass spatialization when receiving broadcast audio.
 
 #### Scenario: Dynamic 3D positional positioning
-- **WHEN** a relative position packet is received for an audible peer
+- **WHEN** a relative position packet is received for an audible peer without broadcast flags
 - **THEN** the client SHALL interpolate and apply the X, Y, and Z offsets to that peer's `PannerNode` relative to the local listener's yaw and pitch.
 
 #### Scenario: Submerged low-pass acoustic filtering
@@ -41,6 +41,10 @@ The web client SHALL process incoming peer audio streams through the Web Audio A
 #### Scenario: Proximity radar visualization
 - **WHEN** audible players are within proximity range
 - **THEN** the client UI SHALL display their relative distance, direction, and speaking activity on a radar display.
+
+#### Scenario: Speaker block 2D broadcast bypass
+- **WHEN** incoming peer audio is flagged with `isBroadcast: true`
+- **THEN** the client SHALL route the audio stream directly to master output gain, bypassing the 3D HRTF `PannerNode` to deliver uniform stereo audio across the speaker block's coverage area.
 
 ### Requirement: Dual-Mode Audio Switching (Proximity vs Fixed Channels)
 The web client SHALL support switching between 3D spatialized proximity chat and unattenuated stereo fixed channels.
@@ -221,6 +225,50 @@ The web client SHALL maintain an active WebRTC audio sink and resilient source n
 #### Scenario: Throttled radar and peer state dispatch
 - **WHEN** peer spatial updates or membership changes arrive from the WebSocket
 - **THEN** the client SHALL update the audio pipeline in real time and throttle React state dispatches to avoid UI frame drops and avatar asset request storms.
+
+### Requirement: Persistent Device Fingerprint Generation
+The web client SHALL generate and store a persistent cryptographic device identifier in browser storage to detect alternate account connections from the same machine.
+
+#### Scenario: Client transmits device ID during handshake
+- **WHEN** the web client connects and authenticates with the voice backend
+- **THEN** the client SHALL load or generate a persistent UUID stored in `localStorage` and transmit it inside the `client_auth` frame.
+
+### Requirement: Moderation Status UI Banner
+The web client SHALL display clear visual status indicators when a player is subjected to moderation sanctions.
+
+#### Scenario: Muted or deafened banner notification
+- **WHEN** the client receives a `moderation_notice` frame indicating an active mute or deafen
+- **THEN** the UI SHALL render an alert banner detailing the sanction type, reason, and remaining duration, and disable the corresponding microphone input controls.
+
+### Requirement: Synchronized Media Pipeline and Linear Distance Attenuation
+The web client SHALL maintain a dedicated media audio pipeline that synchronizes playback time with the voice server and renders 3D spatial emitters using linear distance attenuation.
+
+#### Scenario: Clock synchronization via lightweight WebSocket NTP
+- **WHEN** the web client connects or receives server time sync frames
+- **THEN** the client SHALL calculate the round-trip latency and clock offset (`clockOffset = serverTime - (clientTime + rtt / 2)`) to align client time with the voice server.
+
+#### Scenario: Absolute offset seeking upon entering emitter radius
+- **WHEN** a listener moves within the radius of an active spatial emitter
+- **THEN** the client SHALL initialize playback at the exact elapsed offset (`(clientNow + clockOffset - startedAt) % duration`), aligning playback with other listeners.
+
+#### Scenario: Linear distance attenuation rendering
+- **WHEN** a spatial audio emitter is within audible radius
+- **THEN** the client SHALL connect the stream to a `PannerNode` configured with `distanceModel = 'linear'`, attenuating volume proportionally to distance until reaching zero at max radius.
+
+#### Scenario: Node suspension when out of audible radius
+- **WHEN** the listener moves beyond the radius of an active spatial emitter
+- **THEN** the client SHALL pause the `<audio>` element and disconnect the `PannerNode` to conserve browser CPU and audio decoding resources.
+
+### Requirement: Isolated Client-Side Media Volume Control
+The web client SHALL provide separate local volume controls for media emitters that do not impact player voice volume or global server playback state.
+
+#### Scenario: User adjusts media volume slider
+- **WHEN** a user adjusts the "Media & Music Volume" slider in the settings modal
+- **THEN** the client SHALL adjust the gain multiplier on the dedicated `mediaBusGain` node without affecting `proximityBusGain` or incoming peer volumes.
+
+#### Scenario: User toggles media mute
+- **WHEN** a user activates the "Mute Media" toggle
+- **THEN** the client SHALL mute the `mediaBusGain` node, silencing all background music and emitters while keeping proximity and channel voice chat fully audible.
 
 
 

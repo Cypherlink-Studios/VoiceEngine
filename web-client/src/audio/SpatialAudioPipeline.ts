@@ -14,12 +14,15 @@ export class SpatialAudioPipeline {
   private audioContext: AudioContext;
   private masterGain: GainNode;
   private proximityBusGain: GainNode;
+  private mediaBusGain: GainNode;
   private deafenGain: GainNode;
   private peers = new Map<string, PeerAudioNode>();
   private peerVolumes = new Map<string, number>();
   private peerMuted = new Map<string, boolean>();
   private isDeafenedState = false;
   private isDuckingState = false;
+  private mediaVolume = 1.0;
+  private isMediaMutedState = false;
 
   // Single persistent hidden sink to keep Chromium WebRTC audio decoder active
   // without creating/destroying WASAPI audio sessions per peer in Windows
@@ -36,11 +39,13 @@ export class SpatialAudioPipeline {
     this.audioContext = new AudioContextClass();
     this.masterGain = this.audioContext.createGain();
     this.proximityBusGain = this.audioContext.createGain();
+    this.mediaBusGain = this.audioContext.createGain();
     this.deafenGain = this.audioContext.createGain();
 
-    // Route: proximityBusGain -> masterGain; fixed channels directly -> masterGain
+    // Route: proximityBusGain -> masterGain; mediaBusGain -> masterGain; fixed channels directly -> masterGain
     // Master routing: masterGain -> deafenGain -> destination
     this.proximityBusGain.connect(this.masterGain);
+    this.mediaBusGain.connect(this.masterGain);
     this.masterGain.connect(this.deafenGain);
     this.deafenGain.connect(this.audioContext.destination);
 
@@ -395,6 +400,34 @@ export class SpatialAudioPipeline {
     const isPaused = Boolean(peerNode.isPaused);
     const targetGain = (isMuted || isPaused) ? 0 : userVol;
     peerNode.gain.gain.setTargetAtTime(targetGain, this.audioContext.currentTime, 0.03);
+  }
+
+  public getMediaBusNode(): GainNode {
+    return this.mediaBusGain;
+  }
+
+  public setMediaVolume(volume: number): void {
+    const clamped = Math.max(0, Math.min(2.0, volume));
+    this.mediaVolume = clamped;
+    this.applyMediaGain();
+  }
+
+  public getMediaVolume(): number {
+    return this.mediaVolume;
+  }
+
+  public setMediaMuted(muted: boolean): void {
+    this.isMediaMutedState = muted;
+    this.applyMediaGain();
+  }
+
+  public isMediaMuted(): boolean {
+    return this.isMediaMutedState;
+  }
+
+  private applyMediaGain(): void {
+    const target = this.isMediaMutedState ? 0 : this.mediaVolume;
+    this.mediaBusGain.gain.setTargetAtTime(target, this.audioContext.currentTime, 0.03);
   }
 
   public setDeafened(deafened: boolean): void {

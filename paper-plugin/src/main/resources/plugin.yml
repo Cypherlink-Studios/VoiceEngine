@@ -17,3 +17,9 @@ permissions:
   voiceengine.admin.status:
     description: Allows viewing VoiceEngine backend connectivity and status
     default: op
+  voiceengine.admin.speaker:
+    description: Allows managing speaker blocks
+    default: op
+  voiceengine.admin.audio:
+    description: Allows managing audio emitters and media playback
+    default: op

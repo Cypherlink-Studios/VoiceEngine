@@ -27,3 +27,13 @@ server-id: "default"
 # Proxy mode: auto, true, or false.
 # When enabled, suppresses local /voice commands and join notices, delegating to Velocity.
 proxy-mode: "auto"
+
+# Audio Emitters & Media Playback Settings
+audio:
+  # Enable the audio emitter system
+  enabled: true
+  # Persist active emitters across restarts in audio.yml
+  persistence-enabled: true
+  # Render visual note particles at active spatial emitter locations
+  particles-enabled: true
+

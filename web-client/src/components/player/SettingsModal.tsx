@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check, Eye, EyeOff, Radio } from 'lucide-react';
+import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check, Eye, EyeOff, Radio, Music } from 'lucide-react';
 import { soundEffects } from '../../audio/SoundEffects.js';
 import { ChannelMember } from '../../net/VoiceSignaling.js';
 import { PeerRadarInfo } from '../Radar.js';
@@ -40,6 +40,11 @@ export interface SettingsModalProps {
   onToggleSfx: (enabled: boolean) => void;
   onSetSfxVolume: (volume: number) => void;
   pingMs: number | null;
+  // Media & Music
+  mediaVolume?: number;
+  onSetMediaVolume?: (volume: number) => void;
+  mediaMuted?: boolean;
+  onToggleMediaMuted?: (muted: boolean) => void;
 }
 
 type TabType = 'devices' | 'players' | 'preferences';
@@ -72,6 +77,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleSfx,
   onSetSfxVolume,
   pingMs,
+  mediaVolume = 1.0,
+  onSetMediaVolume,
+  mediaMuted = false,
+  onToggleMediaMuted,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('devices');
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -510,6 +519,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 3: PREFERENCES & NETWORK */}
           {activeTab === 'preferences' && (
             <div className="space-y-6">
+              {/* Media & Music Volume Controls */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Música y Medios Espaciales (Media)
+                </h3>
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                        <Music className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-slate-200">Silenciar Medios y Música</div>
+                        <div className="text-xs text-slate-400">
+                          Silencia transmisiones de audio y música de fondo sin alterar el volumen de voz
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onToggleMediaMuted?.(!mediaMuted)}
+                      className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${
+                        mediaMuted ? 'bg-rose-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${
+                          mediaMuted ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {!mediaMuted && (
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <div className="flex justify-between text-xs text-slate-400">
+                        <span>Volumen de Medios y Música</span>
+                        <span className="font-mono text-cyan-400">{Math.round((mediaVolume ?? 1.0) * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1.5"
+                        step="0.05"
+                        value={mediaVolume ?? 1.0}
+                        onChange={(e) => onSetMediaVolume?.(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-slate-700/80 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Sound Effects */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">

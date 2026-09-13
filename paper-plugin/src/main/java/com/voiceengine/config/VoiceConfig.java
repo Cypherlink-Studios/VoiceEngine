@@ -14,7 +14,10 @@ public record VoiceConfig(
     boolean notifyOnJoin,
     String defaultLocale,
     String serverId,
-    String proxyMode
+    String proxyMode,
+    boolean audioEnabled,
+    boolean audioPersistenceEnabled,
+    boolean audioParticlesEnabled
 ) {
     public VoiceConfig(
         URI voiceServerUri,
@@ -25,7 +28,21 @@ public record VoiceConfig(
         boolean notifyOnJoin,
         String defaultLocale
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto");
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true);
+    }
+
+    public VoiceConfig(
+        URI voiceServerUri,
+        String webClientUrl,
+        String secretKey,
+        int tickRateHz,
+        Duration tokenTtl,
+        boolean notifyOnJoin,
+        String defaultLocale,
+        String serverId,
+        String proxyMode
+    ) {
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true);
     }
 
     public boolean resolveProxyMode(boolean velocityForwardingDetected) {
@@ -73,6 +90,10 @@ public record VoiceConfig(
             pMode = "auto";
         }
 
+        boolean audioEnabled = config == null || config.getBoolean("audio.enabled", true);
+        boolean audioPersistenceEnabled = config == null || config.getBoolean("audio.persistence-enabled", true);
+        boolean audioParticlesEnabled = config == null || config.getBoolean("audio.particles-enabled", true);
+
         return new VoiceConfig(
             serverUri,
             webClient,
@@ -82,7 +103,10 @@ public record VoiceConfig(
             notify,
             defaultLoc,
             srvId,
-            pMode
+            pMode,
+            audioEnabled,
+            audioPersistenceEnabled,
+            audioParticlesEnabled
         );
     }
 }

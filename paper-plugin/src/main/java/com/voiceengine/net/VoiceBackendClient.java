@@ -28,6 +28,7 @@ public class VoiceBackendClient extends WebSocketClient {
     private final SpeechFeedbackHandler speechFeedbackHandler;
     private final java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private volatile java.util.function.Consumer<JsonObject> audioResponseConsumer;
 
     private volatile boolean intentionalClose = false;
     private int reconnectAttempts = 0;
@@ -107,6 +108,10 @@ public class VoiceBackendClient extends WebSocketClient {
                 if (onSpeakingStateChange != null) {
                     onSpeakingStateChange.accept(uuid, speaking);
                 }
+            } else if ("audio_command_response".equals(type)) {
+                if (audioResponseConsumer != null) {
+                    audioResponseConsumer.accept(json);
+                }
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[VoiceEngine] Failed to parse message from voice server: " + message, e);
@@ -159,6 +164,20 @@ public class VoiceBackendClient extends WebSocketClient {
             JsonObject json = new JsonObject();
             json.addProperty("type", "player_quit");
             json.addProperty("playerUuid", playerUuid.toString());
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void setAudioResponseConsumer(java.util.function.Consumer<JsonObject> consumer) {
+        this.audioResponseConsumer = consumer;
+    }
+
+    public void sendAudioCommand(JsonObject command) {
+        if (isOpen() && command != null) {
+            JsonObject json = command.deepCopy();
+            if (!json.has("type")) {
+                json.addProperty("type", "audio_command");
+            }
             send(GSON.toJson(json));
         }
     }

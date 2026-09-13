@@ -124,4 +124,50 @@ class SpeakerManagerTest {
         assertEquals(hostUuid.toString(), state.linkedPlayerUuid());
         assertTrue(state.active());
     }
+
+    @Test
+    void testBindAndUnbindAudio() {
+        com.voiceengine.audio.AudioManager mockAudio = org.mockito.Mockito.mock(com.voiceengine.audio.AudioManager.class);
+        SpeakerManager managerWithAudio = new SpeakerManager(tempDir.toFile(), () -> mockAudio);
+
+        managerWithAudio.createSpeaker("park_stage", "world", 20.0, 64.0, 30.0, 25.0);
+        assertTrue(managerWithAudio.bindAudio("park_stage", "ambient_birds.mp3", true));
+
+        SpeakerBlock speaker = managerWithAudio.getSpeaker("park_stage").orElseThrow();
+        assertEquals("ambient_birds.mp3", speaker.audioSource());
+        assertTrue(speaker.loopMedia());
+
+        org.mockito.Mockito.verify(mockAudio).playSpatial(
+            org.mockito.ArgumentMatchers.eq("speaker-park_stage"),
+            org.mockito.ArgumentMatchers.eq("ambient_birds.mp3"),
+            org.mockito.ArgumentMatchers.eq("world"),
+            org.mockito.ArgumentMatchers.eq(20.0),
+            org.mockito.ArgumentMatchers.eq(64.0),
+            org.mockito.ArgumentMatchers.eq(30.0),
+            org.mockito.ArgumentMatchers.eq(25.0),
+            org.mockito.ArgumentMatchers.eq(true),
+            org.mockito.ArgumentMatchers.eq(1.0),
+            org.mockito.ArgumentMatchers.eq("park_stage")
+        );
+
+        assertTrue(managerWithAudio.unbindAudio("park_stage"));
+        SpeakerBlock unlinked = managerWithAudio.getSpeaker("park_stage").orElseThrow();
+        assertNull(unlinked.audioSource());
+        assertFalse(unlinked.loopMedia());
+
+        org.mockito.Mockito.verify(mockAudio).stop("speaker-park_stage");
+    }
+
+    @Test
+    void testSpeakerMediaPersistence() {
+        speakerManager.createSpeaker("fountain", "world", 0, 64, 0, 15);
+        speakerManager.bindAudio("fountain", "water.wav", false);
+
+        SpeakerManager loadedManager = new SpeakerManager(tempDir.toFile());
+        loadedManager.load();
+
+        SpeakerBlock loaded = loadedManager.getSpeaker("fountain").orElseThrow();
+        assertEquals("water.wav", loaded.audioSource());
+        assertFalse(loaded.loopMedia());
+    }
 }

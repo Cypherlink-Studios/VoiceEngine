@@ -1,5 +1,24 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+
 dotenv.config();
+
+const resolveDefaultMediaDir = () => {
+  if (process.env.MEDIA_DIR) {
+    return path.resolve(process.env.MEDIA_DIR);
+  }
+  const parentPath = path.resolve(process.cwd(), '../plugins/VoiceEngine/media');
+  if (fs.existsSync(parentPath) || path.basename(process.cwd()) === 'voice-server') {
+    return parentPath;
+  }
+  return path.resolve(process.cwd(), 'plugins/VoiceEngine/media');
+};
+
+const defaultMediaDir = resolveDefaultMediaDir();
+const defaultMediaCacheDir = process.env.MEDIA_CACHE_DIR
+  ? path.resolve(process.env.MEDIA_CACHE_DIR)
+  : path.resolve(defaultMediaDir, 'cache');
 
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
@@ -10,6 +29,11 @@ export const config = {
     ? process.env.ENABLE_DEV_TOKENS === 'true'
     : process.env.NODE_ENV !== 'production',
 
+  // Media settings
+  mediaDir: defaultMediaDir,
+  mediaCacheDir: defaultMediaCacheDir,
+  mediaMaxCacheSizeMb: parseInt(process.env.MEDIA_MAX_CACHE_SIZE_MB || '1024', 10),
+  mediaMaxCacheAgeDays: parseInt(process.env.MEDIA_MAX_CACHE_AGE_DAYS || '7', 10),
   
   // Proximity settings (in blocks)
   maxVoiceDistance: parseFloat(process.env.MAX_VOICE_DISTANCE || '30.0'),
@@ -44,3 +68,13 @@ export const config = {
     },
   },
 };
+
+export function ensureMediaDirs(): void {
+  if (!fs.existsSync(config.mediaDir)) {
+    fs.mkdirSync(config.mediaDir, { recursive: true });
+  }
+  if (!fs.existsSync(config.mediaCacheDir)) {
+    fs.mkdirSync(config.mediaCacheDir, { recursive: true });
+  }
+}
+

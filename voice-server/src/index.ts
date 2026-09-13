@@ -5,7 +5,7 @@ import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-import { config } from './config.js';
+import { config, ensureMediaDirs } from './config.js';
 import { TokenStore } from './auth/TokenStore.js';
 import { SpatialEngine } from './spatial/SpatialEngine.js';
 import { MediasoupManager } from './sfu/MediasoupManager.js';
@@ -14,6 +14,10 @@ import { ClientGateway } from './gateway/ClientGateway.js';
 import { SettingsManager } from './config/SettingsManager.js';
 import { AdminAuthManager } from './auth/AdminAuthManager.js';
 import { createApiRouter } from './routes/api.js';
+import { createMediaRouter } from './routes/media.js';
+import { MediaCacheService } from './media/MediaCacheService.js';
+import { AudioEmitterManager } from './media/AudioEmitterManager.js';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,8 +58,13 @@ const spatialEngine = new SpatialEngine(
   settingsManager.getSettings().voice.sneakVoiceDistance
 );
 const sfu = new MediasoupManager();
+const mediaCacheService = new MediaCacheService();
+const audioEmitterManager = new AudioEmitterManager();
 let pluginGateway: PluginGateway;
 let clientGateway: ClientGateway;
+
+// Ensure media directories exist
+ensureMediaDirs();
 
 // API Routes
 app.use(
@@ -69,6 +78,9 @@ app.use(
     () => pluginGateway
   )
 );
+app.use('/api/media', createMediaRouter(mediaCacheService));
+
+
 
 // Pre-seed mock players so local testing works out of the box (disabled in production)
 if (config.enableDevTokens) {
@@ -138,8 +150,23 @@ app.get('*', (_req, res, next) => {
 
 export async function startServer(): Promise<void> {
   await sfu.init();
-  pluginGateway = new PluginGateway(pluginWss, config.secretKey, tokenStore, spatialEngine);
-  clientGateway = new ClientGateway(clientWss, tokenStore, spatialEngine, sfu, pluginGateway, settingsManager);
+  pluginGateway = new PluginGateway(
+    pluginWss,
+    config.secretKey,
+    tokenStore,
+    spatialEngine,
+    audioEmitterManager,
+    mediaCacheService
+  );
+  clientGateway = new ClientGateway(
+    clientWss,
+    tokenStore,
+    spatialEngine,
+    sfu,
+    pluginGateway,
+    settingsManager,
+    audioEmitterManager
+  );
   pluginGateway.setClientGateway(clientGateway);
 
   return new Promise((resolve) => {
@@ -159,4 +186,15 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
-export { app, httpServer, tokenStore, spatialEngine, sfu, settingsManager, adminAuthManager };
+export {
+  app,
+  httpServer,
+  tokenStore,
+  spatialEngine,
+  sfu,
+  settingsManager,
+  adminAuthManager,
+  mediaCacheService,
+  audioEmitterManager,
+};
+

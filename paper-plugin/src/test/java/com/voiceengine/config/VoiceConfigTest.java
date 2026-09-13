@@ -27,6 +27,9 @@ class VoiceConfigTest {
         assertEquals("auto", config.proxyMode());
         assertTrue(config.resolveProxyMode(true));
         assertFalse(config.resolveProxyMode(false));
+        assertTrue(config.audioEnabled());
+        assertTrue(config.audioPersistenceEnabled());
+        assertTrue(config.audioParticlesEnabled());
     }
 
     @Test
@@ -41,6 +44,10 @@ class VoiceConfigTest {
             default-locale: "es_ES"
             server-id: "survival-1"
             proxy-mode: "true"
+            audio:
+              enabled: false
+              persistence-enabled: false
+              particles-enabled: false
             """;
         YamlConfiguration parsed = YamlConfiguration.loadConfiguration(new StringReader(yaml));
         VoiceConfig config = VoiceConfig.fromConfiguration(parsed);
@@ -55,6 +62,9 @@ class VoiceConfigTest {
         assertEquals("survival-1", config.serverId());
         assertEquals("true", config.proxyMode());
         assertTrue(config.resolveProxyMode(false)); // explicitly "true"
+        assertFalse(config.audioEnabled());
+        assertFalse(config.audioPersistenceEnabled());
+        assertFalse(config.audioParticlesEnabled());
     }
 
     @Test

@@ -12,6 +12,7 @@ import org.incendo.cloud.annotation.specifier.Range;
 import org.incendo.cloud.annotations.Argument;
 import org.incendo.cloud.annotations.Command;
 import org.incendo.cloud.annotations.CommandDescription;
+import org.incendo.cloud.annotations.Flag;
 import org.incendo.cloud.annotations.Permission;
 
 import java.util.Collection;
@@ -151,6 +152,45 @@ public class SpeakerCommands {
         }
     }
 
+    @Command("voice|ve|voiceengine|audio speaker play <id> <source>")
+    @Permission("voiceengine.admin.speaker")
+    @CommandDescription("Play audio media track on a speaker block")
+    public void onSpeakerPlay(
+        CommandSourceStack stack,
+        @Argument("id") String id,
+        @Argument("source") String source,
+        @Flag("loop") boolean loop
+    ) {
+        boolean bound = speakerManager.bindAudio(id, source, loop);
+        if (bound) {
+            translationService.send(stack.getSender(), "command.speaker.play_started",
+                Placeholder.parsed("id", id),
+                Placeholder.parsed("source", source),
+                Placeholder.parsed("loop", String.valueOf(loop))
+            );
+        } else {
+            translationService.send(stack.getSender(), "command.speaker.not_found",
+                Placeholder.parsed("id", id)
+            );
+        }
+    }
+
+    @Command("voice|ve|voiceengine|audio speaker stop <id>")
+    @Permission("voiceengine.admin.speaker")
+    @CommandDescription("Stop audio media playback on a speaker block")
+    public void onSpeakerStop(CommandSourceStack stack, @Argument("id") String id) {
+        boolean stopped = speakerManager.unbindAudio(id);
+        if (stopped) {
+            translationService.send(stack.getSender(), "command.speaker.play_stopped",
+                Placeholder.parsed("id", id)
+            );
+        } else {
+            translationService.send(stack.getSender(), "command.speaker.no_audio",
+                Placeholder.parsed("id", id)
+            );
+        }
+    }
+
     @Command("voice|ve|voiceengine|audio speaker list")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("List all registered speaker blocks")
@@ -172,6 +212,8 @@ public class SpeakerCommands {
                 linkedName = (p != null) ? p.getName() : s.linkedPlayerUuid().toString();
             }
 
+            String mediaInfo = (s.audioSource() != null) ? s.audioSource() + (s.loopMedia() ? " (loop)" : "") : "none";
+
             translationService.send(stack.getSender(), "command.speaker.list_item",
                 Placeholder.parsed("id", s.id()),
                 Placeholder.parsed("x", String.format("%.1f", s.x())),
@@ -180,7 +222,8 @@ public class SpeakerCommands {
                 Placeholder.parsed("world", s.world()),
                 Placeholder.parsed("radius", String.valueOf(s.radius())),
                 Placeholder.parsed("linked", linkedName),
-                Placeholder.parsed("redstone", String.valueOf(s.requireRedstone()))
+                Placeholder.parsed("redstone", String.valueOf(s.requireRedstone())),
+                Placeholder.parsed("media", mediaInfo)
             );
         }
     }
