@@ -60,7 +60,7 @@ npm run dev     # Starts development server on http://localhost:5173
 cd paper-plugin
 ./gradlew build
 ```
-Copy `paper-plugin/build/libs/paper-plugin-1.0.0-SNAPSHOT.jar` into your Paper server's `plugins/` folder and configure `config.yml`.
+Copy `paper-plugin/build/libs/VoiceEngine-paper-1.0.0-SNAPSHOT.jar` into your Paper server's `plugins/` folder and configure `config.yml`.
 
 ---
 
