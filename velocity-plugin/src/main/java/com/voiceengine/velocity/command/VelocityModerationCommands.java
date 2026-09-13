@@ -30,7 +30,7 @@ public class VelocityModerationCommands {
         this.moderationService = moderationService;
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity kick <player> [reason]")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity kick <player> [reason]")
     @Permission("voiceengine.admin.kick")
     @CommandDescription("Kick a player from the VoiceEngine web client session")
     public void onKick(
@@ -58,7 +58,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity mute <player> <duration> [reason]")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity mute <player> <duration> [reason]")
     @Permission("voiceengine.admin.mute")
     @CommandDescription("Mute a player's microphone in VoiceEngine")
     public void onMute(
@@ -106,7 +106,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity deafen <player> <duration> [reason]")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity deafen <player> <duration> [reason]")
     @Permission("voiceengine.admin.deafen")
     @CommandDescription("Deafen a player so they cannot hear voice audio")
     public void onDeafen(
@@ -154,7 +154,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity ban <player> <duration> [reason]")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity ban <player> <duration> [reason]")
     @Permission("voiceengine.admin.ban")
     @CommandDescription("Ban a player from using VoiceEngine across the network")
     public void onBan(
@@ -202,7 +202,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity unmute <player>")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity unmute <player>")
     @Permission("voiceengine.admin.mute")
     @CommandDescription("Unmute a player in VoiceEngine")
     public void onUnmute(CommandSource source, @Argument("player") String playerName) {
@@ -229,7 +229,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity undeafen <player>")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity undeafen <player>")
     @Permission("voiceengine.admin.deafen")
     @CommandDescription("Undeafen a player in VoiceEngine")
     public void onUndeafen(CommandSource source, @Argument("player") String playerName) {
@@ -256,7 +256,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity unban <player>")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity unban <player>")
     @Permission("voiceengine.admin.ban")
     @CommandDescription("Unban a player in VoiceEngine")
     public void onUnban(CommandSource source, @Argument("player") String playerName) {
@@ -283,7 +283,7 @@ public class VelocityModerationCommands {
         }
     }
 
-    @Command("voicevelocity|vevelocity|voiceenginevelocity|audiovelocity modstatus <player>")
+    @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity modstatus <player>")
     @Permission("voiceengine.admin.status")
     @CommandDescription("Inspect active sanctions on a player")
     public void onStatus(CommandSource source, @Argument("player") String playerName) {
