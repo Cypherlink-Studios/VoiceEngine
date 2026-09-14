@@ -53,6 +53,7 @@ tasks.jar {
 tasks.shadowJar {
     archiveBaseName.set("VoiceEngine-velocity")
     archiveClassifier.set("")
+    mergeServiceFiles()
     relocate("org.incendo.cloud", "com.voiceengine.velocity.libs.cloud")
     relocate("org.java_websocket", "com.voiceengine.velocity.libs.websocket")
     relocate("org.yaml.snakeyaml", "com.voiceengine.velocity.libs.snakeyaml")

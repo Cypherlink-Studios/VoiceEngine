@@ -142,8 +142,24 @@ export class MediaCacheService {
     fs.writeFileSync(destPath, buffer);
   }
 
+  private static invalidCookiesFiles = new Map<string, number>();
+
   public resolveCookiesPath(): string | null {
-    if (config.ytCookiesPath && fs.existsSync(config.ytCookiesPath)) {
+    const isFileValid = (p: string): boolean => {
+      if (!fs.existsSync(p)) return false;
+      try {
+        const stats = fs.statSync(p);
+        const invalidMtime = MediaCacheService.invalidCookiesFiles.get(path.resolve(p));
+        if (invalidMtime !== undefined && stats.mtimeMs <= invalidMtime) {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    if (config.ytCookiesPath && isFileValid(config.ytCookiesPath)) {
       return path.resolve(config.ytCookiesPath);
     }
     const candidates = [
@@ -153,11 +169,29 @@ export class MediaCacheService {
       path.resolve(config.mediaDir, 'cookies.txt'),
     ];
     for (const cand of candidates) {
-      if (fs.existsSync(cand)) {
+      if (isFileValid(cand)) {
         return cand;
       }
     }
     return null;
+  }
+
+  public static markCookiesInvalid(cookiesPath: string): void {
+    try {
+      const resolved = path.resolve(cookiesPath);
+      if (fs.existsSync(resolved)) {
+        const stats = fs.statSync(resolved);
+        MediaCacheService.invalidCookiesFiles.set(resolved, stats.mtimeMs);
+      } else {
+        MediaCacheService.invalidCookiesFiles.set(resolved, Date.now());
+      }
+    } catch {
+      MediaCacheService.invalidCookiesFiles.set(path.resolve(cookiesPath), Date.now());
+    }
+  }
+
+  public static clearInvalidCookies(): void {
+    MediaCacheService.invalidCookiesFiles.clear();
   }
 
   private async downloadWithYtDlp(url: string, destPath: string): Promise<void> {
@@ -170,7 +204,7 @@ export class MediaCacheService {
     }
 
     const ffmpegPath = BinaryResolver.getFfmpegPath();
-    const args = [
+    const baseArgs = [
       '-x',
       '--audio-format',
       'mp3',
@@ -188,20 +222,60 @@ export class MediaCacheService {
     ];
 
     if (ffmpegPath) {
-      args.push('--ffmpeg-location', ffmpegPath);
+      baseArgs.push('--ffmpeg-location', ffmpegPath);
     }
 
     const cookiesPath = this.resolveCookiesPath();
+    const env = BinaryResolver.getExecutionEnvironment();
+
+    const runExec = async (useCookies: boolean): Promise<void> => {
+      const args = [...baseArgs];
+      if (useCookies && cookiesPath) {
+        args.push('--cookies', cookiesPath);
+      }
+      args.push('-o', destPath, url);
+      await execFileAsync(ytDlpPath, args, { env });
+    };
+
     if (cookiesPath) {
-      args.push('--cookies', cookiesPath);
+      try {
+        await runExec(true);
+        return;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isCookieError = msg.includes('cookies are no longer valid')
+          || msg.includes('Sign in to confirm you’re not a bot')
+          || msg.includes("Sign in to confirm you're not a bot")
+          || msg.includes('Use --cookies-from-browser');
+
+        if (isCookieError) {
+          MediaCacheService.markCookiesInvalid(cookiesPath);
+        }
+
+        console.warn(`[MediaCacheService] yt-dlp download failed with cookies (${cookiesPath}): ${msg}. Retrying without cookies...`);
+
+        // Clean up any partially-written output file before retrying
+        if (fs.existsSync(destPath)) {
+          try {
+            fs.unlinkSync(destPath);
+          } catch {
+            // ignore unlink errors
+          }
+        }
+
+        try {
+          await runExec(false);
+          console.warn(`[MediaCacheService] yt-dlp extraction succeeded after falling back to unauthenticated mode. The cookies file at "${cookiesPath}" appears to be expired or invalid and has been ignored until updated.`);
+          return;
+        } catch (retryErr: unknown) {
+          const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          throw new Error(`yt-dlp extraction failed with cookies: ${msg}\nRetry without cookies also failed: ${retryMsg}. Verify yt-dlp, cookies, and ffmpeg configuration.`);
+        }
+      }
     }
 
-    args.push('-o', destPath, url);
-
     try {
-      await execFileAsync(ytDlpPath, args, {
-        env: BinaryResolver.getExecutionEnvironment(),
-      });
+      await runExec(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       throw new Error(`yt-dlp extraction failed: ${msg}. Verify yt-dlp and ffmpeg configuration.`);

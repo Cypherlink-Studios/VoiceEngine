@@ -1,5 +1,7 @@
 package com.voiceengine.velocity.moderation;
 
+import org.sqlite.SQLiteDataSource;
+
 import java.io.File;
 import java.sql.*;
 import java.util.ArrayList;
@@ -12,18 +14,29 @@ import java.util.logging.Logger;
 public class ModerationDatabase {
     private static final Logger LOGGER = Logger.getLogger(ModerationDatabase.class.getName());
 
-    private final String url;
+    static {
+        try {
+            Class.forName("org.sqlite.JDBC");
+        } catch (ClassNotFoundException e) {
+            LOGGER.log(Level.SEVERE, "Failed to load org.sqlite.JDBC class", e);
+        }
+    }
+
+    private final SQLiteDataSource dataSource;
     private Connection connection;
 
     public ModerationDatabase(File dbFile) {
-        if (!dbFile.getParentFile().exists()) {
-            dbFile.getParentFile().mkdirs();
+        File parent = dbFile.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
         }
-        this.url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+        String url = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+        this.dataSource = new SQLiteDataSource();
+        this.dataSource.setUrl(url);
     }
 
     public synchronized void init() throws SQLException {
-        this.connection = DriverManager.getConnection(url);
+        this.connection = getConnection();
 
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("PRAGMA journal_mode=WAL;");
@@ -51,7 +64,7 @@ public class ModerationDatabase {
 
     private Connection getConnection() throws SQLException {
         if (connection == null || connection.isClosed()) {
-            connection = DriverManager.getConnection(url);
+            connection = dataSource.getConnection();
         }
         return connection;
     }

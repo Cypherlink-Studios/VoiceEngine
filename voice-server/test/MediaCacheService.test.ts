@@ -182,6 +182,7 @@ describe('MediaCacheService & Cache Endpoints', () => {
   });
 
   it('resolves cookies.txt path when present', async () => {
+    MediaCacheService.clearInvalidCookies();
     // When no cookies file exists
     expect(cacheService.resolveCookiesPath()).toBeNull();
 
@@ -191,5 +192,16 @@ describe('MediaCacheService & Cache Endpoints', () => {
 
     const resolved = cacheService.resolveCookiesPath();
     expect(resolved).toBe(cookiesFile);
+
+    // Marking invalid should cause resolveCookiesPath to ignore it
+    MediaCacheService.markCookiesInvalid(cookiesFile);
+    expect(cacheService.resolveCookiesPath()).toBeNull();
+
+    // Modifying the file (updating mtime) should restore resolution
+    const futureTime = new Date(Date.now() + 5000);
+    fs.utimesSync(cookiesFile, futureTime, futureTime);
+    expect(cacheService.resolveCookiesPath()).toBe(cookiesFile);
+
+    MediaCacheService.clearInvalidCookies();
   });
 });
