@@ -37,6 +37,36 @@ public class AudioCommands {
             .toList();
     }
 
+    @Suggestions("activeEmitters")
+    public List<String> suggestActiveEmitters(CommandContext<CommandSourceStack> context, String input) {
+        return audioManager.getAllEmitters().stream()
+            .map(AudioEmitter::id)
+            .toList();
+    }
+
+    @Suggestions("stoppableEmitters")
+    public List<String> suggestStoppableEmitters(CommandContext<CommandSourceStack> context, String input) {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        list.add("all");
+        list.addAll(audioManager.getAllEmitters().stream().map(AudioEmitter::id).toList());
+        return list;
+    }
+
+    @Suggestions("volumePresets")
+    public List<String> suggestVolumePresets(CommandContext<CommandSourceStack> context, String input) {
+        return List.of("0.25", "0.5", "0.75", "1.0");
+    }
+
+    @Suggestions("purgeDurations")
+    public List<String> suggestPurgeDurations(CommandContext<CommandSourceStack> context, String input) {
+        return List.of("all", "24h", "7d", "30d");
+    }
+
+    @Suggestions("particleStates")
+    public List<String> suggestParticleStates(CommandContext<CommandSourceStack> context, String input) {
+        return List.of("on", "off", "toggle");
+    }
+
     @Command("voice|ve|voiceengine|audio audio play <id> <source> <x> <y> <z> [radius]")
     @Permission("voiceengine.admin.audio")
     @CommandDescription("Play 3D spatial audio at specific coordinates")
@@ -138,7 +168,7 @@ public class AudioCommands {
     @Command("voice|ve|voiceengine|audio audio pause <id>")
     @Permission("voiceengine.admin.audio")
     @CommandDescription("Pause an active audio emitter")
-    public void onPause(CommandSourceStack stack, @Argument("id") String id) {
+    public void onPause(CommandSourceStack stack, @Argument(value = "id", suggestions = "activeEmitters") String id) {
         boolean paused = audioManager.pause(id);
         if (paused) {
             translationService.send(stack.getSender(), "command.audio.paused",
@@ -154,7 +184,7 @@ public class AudioCommands {
     @Command("voice|ve|voiceengine|audio audio resume <id>")
     @Permission("voiceengine.admin.audio")
     @CommandDescription("Resume a paused audio emitter")
-    public void onResume(CommandSourceStack stack, @Argument("id") String id) {
+    public void onResume(CommandSourceStack stack, @Argument(value = "id", suggestions = "activeEmitters") String id) {
         boolean resumed = audioManager.resume(id);
         if (resumed) {
             translationService.send(stack.getSender(), "command.audio.resumed",
@@ -170,7 +200,7 @@ public class AudioCommands {
     @Command("voice|ve|voiceengine|audio audio stop <id>")
     @Permission("voiceengine.admin.audio")
     @CommandDescription("Stop an audio emitter or 'all'")
-    public void onStop(CommandSourceStack stack, @Argument("id") String id) {
+    public void onStop(CommandSourceStack stack, @Argument(value = "id", suggestions = "stoppableEmitters") String id) {
         if ("all".equalsIgnoreCase(id.trim())) {
             int count = audioManager.stopAll();
             translationService.send(stack.getSender(), "command.audio.stopped_all",
@@ -196,8 +226,8 @@ public class AudioCommands {
     @CommandDescription("Adjust volume of an audio emitter (0.0 to 1.0)")
     public void onVolume(
         CommandSourceStack stack,
-        @Argument("id") String id,
-        @Argument("volume") @Range(min = "0.0", max = "1.0") double volume
+        @Argument(value = "id", suggestions = "activeEmitters") String id,
+        @Argument(value = "volume", suggestions = "volumePresets") @Range(min = "0.0", max = "1.0") double volume
     ) {
         boolean updated = audioManager.setVolume(id, volume);
         if (updated) {
@@ -277,7 +307,7 @@ public class AudioCommands {
     @CommandDescription("Purge remote media download cache (e.g. 7d, 24h, all)")
     public void onCachePurge(
         CommandSourceStack stack,
-        @Argument("duration") String duration
+        @Argument(value = "duration", suggestions = "purgeDurations") String duration
     ) {
         String targetDuration = (duration != null && !duration.isBlank()) ? duration : "all";
         audioManager.purgeCache(targetDuration);
@@ -291,7 +321,7 @@ public class AudioCommands {
     @CommandDescription("Toggle visual musical note particles for spatial emitters")
     public void onParticles(
         CommandSourceStack stack,
-        @Argument("state") String state
+        @Argument(value = "state", suggestions = "particleStates") String state
     ) {
         boolean enable;
         if ("on".equalsIgnoreCase(state) || "true".equalsIgnoreCase(state)) {

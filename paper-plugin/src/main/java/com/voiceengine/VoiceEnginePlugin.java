@@ -100,7 +100,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.commandService = new CommandService(this, translationService);
         this.commandService.initialize();
 
-        SpeakerCommands speakerCommands = new SpeakerCommands(speakerManager, translationService);
+        SpeakerCommands speakerCommands = new SpeakerCommands(speakerManager, translationService, audioManager);
         AudioCommands audioCommands = new AudioCommands(audioManager, translationService);
         if (isProxyMode()) {
             getLogger().info("[VoiceEngine] Proxy mode active (server: " + voiceConfig.serverId() + "). Local /voice commands delegated to Velocity.");

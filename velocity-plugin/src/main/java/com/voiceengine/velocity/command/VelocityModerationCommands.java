@@ -14,6 +14,8 @@ import org.incendo.cloud.annotations.Command;
 import org.incendo.cloud.annotations.CommandDescription;
 import org.incendo.cloud.annotations.Default;
 import org.incendo.cloud.annotations.Permission;
+import org.incendo.cloud.annotations.suggestion.Suggestions;
+import org.incendo.cloud.context.CommandContext;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,12 +32,27 @@ public class VelocityModerationCommands {
         this.moderationService = moderationService;
     }
 
+    @Suggestions("networkPlayers")
+    public List<String> suggestNetworkPlayers(CommandContext<CommandSource> context, String input) {
+        if (proxyServer == null) {
+            return List.of();
+        }
+        return proxyServer.getAllPlayers().stream()
+            .map(Player::getUsername)
+            .toList();
+    }
+
+    @Suggestions("punishmentDurations")
+    public List<String> suggestPunishmentDurations(CommandContext<CommandSource> context, String input) {
+        return List.of("15m", "30m", "1h", "6h", "12h", "1d", "7d", "30d", "permanent");
+    }
+
     @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity kick <player> [reason]")
     @Permission("voiceengine.admin.kick")
     @CommandDescription("Kick a player from the VoiceEngine web client session")
     public void onKick(
         CommandSource source,
-        @Argument("player") String playerName,
+        @Argument(value = "player", suggestions = "networkPlayers") String playerName,
         @Argument("reason") @Default("Kicked by staff") @Greedy String reason
     ) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
@@ -63,8 +80,8 @@ public class VelocityModerationCommands {
     @CommandDescription("Mute a player's microphone in VoiceEngine")
     public void onMute(
         CommandSource source,
-        @Argument("player") String playerName,
-        @Argument("duration") String duration,
+        @Argument(value = "player", suggestions = "networkPlayers") String playerName,
+        @Argument(value = "duration", suggestions = "punishmentDurations") String duration,
         @Argument("reason") @Default("Muted by staff") @Greedy String reason
     ) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
@@ -111,8 +128,8 @@ public class VelocityModerationCommands {
     @CommandDescription("Deafen a player so they cannot hear voice audio")
     public void onDeafen(
         CommandSource source,
-        @Argument("player") String playerName,
-        @Argument("duration") String duration,
+        @Argument(value = "player", suggestions = "networkPlayers") String playerName,
+        @Argument(value = "duration", suggestions = "punishmentDurations") String duration,
         @Argument("reason") @Default("Deafened by staff") @Greedy String reason
     ) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
@@ -159,8 +176,8 @@ public class VelocityModerationCommands {
     @CommandDescription("Ban a player from using VoiceEngine across the network")
     public void onBan(
         CommandSource source,
-        @Argument("player") String playerName,
-        @Argument("duration") String duration,
+        @Argument(value = "player", suggestions = "networkPlayers") String playerName,
+        @Argument(value = "duration", suggestions = "punishmentDurations") String duration,
         @Argument("reason") @Default("Banned by staff") @Greedy String reason
     ) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
@@ -205,7 +222,7 @@ public class VelocityModerationCommands {
     @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity unmute <player>")
     @Permission("voiceengine.admin.mute")
     @CommandDescription("Unmute a player in VoiceEngine")
-    public void onUnmute(CommandSource source, @Argument("player") String playerName) {
+    public void onUnmute(CommandSource source, @Argument(value = "player", suggestions = "networkPlayers") String playerName) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
         if (targetOpt.isEmpty()) {
             source.sendMessage(MINI_MESSAGE.deserialize("<red>Player <yellow><player></yellow> not found.</red>",
@@ -232,7 +249,7 @@ public class VelocityModerationCommands {
     @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity undeafen <player>")
     @Permission("voiceengine.admin.deafen")
     @CommandDescription("Undeafen a player in VoiceEngine")
-    public void onUndeafen(CommandSource source, @Argument("player") String playerName) {
+    public void onUndeafen(CommandSource source, @Argument(value = "player", suggestions = "networkPlayers") String playerName) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
         if (targetOpt.isEmpty()) {
             source.sendMessage(MINI_MESSAGE.deserialize("<red>Player <yellow><player></yellow> not found.</red>",
@@ -259,7 +276,7 @@ public class VelocityModerationCommands {
     @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity unban <player>")
     @Permission("voiceengine.admin.ban")
     @CommandDescription("Unban a player in VoiceEngine")
-    public void onUnban(CommandSource source, @Argument("player") String playerName) {
+    public void onUnban(CommandSource source, @Argument(value = "player", suggestions = "networkPlayers") String playerName) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
         if (targetOpt.isEmpty()) {
             source.sendMessage(MINI_MESSAGE.deserialize("<red>Player <yellow><player></yellow> not found.</red>",
@@ -286,7 +303,7 @@ public class VelocityModerationCommands {
     @Command("voice-velocity|ve-velocity|voiceengine-velocity|audio-velocity modstatus <player>")
     @Permission("voiceengine.admin.status")
     @CommandDescription("Inspect active sanctions on a player")
-    public void onStatus(CommandSource source, @Argument("player") String playerName) {
+    public void onStatus(CommandSource source, @Argument(value = "player", suggestions = "networkPlayers") String playerName) {
         Optional<Player> targetOpt = proxyServer.getPlayer(playerName);
         if (targetOpt.isEmpty()) {
             source.sendMessage(MINI_MESSAGE.deserialize("<red>Player <yellow><player></yellow> not found.</red>",
