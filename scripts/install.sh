@@ -188,6 +188,14 @@ for tool in node npm java git curl nginx; do
 done
 
 # ------------------------------------------------------------------------------
+# Install Audio Tools (FFmpeg & yt-dlp)
+# ------------------------------------------------------------------------------
+if [ -f "${REPO_DIR}/scripts/install_audio_tools.sh" ]; then
+    log_info "Invoking audio tools installer..."
+    bash "${REPO_DIR}/scripts/install_audio_tools.sh" || log_warn "Audio tools installation finished with warnings."
+fi
+
+# ------------------------------------------------------------------------------
 # 4. Monorepo Build Sequence
 # ------------------------------------------------------------------------------
 log_info "--- Building Web Client (web-client) ---"
