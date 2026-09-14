@@ -29,6 +29,11 @@ function parseDurationToMs(durationStr: string): number | null {
   }
 }
 
+function getEffectiveMediaDirs(): string[] {
+  const dirs = [config.mediaDir, ...(config.mediaDirs || [])];
+  return Array.from(new Set(dirs.filter(Boolean).map((d) => path.resolve(d))));
+}
+
 export function createMediaRouter(cacheService: MediaCacheService = new MediaCacheService()): Router {
   const router = Router();
 
@@ -77,29 +82,35 @@ export function createMediaRouter(cacheService: MediaCacheService = new MediaCac
   // List Local Media Files
   router.get('/files', (_req: Request, res: Response) => {
     try {
-      const baseDir = path.resolve(config.mediaDir);
-      if (!fs.existsSync(baseDir)) {
-        res.json({ success: true, files: [] });
-        return;
-      }
+      const baseDirs = getEffectiveMediaDirs();
 
-      const files = fs.readdirSync(baseDir);
+      const seenNames = new Set<string>();
       const audioFiles = [];
 
-      for (const file of files) {
-        const fullPath = path.join(baseDir, file);
+      for (const baseDir of baseDirs) {
+        const resolvedBase = path.resolve(baseDir);
+        if (!fs.existsSync(resolvedBase)) continue;
+
         try {
-          const stats = fs.statSync(fullPath);
-          if (stats.isFile()) {
-            const ext = path.extname(file).toLowerCase();
-            if (MIME_TYPES[ext]) {
-              audioFiles.push({
-                name: file,
-                sizeBytes: stats.size,
-                format: ext.replace('.', ''),
-                updatedAt: stats.mtimeMs,
-              });
-            }
+          const files = fs.readdirSync(resolvedBase);
+          for (const file of files) {
+            if (seenNames.has(file)) continue;
+            const fullPath = path.join(resolvedBase, file);
+            try {
+              const stats = fs.statSync(fullPath);
+              if (stats.isFile()) {
+                const ext = path.extname(file).toLowerCase();
+                if (MIME_TYPES[ext]) {
+                  seenNames.add(file);
+                  audioFiles.push({
+                    name: file,
+                    sizeBytes: stats.size,
+                    format: ext.replace('.', ''),
+                    updatedAt: stats.mtimeMs,
+                  });
+                }
+              }
+            } catch {}
           }
         } catch {}
       }
@@ -203,16 +214,35 @@ export function createMediaRouter(cacheService: MediaCacheService = new MediaCac
       return;
     }
 
-    const safeBase = path.resolve(config.mediaDir);
-    const targetFile = path.resolve(safeBase, decodedSubpath);
-
     // Prevent directory traversal
-    if (!targetFile.startsWith(safeBase)) {
+    const normalized = path.normalize(decodedSubpath);
+    if (normalized.startsWith('..') || decodedSubpath.split(/[\/\\]/).includes('..')) {
       res.status(403).json({ error: 'Access denied' });
       return;
     }
 
-    if (!fs.existsSync(targetFile)) {
+    const baseDirs = getEffectiveMediaDirs();
+    let targetFile: string | null = null;
+
+    for (const safeBase of baseDirs) {
+      const candidate = path.resolve(safeBase, decodedSubpath);
+      if (!candidate.startsWith(safeBase)) {
+        res.status(403).json({ error: 'Access denied' });
+        return;
+      }
+
+      if (fs.existsSync(candidate)) {
+        try {
+          const stats = fs.statSync(candidate);
+          if (!stats.isDirectory()) {
+            targetFile = candidate;
+            break;
+          }
+        } catch {}
+      }
+    }
+
+    if (!targetFile) {
       res.status(404).json({ error: 'Media file not found' });
       return;
     }

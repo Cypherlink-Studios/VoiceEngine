@@ -5,6 +5,9 @@ build/
 .npm/
 *.tsbuildinfo
 voice-server/data
+.env
+*.env.local
+.env.*.local
 
 # Java / Gradle
 .gradle/

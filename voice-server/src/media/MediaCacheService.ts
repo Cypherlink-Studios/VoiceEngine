@@ -7,22 +7,7 @@ import { config } from '../config.js';
 
 const execFileAsync = promisify(execFile);
 
-function getExecutionEnv(): NodeJS.ProcessEnv {
-  const localAppData = process.env.LOCALAPPDATA || '';
-  const extraPaths = [
-    path.join(localAppData, 'Python', 'pythoncore-3.14-64', 'Scripts'),
-    path.join(localAppData, 'Microsoft', 'WinGet', 'Packages', 'Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe', 'ffmpeg-9.0.1-full_build', 'bin'),
-  ].filter((p) => fs.existsSync(p));
-
-  const currentPath = process.env.PATH || process.env.Path || '';
-  const combined = [...extraPaths, currentPath].join(path.delimiter);
-
-  return {
-    ...process.env,
-    PATH: combined,
-    Path: combined,
-  };
-}
+import { BinaryResolver } from './BinaryResolver.js';
 
 export interface CachedMediaMetadata {
   hash: string;
@@ -158,23 +143,37 @@ export class MediaCacheService {
   }
 
   private async downloadWithYtDlp(url: string, destPath: string): Promise<void> {
+    const ytDlpPath = BinaryResolver.getYtDlpPath();
+    if (!ytDlpPath) {
+      const installHint = process.platform === 'win32'
+        ? 'Install with "pip install yt-dlp" and "winget install Gyan.FFmpeg", or configure YT_DLP_PATH.'
+        : 'Install with "pip install yt-dlp" (or "sudo apt install yt-dlp ffmpeg"), or configure YT_DLP_PATH.';
+      throw new Error(`yt-dlp executable was not found on the host system. ${installHint}`);
+    }
+
+    const ffmpegPath = BinaryResolver.getFfmpegPath();
+    const args = [
+      '-x',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      '0',
+      '--no-playlist',
+    ];
+
+    if (ffmpegPath) {
+      args.push('--ffmpeg-location', ffmpegPath);
+    }
+
+    args.push('-o', destPath, url);
+
     try {
-      // Execute yt-dlp to extract best audio and convert to mp3
-      await execFileAsync('yt-dlp', [
-        '-x',
-        '--audio-format',
-        'mp3',
-        '--audio-quality',
-        '0',
-        '--no-playlist',
-        '-o',
-        destPath,
-        url,
-      ], { env: getExecutionEnv() });
+      await execFileAsync(ytDlpPath, args, {
+        env: BinaryResolver.getExecutionEnvironment(),
+      });
     } catch (err: unknown) {
-      // If yt-dlp is not installed or fails, throw informative error
       const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`yt-dlp extraction failed: ${msg}. Ensure yt-dlp and ffmpeg are installed.`);
+      throw new Error(`yt-dlp extraction failed: ${msg}. Verify yt-dlp and ffmpeg configuration.`);
     }
   }
 

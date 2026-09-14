@@ -17,6 +17,7 @@ import { createApiRouter } from './routes/api.js';
 import { createMediaRouter } from './routes/media.js';
 import { MediaCacheService } from './media/MediaCacheService.js';
 import { AudioEmitterManager } from './media/AudioEmitterManager.js';
+import { BinaryResolver } from './media/BinaryResolver.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -65,6 +66,23 @@ let clientGateway: ClientGateway;
 
 // Ensure media directories exist
 ensureMediaDirs();
+
+// Verify external media dependencies (yt-dlp, ffmpeg) across Windows & Linux
+BinaryResolver.checkDependencies().then((deps) => {
+  if (deps.allAvailable) {
+    const ffVer = deps.ffmpeg.version ? deps.ffmpeg.version.split(' ')[2] || deps.ffmpeg.version : 'available';
+    console.log(`[MediaCache] External tools ready: yt-dlp (${deps.ytDlp.version || 'available'}), ffmpeg (${ffVer})`);
+  } else {
+    if (!deps.ytDlp.found) {
+      console.warn(`[MediaCache] Notice: yt-dlp not found. ${deps.ytDlp.error}`);
+    }
+    if (!deps.ffmpeg.found) {
+      console.warn(`[MediaCache] Notice: ffmpeg not found. ${deps.ffmpeg.error}`);
+    }
+  }
+}).catch((err) => {
+  console.warn('[MediaCache] Could not verify media tools:', err);
+});
 
 // API Routes
 app.use(

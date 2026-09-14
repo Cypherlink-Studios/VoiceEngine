@@ -4,18 +4,30 @@ import fs from 'fs';
 
 dotenv.config();
 
-const resolveDefaultMediaDir = () => {
+const resolveMediaDirs = (): string[] => {
+  const dirs: string[] = [];
   if (process.env.MEDIA_DIR) {
-    return path.resolve(process.env.MEDIA_DIR);
+    dirs.push(path.resolve(process.env.MEDIA_DIR));
   }
-  const parentPath = path.resolve(process.cwd(), '../plugins/VoiceEngine/media');
-  if (fs.existsSync(parentPath) || path.basename(process.cwd()) === 'voice-server') {
-    return parentPath;
+  const candidatePaths = [
+    path.resolve(process.cwd(), '../../SERVERS/1.21.8/Test_Server-001/plugins/VoiceEngine/media'),
+    path.resolve(process.cwd(), '../SERVERS/1.21.8/Test_Server-001/plugins/VoiceEngine/media'),
+    path.resolve(process.cwd(), '../plugins/VoiceEngine/media'),
+    path.resolve(process.cwd(), 'plugins/VoiceEngine/media'),
+  ];
+  for (const cand of candidatePaths) {
+    if (fs.existsSync(cand)) {
+      dirs.push(cand);
+    }
   }
-  return path.resolve(process.cwd(), 'plugins/VoiceEngine/media');
+  if (dirs.length === 0) {
+    dirs.push(path.resolve(process.cwd(), '../plugins/VoiceEngine/media'));
+  }
+  return Array.from(new Set(dirs));
 };
 
-const defaultMediaDir = resolveDefaultMediaDir();
+const discoveredMediaDirs = resolveMediaDirs();
+const defaultMediaDir = discoveredMediaDirs[0];
 const defaultMediaCacheDir = process.env.MEDIA_CACHE_DIR
   ? path.resolve(process.env.MEDIA_CACHE_DIR)
   : path.resolve(defaultMediaDir, 'cache');
@@ -31,9 +43,12 @@ export const config = {
 
   // Media settings
   mediaDir: defaultMediaDir,
+  mediaDirs: discoveredMediaDirs,
   mediaCacheDir: defaultMediaCacheDir,
   mediaMaxCacheSizeMb: parseInt(process.env.MEDIA_MAX_CACHE_SIZE_MB || '1024', 10),
   mediaMaxCacheAgeDays: parseInt(process.env.MEDIA_MAX_CACHE_AGE_DAYS || '7', 10),
+  ytDlpPath: process.env.YT_DLP_PATH || '',
+  ffmpegPath: process.env.FFMPEG_PATH || '',
   
   // Proximity settings (in blocks)
   maxVoiceDistance: parseFloat(process.env.MAX_VOICE_DISTANCE || '30.0'),
