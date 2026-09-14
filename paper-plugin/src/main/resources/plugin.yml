@@ -1,7 +1,7 @@
 name: VoiceEngine
 version: '1.0.0-SNAPSHOT'
 main: com.voiceengine.VoiceEnginePlugin
-api-version: '1.21'
+api-version: '1.20'
 author: VoiceEngine Team
 description: Zero-mod Proximity Voice Chat Paper plugin
 permissions:

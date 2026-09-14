@@ -5,10 +5,10 @@ import com.voiceengine.audio.MediaFileInfo;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.speaker.SpeakerBlock;
 import com.voiceengine.speaker.SpeakerManager;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.incendo.cloud.annotation.specifier.Quoted;
 import org.incendo.cloud.annotation.specifier.Range;
@@ -39,14 +39,14 @@ public class SpeakerCommands {
     }
 
     @Suggestions("speakers")
-    public List<String> suggestSpeakers(CommandContext<CommandSourceStack> context, String input) {
+    public List<String> suggestSpeakers(CommandContext<CommandSender> context, String input) {
         return speakerManager.getAllSpeakers().stream()
             .map(SpeakerBlock::id)
             .toList();
     }
 
     @Suggestions("onlinePlayers")
-    public List<String> suggestOnlinePlayers(CommandContext<CommandSourceStack> context, String input) {
+    public List<String> suggestOnlinePlayers(CommandContext<CommandSender> context, String input) {
         try {
             if (Bukkit.getServer() == null) {
                 return List.of();
@@ -60,7 +60,7 @@ public class SpeakerCommands {
     }
 
     @Suggestions("mediaFiles")
-    public List<String> suggestMediaFiles(CommandContext<CommandSourceStack> context, String input) {
+    public List<String> suggestMediaFiles(CommandContext<CommandSender> context, String input) {
         if (audioManager == null) {
             return List.of();
         }
@@ -70,7 +70,7 @@ public class SpeakerCommands {
     }
 
     @Suggestions("booleans")
-    public List<String> suggestBooleans(CommandContext<CommandSourceStack> context, String input) {
+    public List<String> suggestBooleans(CommandContext<CommandSender> context, String input) {
         return List.of("true", "false");
     }
 
@@ -78,12 +78,12 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Create a new speaker block at targeted block")
     public void onCreate(
-        CommandSourceStack stack,
+        CommandSender sender,
         @Argument("id") String id,
         @Argument("radius") @Range(min = "1", max = "500") Double radius
     ) {
-        if (!(stack.getSender() instanceof Player player)) {
-            translationService.send(stack.getSender(), "command.connect.only_players");
+        if (!(sender instanceof Player player)) {
+            translationService.send(sender, "command.connect.only_players");
             return;
         }
 
@@ -121,14 +121,14 @@ public class SpeakerCommands {
     @Command("voice|ve|voiceengine|audio speaker remove <id>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Remove a registered speaker block")
-    public void onRemove(CommandSourceStack stack, @Argument(value = "id", suggestions = "speakers") String id) {
+    public void onRemove(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
         boolean removed = speakerManager.removeSpeaker(id);
         if (removed) {
-            translationService.send(stack.getSender(), "command.speaker.removed",
+            translationService.send(sender, "command.speaker.removed",
                 Placeholder.parsed("id", id)
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.not_found",
+            translationService.send(sender, "command.speaker.not_found",
                 Placeholder.parsed("id", id)
             );
         }
@@ -138,13 +138,13 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Link a player's microphone to a speaker block")
     public void onLink(
-        CommandSourceStack stack,
+        CommandSender sender,
         @Argument(value = "id", suggestions = "speakers") String id,
         @Argument(value = "player", suggestions = "onlinePlayers") String playerName
     ) {
         Player targetPlayer = Bukkit.getPlayer(playerName);
         if (targetPlayer == null) {
-            translationService.send(stack.getSender(), "command.moderation.player_not_found",
+            translationService.send(sender, "command.moderation.player_not_found",
                 Placeholder.parsed("player", playerName)
             );
             return;
@@ -152,12 +152,12 @@ public class SpeakerCommands {
 
         boolean linked = speakerManager.linkSpeaker(id, targetPlayer.getUniqueId());
         if (linked) {
-            translationService.send(stack.getSender(), "command.speaker.linked",
+            translationService.send(sender, "command.speaker.linked",
                 Placeholder.parsed("id", id),
                 Placeholder.parsed("player", targetPlayer.getName())
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.not_found",
+            translationService.send(sender, "command.speaker.not_found",
                 Placeholder.parsed("id", id)
             );
         }
@@ -166,14 +166,14 @@ public class SpeakerCommands {
     @Command("voice|ve|voiceengine|audio speaker unlink <id>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Unlink voice transmission from a speaker block")
-    public void onUnlink(CommandSourceStack stack, @Argument(value = "id", suggestions = "speakers") String id) {
+    public void onUnlink(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
         boolean unlinked = speakerManager.unlinkSpeaker(id);
         if (unlinked) {
-            translationService.send(stack.getSender(), "command.speaker.unlinked",
+            translationService.send(sender, "command.speaker.unlinked",
                 Placeholder.parsed("id", id)
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.not_found",
+            translationService.send(sender, "command.speaker.not_found",
                 Placeholder.parsed("id", id)
             );
         }
@@ -183,18 +183,18 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Toggle redstone activation requirement for a speaker block")
     public void onRedstone(
-        CommandSourceStack stack,
+        CommandSender sender,
         @Argument(value = "id", suggestions = "speakers") String id,
         @Argument(value = "requireRedstone", suggestions = "booleans") boolean requireRedstone
     ) {
         boolean updated = speakerManager.setRequireRedstone(id, requireRedstone);
         if (updated) {
-            translationService.send(stack.getSender(), "command.speaker.redstone_set",
+            translationService.send(sender, "command.speaker.redstone_set",
                 Placeholder.parsed("id", id),
                 Placeholder.parsed("value", String.valueOf(requireRedstone))
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.not_found",
+            translationService.send(sender, "command.speaker.not_found",
                 Placeholder.parsed("id", id)
             );
         }
@@ -204,20 +204,20 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Play audio media track on a speaker block")
     public void onSpeakerPlay(
-        CommandSourceStack stack,
+        CommandSender sender,
         @Argument(value = "id", suggestions = "speakers") String id,
         @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source,
         @Flag("loop") boolean loop
     ) {
         boolean bound = speakerManager.bindAudio(id, source, loop);
         if (bound) {
-            translationService.send(stack.getSender(), "command.speaker.play_started",
+            translationService.send(sender, "command.speaker.play_started",
                 Placeholder.parsed("id", id),
                 Placeholder.parsed("source", source),
                 Placeholder.parsed("loop", String.valueOf(loop))
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.not_found",
+            translationService.send(sender, "command.speaker.not_found",
                 Placeholder.parsed("id", id)
             );
         }
@@ -226,14 +226,14 @@ public class SpeakerCommands {
     @Command("voice|ve|voiceengine|audio speaker stop <id>")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Stop audio media playback on a speaker block")
-    public void onSpeakerStop(CommandSourceStack stack, @Argument(value = "id", suggestions = "speakers") String id) {
+    public void onSpeakerStop(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
         boolean stopped = speakerManager.unbindAudio(id);
         if (stopped) {
-            translationService.send(stack.getSender(), "command.speaker.play_stopped",
+            translationService.send(sender, "command.speaker.play_stopped",
                 Placeholder.parsed("id", id)
             );
         } else {
-            translationService.send(stack.getSender(), "command.speaker.no_audio",
+            translationService.send(sender, "command.speaker.no_audio",
                 Placeholder.parsed("id", id)
             );
         }
@@ -242,14 +242,14 @@ public class SpeakerCommands {
     @Command("voice|ve|voiceengine|audio speaker list")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("List all registered speaker blocks")
-    public void onList(CommandSourceStack stack) {
+    public void onList(CommandSender sender) {
         Collection<SpeakerBlock> speakers = speakerManager.getAllSpeakers();
         if (speakers.isEmpty()) {
-            translationService.send(stack.getSender(), "command.speaker.no_speakers");
+            translationService.send(sender, "command.speaker.no_speakers");
             return;
         }
 
-        translationService.send(stack.getSender(), "command.speaker.list_header",
+        translationService.send(sender, "command.speaker.list_header",
             Placeholder.parsed("count", String.valueOf(speakers.size()))
         );
 
@@ -262,7 +262,7 @@ public class SpeakerCommands {
 
             String mediaInfo = (s.audioSource() != null) ? s.audioSource() + (s.loopMedia() ? " (loop)" : "") : "none";
 
-            translationService.send(stack.getSender(), "command.speaker.list_item",
+            translationService.send(sender, "command.speaker.list_item",
                 Placeholder.parsed("id", s.id()),
                 Placeholder.parsed("x", String.format("%.1f", s.x())),
                 Placeholder.parsed("y", String.format("%.1f", s.y())),

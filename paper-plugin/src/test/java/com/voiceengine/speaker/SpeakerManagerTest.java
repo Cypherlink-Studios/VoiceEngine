@@ -116,7 +116,7 @@ class SpeakerManagerTest {
         List<SpeakerBlockState> states = speakerManager.getActiveSpeakerStates("survival-1");
         assertEquals(1, states.size());
 
-        SpeakerBlockState state = states.getFirst();
+        SpeakerBlockState state = states.get(0);
         assertEquals("arena", state.id());
         assertEquals("world", state.world());
         assertEquals("survival-1", state.serverId());

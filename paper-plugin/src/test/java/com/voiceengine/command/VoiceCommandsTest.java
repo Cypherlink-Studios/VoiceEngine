@@ -42,6 +42,7 @@ class VoiceCommandsTest {
             command:
               connect:
                 prompt: "<prefix>Connect at <url> with code <token>"
+                only_players: "<prefix>Only players"
                 backend_offline: "<prefix>Backend offline"
               admin:
                 prompt: "<prefix_admin>Admin at <url> with code <token>"
@@ -207,5 +208,45 @@ class VoiceCommandsTest {
         assertTrue(messages.get(1).contains("Status: CONNECTED"));
         assertTrue(messages.get(2).contains("URI: ws://localhost:3000/ws/plugin"));
         assertTrue(messages.get(3).contains("Tokens: 0"));
+    }
+
+    @Test
+    void testVoiceConnectNotPlayer() {
+        CommandSender sender = mock(CommandSender.class);
+        VoiceCommands commands = new VoiceCommands(
+            tokenManager,
+            () -> voiceConfig,
+            () -> null,
+            translationService,
+            null,
+            () -> {}
+        );
+
+        commands.onVoiceConnect(sender);
+
+        ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
+        verify(sender).sendMessage(msgCaptor.capture());
+        String text = serializer.serialize(msgCaptor.getValue());
+        assertTrue(text.contains("Only players"));
+    }
+
+    @Test
+    void testVoiceAdminNotPlayer() {
+        CommandSender sender = mock(CommandSender.class);
+        VoiceCommands commands = new VoiceCommands(
+            tokenManager,
+            () -> voiceConfig,
+            () -> null,
+            translationService,
+            null,
+            () -> {}
+        );
+
+        commands.onVoiceAdmin(sender);
+
+        ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
+        verify(sender).sendMessage(msgCaptor.capture());
+        String text = serializer.serialize(msgCaptor.getValue());
+        assertTrue(text.contains("Only players"));
     }
 }

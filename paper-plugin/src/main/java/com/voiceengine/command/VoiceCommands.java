@@ -5,7 +5,6 @@ import com.voiceengine.auth.TokenManager;
 import com.voiceengine.config.VoiceConfig;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
-import io.papermc.paper.command.brigadier.CommandSourceStack;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -57,9 +56,9 @@ public class VoiceCommands {
     @Command("voice|ve|voiceengine|audio")
     @Permission("voiceengine.use")
     @CommandDescription("Connect your microphone to VoiceEngine web client")
-    public void onVoiceConnect(CommandSourceStack stack) {
-        if (!(stack.getSender() instanceof Player player)) {
-            translationService.send(stack.getSender(), "command.connect.only_players");
+    public void onVoiceConnect(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            translationService.send(sender, "command.connect.only_players");
             return;
         }
         onVoiceConnect(player);
@@ -92,9 +91,9 @@ public class VoiceCommands {
     @Command("voice|ve|voiceengine|audio admin")
     @Permission("voiceengine.admin")
     @CommandDescription("Open the VoiceEngine Admin Portal")
-    public void onVoiceAdmin(CommandSourceStack stack) {
-        if (!(stack.getSender() instanceof Player player)) {
-            translationService.send(stack.getSender(), "command.connect.only_players");
+    public void onVoiceAdmin(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            translationService.send(sender, "command.connect.only_players");
             return;
         }
         onVoiceAdmin(player);
@@ -127,10 +126,6 @@ public class VoiceCommands {
     @Command("voice|ve|voiceengine|audio reload")
     @Permission("voiceengine.admin.reload")
     @CommandDescription("Reload VoiceEngine configuration and language bundles")
-    public void onVoiceReload(CommandSourceStack stack) {
-        onVoiceReload(stack.getSender());
-    }
-
     public void onVoiceReload(CommandSender sender) {
         if (reloadAction != null) {
             reloadAction.run();
@@ -141,10 +136,6 @@ public class VoiceCommands {
     @Command("voice|ve|voiceengine|audio status")
     @Permission("voiceengine.admin.status")
     @CommandDescription("View VoiceEngine backend connectivity and status")
-    public void onVoiceStatus(CommandSourceStack stack) {
-        onVoiceStatus(stack.getSender());
-    }
-
     public void onVoiceStatus(CommandSender sender) {
         VoiceBackendClient client = clientSupplier != null ? clientSupplier.get() : null;
         VoiceConfig config = configSupplier.get();

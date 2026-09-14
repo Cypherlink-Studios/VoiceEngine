@@ -12,14 +12,14 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
     implementation("org.java-websocket:Java-WebSocket:1.5.7")
     implementation("org.incendo:cloud-paper:2.0.0")
     implementation("org.incendo:cloud-annotations:2.0.0")
     compileOnly("com.google.code.gson:gson:2.11.0")
     compileOnly("org.xerial:sqlite-jdbc:3.49.1.0")
 
-    testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
+    testImplementation("io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT")
     testImplementation("org.xerial:sqlite-jdbc:3.49.1.0")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
     testImplementation("org.mockito:mockito-core:5.14.2")
@@ -28,7 +28,7 @@ dependencies {
 
 val targetJava = providers.gradleProperty("javaVersion")
     .map { it.toInt() }
-    .orElse(21)
+    .orElse(17)
 
 java {
     toolchain {
@@ -38,6 +38,7 @@ java {
 
 tasks.withType<JavaCompile> {
     options.encoding = "UTF-8"
+    options.release.set(targetJava)
 }
 
 tasks.test {
