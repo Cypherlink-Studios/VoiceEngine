@@ -126,7 +126,28 @@ if [ "$INSTALLED_YTDLP" = false ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# 5. Verification & Final Diagnostics
+# 5. Install Deno (Preferred Standalone JS Runtime for yt-dlp EJS)
+# ------------------------------------------------------------------------------
+log_info "Checking JavaScript runtime for yt-dlp..."
+if command -v deno >/dev/null 2>&1; then
+    log_success "Deno is already installed: $(deno --version 2>&1 | head -n1)"
+else
+    log_info "Installing Deno for yt-dlp..."
+    if curl -fsSL https://deno.land/install.sh | sh >/dev/null 2>&1; then
+        if [ -f "${HOME}/.deno/bin/deno" ]; then
+            cp "${HOME}/.deno/bin/deno" /usr/local/bin/deno
+            chmod a+rx /usr/local/bin/deno
+            log_success "Deno installed to /usr/local/bin/deno: $(/usr/local/bin/deno --version | head -n1)"
+        fi
+    elif command -v node >/dev/null 2>&1; then
+        log_info "Node.js is installed ($(node -v)) and will be used as the JS challenge runtime."
+    else
+        log_warn "Neither Deno nor Node.js detected. yt-dlp may have limited player extraction."
+    fi
+fi
+
+# ------------------------------------------------------------------------------
+# 6. Verification & Final Diagnostics
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${CYAN}-----------------------------------------------------${NC}"
@@ -151,6 +172,14 @@ if command -v yt-dlp >/dev/null 2>&1; then
 else
     log_error "yt-dlp binary not found in PATH."
     ERRORS=$((ERRORS + 1))
+fi
+
+if command -v deno >/dev/null 2>&1; then
+    log_success "JS runtime:     $(command -v deno) ($(deno --version | head -n1))"
+elif command -v node >/dev/null 2>&1; then
+    log_success "JS runtime:     $(command -v node) ($(node -v))"
+else
+    log_warn "JS runtime:     None found. Extraction of some YouTube formats may fail."
 fi
 
 echo ""

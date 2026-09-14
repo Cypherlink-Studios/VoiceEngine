@@ -180,4 +180,16 @@ describe('MediaCacheService & Cache Endpoints', () => {
     expect(json.files.length).toBeGreaterThanOrEqual(1);
     expect(json.files.some((f: any) => f.name === 'song.ogg')).toBe(true);
   });
+
+  it('resolves cookies.txt path when present', async () => {
+    // When no cookies file exists
+    expect(cacheService.resolveCookiesPath()).toBeNull();
+
+    // Create a mock cookies.txt in tempBaseDir
+    const cookiesFile = path.join(tempBaseDir, 'cookies.txt');
+    await fs.promises.writeFile(cookiesFile, '# Netscape HTTP Cookie File\n');
+
+    const resolved = cacheService.resolveCookiesPath();
+    expect(resolved).toBe(cookiesFile);
+  });
 });

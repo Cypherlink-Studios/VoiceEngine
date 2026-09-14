@@ -142,6 +142,24 @@ export class MediaCacheService {
     fs.writeFileSync(destPath, buffer);
   }
 
+  public resolveCookiesPath(): string | null {
+    if (config.ytCookiesPath && fs.existsSync(config.ytCookiesPath)) {
+      return path.resolve(config.ytCookiesPath);
+    }
+    const candidates = [
+      path.resolve(process.cwd(), 'cookies.txt'),
+      path.resolve(this.cacheDir, '..', 'cookies.txt'),
+      path.resolve(this.cacheDir, 'cookies.txt'),
+      path.resolve(config.mediaDir, 'cookies.txt'),
+    ];
+    for (const cand of candidates) {
+      if (fs.existsSync(cand)) {
+        return cand;
+      }
+    }
+    return null;
+  }
+
   private async downloadWithYtDlp(url: string, destPath: string): Promise<void> {
     const ytDlpPath = BinaryResolver.getYtDlpPath();
     if (!ytDlpPath) {
@@ -159,10 +177,21 @@ export class MediaCacheService {
       '--audio-quality',
       '0',
       '--no-playlist',
+      // Pass Node.js as the JavaScript runtime for challenge solving (EJS)
+      '--js-runtimes',
+      `node:${process.execPath}`,
+      // Bypass datacenter IP bot-check blocks by prioritizing mobile client APIs
+      '--extractor-args',
+      'youtube:player_client=android,ios,web',
     ];
 
     if (ffmpegPath) {
       args.push('--ffmpeg-location', ffmpegPath);
+    }
+
+    const cookiesPath = this.resolveCookiesPath();
+    if (cookiesPath) {
+      args.push('--cookies', cookiesPath);
     }
 
     args.push('-o', destPath, url);

@@ -49,6 +49,7 @@ export const config = {
   mediaMaxCacheAgeDays: parseInt(process.env.MEDIA_MAX_CACHE_AGE_DAYS || '7', 10),
   ytDlpPath: process.env.YT_DLP_PATH || '',
   ffmpegPath: process.env.FFMPEG_PATH || '',
+  ytCookiesPath: process.env.YT_COOKIES_PATH || '',
   
   // Proximity settings (in blocks)
   maxVoiceDistance: parseFloat(process.env.MAX_VOICE_DISTANCE || '30.0'),
