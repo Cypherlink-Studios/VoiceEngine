@@ -180,6 +180,8 @@ export class MediaCacheService {
       // Pass Node.js as the JavaScript runtime for challenge solving (EJS)
       '--js-runtimes',
       `node:${process.execPath}`,
+      '--remote-components',
+      'ejs:github',
       // Bypass datacenter IP bot-check blocks by prioritizing mobile client APIs
       '--extractor-args',
       'youtube:player_client=android,ios,web',
