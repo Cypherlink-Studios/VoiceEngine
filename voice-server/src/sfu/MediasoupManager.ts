@@ -68,12 +68,22 @@ export class MediasoupManager {
     return consumer;
   }
 
+  public isClosed(): boolean {
+    return !this.worker || this.worker.closed || !this.router || this.router.closed;
+  }
+
   public close(): void {
     if (this.router) {
-      this.router.close();
+      try {
+        this.router.close();
+      } catch {}
+      this.router = undefined;
     }
     if (this.worker) {
-      this.worker.close();
+      try {
+        this.worker.close();
+      } catch {}
+      this.worker = undefined;
     }
   }
 }

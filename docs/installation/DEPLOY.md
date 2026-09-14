@@ -175,6 +175,7 @@ Environment=NODE_ENV=production
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=5
+TimeoutStopSec=15
 LimitNOFILE=65536
 
 [Install]

@@ -34,7 +34,14 @@ const httpServer = createServer(app);
 const pluginWss = new WebSocketServer({ noServer: true });
 const clientWss = new WebSocketServer({ noServer: true });
 
+let isShuttingDown = false;
+
 httpServer.on('upgrade', (request, socket, head) => {
+  if (isShuttingDown) {
+    socket.destroy();
+    return;
+  }
+
   const pathname = request.url ? new URL(request.url, `http://${request.headers.host}`).pathname : '';
 
   if (pathname === '/ws/plugin') {
@@ -197,7 +204,56 @@ export async function startServer(): Promise<void> {
   });
 }
 
+export async function stopServer(): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log('[VoiceServer] Stopping server components...');
+
+  if (clientGateway) {
+    clientGateway.shutdown();
+  }
+  if (pluginGateway) {
+    pluginGateway.shutdown();
+  }
+
+  try {
+    pluginWss.close();
+  } catch {}
+  try {
+    clientWss.close();
+  } catch {}
+
+  await new Promise<void>((resolve) => {
+    httpServer.close(() => resolve());
+  });
+
+  sfu.close();
+  console.log('[VoiceServer] Server stopped successfully.');
+}
+
+export async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`[VoiceServer] Received ${signal}. Initiating graceful shutdown...`);
+
+  // Hard timeout in case any socket, worker or handle hangs
+  const forceExitTimer = setTimeout(() => {
+    console.warn('[VoiceServer] Graceful shutdown timeout exceeded (3s), forcing exit.');
+    process.exit(1);
+  }, 3000);
+  forceExitTimer.unref();
+
+  try {
+    await stopServer();
+    process.exit(0);
+  } catch (err) {
+    console.error('[VoiceServer] Error during graceful shutdown:', err);
+    process.exit(1);
+  }
+}
+
 if (process.env.NODE_ENV !== 'test') {
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
   startServer().catch((err) => {
     console.error('[VoiceServer] Fatal bootstrap error:', err);
     process.exit(1);
@@ -214,5 +270,7 @@ export {
   adminAuthManager,
   mediaCacheService,
   audioEmitterManager,
+  clientGateway,
+  pluginGateway,
 };
 

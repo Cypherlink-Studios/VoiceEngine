@@ -374,5 +374,25 @@ export class PluginGateway {
       );
     }
   }
+
+  public shutdown(): void {
+    for (const ws of this.paperSockets.values()) {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.close(1001, 'Server shutting down');
+        } catch {}
+      }
+    }
+    this.paperSockets.clear();
+    if (this.velocitySocket) {
+      if (this.velocitySocket.readyState === WebSocket.OPEN) {
+        try {
+          this.velocitySocket.close(1001, 'Server shutting down');
+        } catch {}
+      }
+      this.velocitySocket = undefined;
+    }
+    this.socketMeta.clear();
+  }
 }
 

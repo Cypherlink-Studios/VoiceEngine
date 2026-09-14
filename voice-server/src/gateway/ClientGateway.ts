@@ -1087,12 +1087,20 @@ export class ClientGateway {
   public shutdown(): void {
     if (this.loopInterval) {
       clearInterval(this.loopInterval);
+      this.loopInterval = undefined as any;
     }
     if (this.connectionHandler) {
       this.wss.off('connection', this.connectionHandler);
     }
-    for (const session of this.sessions.values()) {
+    for (const session of Array.from(this.sessions.values())) {
       this.cleanupSession(session);
+      if (session.ws.readyState === WebSocket.OPEN) {
+        try {
+          session.ws.close(1001, 'Server shutting down');
+        } catch {}
+      }
     }
+    this.sessions.clear();
+    this.playerSessions.clear();
   }
 }
