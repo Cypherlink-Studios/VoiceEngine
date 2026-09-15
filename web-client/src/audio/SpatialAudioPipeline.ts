@@ -13,6 +13,7 @@ export interface PeerAudioNode {
 export class SpatialAudioPipeline {
   private audioContext: AudioContext;
   private masterGain: GainNode;
+  private masterLimiter: DynamicsCompressorNode;
   private proximityBusGain: GainNode;
   private mediaBusGain: GainNode;
   private deafenGain: GainNode;
@@ -38,15 +39,25 @@ export class SpatialAudioPipeline {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
     this.masterGain = this.audioContext.createGain();
+
+    // Master Output Brickwall Limiter & Anti-Clipping Compressor
+    this.masterLimiter = this.audioContext.createDynamicsCompressor();
+    this.masterLimiter.threshold.setValueAtTime(-1.5, this.audioContext.currentTime);
+    this.masterLimiter.knee.setValueAtTime(3.0, this.audioContext.currentTime);
+    this.masterLimiter.ratio.setValueAtTime(20.0, this.audioContext.currentTime);
+    this.masterLimiter.attack.setValueAtTime(0.002, this.audioContext.currentTime);
+    this.masterLimiter.release.setValueAtTime(0.050, this.audioContext.currentTime);
+
     this.proximityBusGain = this.audioContext.createGain();
     this.mediaBusGain = this.audioContext.createGain();
     this.deafenGain = this.audioContext.createGain();
 
     // Route: proximityBusGain -> masterGain; mediaBusGain -> masterGain; fixed channels directly -> masterGain
-    // Master routing: masterGain -> deafenGain -> destination
+    // Master routing: masterGain -> masterLimiter -> deafenGain -> destination
     this.proximityBusGain.connect(this.masterGain);
     this.mediaBusGain.connect(this.masterGain);
-    this.masterGain.connect(this.deafenGain);
+    this.masterGain.connect(this.masterLimiter);
+    this.masterLimiter.connect(this.deafenGain);
     this.deafenGain.connect(this.audioContext.destination);
 
     // Set listener defaults (facing forward along -Z, up along +Y)
@@ -182,14 +193,17 @@ export class SpatialAudioPipeline {
       return;
     }
 
-    // Low-pass filter for underwater acoustic damping
+    // Low-pass filter for underwater acoustic damping & atmospheric distance absorption
     const isSubmerged = Boolean(initialPos.isSubmerged);
     const filter = this.audioContext.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(
-      isSubmerged ? 600 : 20000,
-      this.audioContext.currentTime
+    const initDist = Math.sqrt(
+      (initialPos.relX ?? 0) ** 2 +
+      (initialPos.relY ?? 0) ** 2 +
+      (initialPos.relZ ?? 0) ** 2
     );
+    const initFreq = isSubmerged ? 600 : this.calculateAtmosphericCutoff(initDist);
+    filter.frequency.setValueAtTime(initFreq, this.audioContext.currentTime);
 
     // HRTF 3D Panner
     const panner = this.audioContext.createPanner();
@@ -288,7 +302,9 @@ export class SpatialAudioPipeline {
         if (!peerNode.filter) {
           peerNode.filter = this.audioContext.createBiquadFilter();
           peerNode.filter.type = 'lowpass';
-          peerNode.filter.frequency.setValueAtTime(isSubmerged ? 600 : 20000, this.audioContext.currentTime);
+          const dist = Math.sqrt(relX * relX + relY * relY + relZ * relZ);
+          const freq = isSubmerged ? 600 : this.calculateAtmosphericCutoff(dist);
+          peerNode.filter.frequency.setValueAtTime(freq, this.audioContext.currentTime);
         }
         if (!peerNode.panner) {
           peerNode.panner = this.audioContext.createPanner();
@@ -322,10 +338,11 @@ export class SpatialAudioPipeline {
       peerNode.panner.setPosition(relX, relY, -relZ);
     }
 
-    if (peerNode.isSubmerged !== isSubmerged) {
-      peerNode.isSubmerged = isSubmerged;
-      peerNode.filter.frequency.setTargetAtTime(isSubmerged ? 600 : 20000, now, 0.05);
-    }
+    // Dynamic atmospheric distance air absorption & underwater damping
+    peerNode.isSubmerged = isSubmerged;
+    const dist = Math.sqrt(relX * relX + relY * relY + relZ * relZ);
+    const targetFreq = isSubmerged ? 600 : this.calculateAtmosphericCutoff(dist);
+    peerNode.filter.frequency.setTargetAtTime(targetFreq, now, 0.08);
   }
 
   public removePeerStream(peerUuid: string): void {
@@ -468,7 +485,7 @@ export class SpatialAudioPipeline {
 
       this.loopbackSource.connect(this.loopbackDelay);
       this.loopbackDelay.connect(this.loopbackGain);
-      this.loopbackGain.connect(this.audioContext.destination);
+      this.loopbackGain.connect(this.masterLimiter);
       this.isLoopbackActive = true;
     } catch (err) {
       console.warn('[SpatialAudioPipeline] Failed to start loopback:', err);
@@ -501,6 +518,27 @@ export class SpatialAudioPipeline {
 
   public getContext(): AudioContext {
     return this.audioContext;
+  }
+
+  public getMasterLimiter(): DynamicsCompressorNode {
+    return this.masterLimiter;
+  }
+
+  /**
+   * Calculates dynamic low-pass cutoff frequency simulating atmospheric air absorption over distance.
+   * High frequencies roll off logarithmically/exponentially from 20 kHz (at <= 2m) down to 3.5 kHz (at >= 30m).
+   */
+  public calculateAtmosphericCutoff(distance: number): number {
+    const minDistance = 2.0;
+    const maxDistance = 30.0;
+    const maxFreq = 20000;
+    const minFreq = 3500;
+
+    if (distance <= minDistance) return maxFreq;
+    if (distance >= maxDistance) return minFreq;
+
+    const t = (distance - minDistance) / (maxDistance - minDistance);
+    return Math.round(maxFreq * Math.pow(minFreq / maxFreq, t));
   }
 
   public close(): void {

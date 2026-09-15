@@ -17,18 +17,38 @@ The web client SHALL support instant onboarding through URL tokens, acquiring mi
 - **THEN** the client UI SHALL display the user's Minecraft username, avatar render, and connection latency.
 
 ### Requirement: Voice Activity Detection (VAD) and Input Management
-The client SHALL process local microphone input using client-side Voice Activity Detection (VAD), transmitting audio only when speech is detected and providing user-configurable sensitivity.
+The client SHALL process local microphone input using a dedicated client-side audio DSP pipeline at 48kHz, integrating subsonic high-pass filtering, neural noise suppression, hybrid voice activity detection combining neural speech probability with volume thresholds, smooth envelope gating, input gain calibration, and automatic fallback.
 
 #### Scenario: Voice activation threshold exceeded
-- **WHEN** input audio levels cross above the user-configured VAD threshold
-- **THEN** the client SHALL unmute the upstream media track, transmit audio packets, and notify the backend of active speech.
+- **WHEN** incoming microphone audio contains human speech where the neural speech probability exceeds the calibrated threshold (e.g., $P_{voice} \ge 0.65$) and exceeds minimum background volume
+- **THEN** the client SHALL transition the upstream audio gain to full volume using an exponential smooth attack envelope (~15ms), transmit audio packets over WebRTC, and notify the backend of active speech.
 
 #### Scenario: Silence and hangover duration
-- **WHEN** input volume drops below the VAD threshold for longer than the hangover period (e.g. 250ms)
-- **THEN** the client SHALL mute or pause the upstream track to eliminate background noise.
+- **WHEN** neural speech probability or input volume drops below the active threshold for longer than the configured hangover duration (e.g., 250ms)
+- **THEN** the client SHALL ramp down the upstream audio gain using an exponential smooth release envelope (~15ms) before muting transmission, eliminating digital audio clicks and popping.
+
+#### Scenario: Neural noise suppression of non-speech audio
+- **WHEN** the microphone captures non-speech background noise (such as mechanical keyboard keystrokes, PC cooling fans, desk taps, or ambient hum) while AI noise suppression is enabled
+- **THEN** the RNNoise AudioWorklet SHALL suppress the ambient noise from the outgoing audio stream, compute a low speech probability ($P_{voice} \approx 0$), and maintain the transmission gate in a closed state.
+
+#### Scenario: Subsonic rumble filtering
+- **WHEN** microphone input contains sub-audible low-frequency noise below 80Hz (such as desk thumps, AC hum, or plosive breath pops)
+- **THEN** the input pipeline SHALL filter the signal through an 80Hz high-pass biquad filter prior to worklet processing and transmission.
+
+#### Scenario: Input gain calibration and peak limiting
+- **WHEN** a user adjusts the microphone input gain slider between 0% and 200%
+- **THEN** the client SHALL scale the input signal by the configured multiplier and route it through a soft-knee compressor to prevent digital clipping before WebRTC encoding.
+
+#### Scenario: Graceful fallback when WebAssembly or AudioWorklet is unsupported
+- **WHEN** the user's browser or environment fails to initialize WebAssembly or register the AudioWorklet processor
+- **THEN** the client SHALL fall back immediately to standard browser constraints (native noise suppression and RMS volume-based VAD) without terminating the audio call or interrupting the user session.
+
+#### Scenario: Toggling AI noise suppression
+- **WHEN** a user toggles the AI noise suppression option in settings
+- **THEN** the input pipeline SHALL bypass or re-enable the RNNoise worklet processing stage in real time without renegotiating the WebRTC PeerConnection or dropping the stream.
 
 ### Requirement: Binaural 3D Spatial Audio Rendering
-The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations parsed from batched binary or JSON telemetry frames, or bypass spatialization when receiving broadcast audio.
+The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations parsed from batched binary or JSON telemetry frames, dynamic distance-based atmospheric absorption filtering, an underwater muffled low-pass filter, master output bus brickwall peak limiting, or bypass spatialization when receiving broadcast audio.
 
 #### Scenario: Dynamic 3D positional positioning
 - **WHEN** relative position updates are received for an audible peer via binary `ArrayBuffer` batch frames or fallback JSON frames without broadcast flags
@@ -40,7 +60,15 @@ The web client SHALL process incoming peer audio streams through the Web Audio A
 
 #### Scenario: Submerged low-pass acoustic filtering
 - **WHEN** spatial telemetry flags that either the listener or speaker is submerged in water
-- **THEN** the client SHALL route the incoming stream through a BiquadFilterNode configured as a low-pass filter to produce muffled acoustic damping.
+- **THEN** the client SHALL route the incoming stream through a BiquadFilterNode configured as a low-pass filter to produce muffled acoustic damping at 600 Hz cutoff, overriding distance air absorption.
+
+#### Scenario: Atmospheric distance frequency absorption
+- **WHEN** an audible proximity peer is not submerged and positioned at distance $d$ from the listener
+- **THEN** the client SHALL adjust that peer's BiquadFilterNode cutoff frequency according to distance, rolling off high frequencies from 20 kHz at close proximity ($d \le 2$ blocks) down to approximately 3.5 kHz at maximum distance ($d \ge 30$ blocks) using smooth parameter automation.
+
+#### Scenario: Master output bus brickwall limiting and anti-clipping
+- **WHEN** multiple peer audio streams, sound effects, or media tracks play simultaneously and exceed 0 dBFS
+- **THEN** the master output stage SHALL route the combined mix through a brickwall DynamicsCompressorNode limiter (`threshold: -1.5 dB`, `ratio: 20:1`, fast attack) before final hardware output, transparently preventing digital clipping and distortion.
 
 #### Scenario: Proximity radar visualization
 - **WHEN** audible players are within proximity range

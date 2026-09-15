@@ -237,10 +237,18 @@ export class VoiceSignaling {
           callback();
         });
 
-        // Produce microphone audio track
+        // Produce microphone audio track with Opus FEC & DTX resilience
         const micTrack = micStream.getAudioTracks()[0];
         if (micTrack) {
-          this.audioProducer = await this.sendTransport.produce({ track: micTrack });
+          this.audioProducer = await this.sendTransport.produce({
+            track: micTrack,
+            codecOptions: {
+              opusFec: true,
+              opusDtx: true,
+              opusMaxAverageBitrate: 64000,
+              opusPtime: 20,
+            },
+          });
         }
 
         this.callbacks.onAuthenticated({

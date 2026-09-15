@@ -64,12 +64,23 @@ export const config = {
       rtcMaxPort: parseInt(process.env.RTC_MAX_PORT || '49999', 10),
     },
     router: {
+      opusMaxAverageBitrate: parseInt(process.env.OPUS_MAX_AVERAGE_BITRATE || '64000', 10),
       mediaCodecs: [
         {
           kind: 'audio' as const,
           mimeType: 'audio/opus',
           clockRate: 48000,
           channels: 2,
+          parameters: {
+            useinbandfec: 1,
+            usedtx: 1,
+            maxaveragebitrate: parseInt(process.env.OPUS_MAX_AVERAGE_BITRATE || '64000', 10),
+            stereo: 1,
+            'sprop-stereo': 1,
+            ptime: 20,
+            minptime: 10,
+            maxptime: 60,
+          },
         },
       ],
     },
@@ -80,7 +91,7 @@ export const config = {
           announcedIp: process.env.ANNOUNCED_IP || '127.0.0.1',
         },
       ],
-      initialAvailableOutgoingBitrate: 64000,
+      initialAvailableOutgoingBitrate: 128000,
     },
   },
 };

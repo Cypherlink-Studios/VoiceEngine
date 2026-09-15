@@ -6,7 +6,7 @@ Provides real-time WebRTC media routing, token validation, dynamic proximity cul
 ## Requirements
 
 ### Requirement: WebRTC SFU Media Routing
-The voice backend SHALL manage WebRTC transports and audio streams using a multi-worker Mediasoup pool, receiving single upstream microphone tracks and selectively routing downstream audio based on proximity across worker routers via inter-worker pipe transports.
+The voice backend SHALL manage WebRTC transports and audio streams using a multi-worker Mediasoup pool, receiving single upstream microphone tracks configured with Opus In-Band Forward Error Correction (FEC), Discontinuous Transmission (DTX), and configurable packet bitrate/framing, and selectively routing downstream audio based on proximity across worker routers via inter-worker pipe transports.
 
 #### Scenario: Audio producer transport establishment
 - **WHEN** an authenticated web client requests an upstream audio transport
@@ -23,6 +23,18 @@ The voice backend SHALL manage WebRTC transports and audio streams using a multi
 #### Scenario: Explicit session termination and channel change culling
 - **WHEN** a player disconnects from the voice server or changes active audio channels
 - **THEN** the SFU SHALL close and remove the associated consumers, clean up any unused inter-worker pipe transports, and notify connected clients with a `consumer_closed` message.
+
+#### Scenario: Opus Forward Error Correction (FEC) negotiation
+- **WHEN** an audio producer or consumer negotiates RTP capabilities with the SFU router
+- **THEN** the SFU router SHALL declare `useinbandfec: 1` in the Opus codec parameters, and the client producer SHALL enable in-band FEC (`opusFec: true`) to embed redundant packet recovery data directly in the audio stream.
+
+#### Scenario: Opus Discontinuous Transmission (DTX) silence compression
+- **WHEN** a speaking client enters silence or pauses speech while the audio track remains active
+- **THEN** the Opus encoder SHALL operate with DTX enabled (`usedtx: 1`, `opusDtx: true`), reducing RTP packet transmission to low-overhead comfort noise frames, and the SFU SHALL route these packets without tearing down or stalling the WebRTC pipeline.
+
+#### Scenario: Configurable audio bitrate and packet framing
+- **WHEN** the voice server initializes worker routers and transports
+- **THEN** the SFU SHALL configure the Opus codec with the server's configured maximum average bitrate (default 64 kbps, 48 kHz clock rate, stereo enabled) and 20ms packet duration framing (`ptime: 20`, `minptime: 10`, `maxptime: 60`).
 
 ### Requirement: Spatial Proximity Culling and State Dispatch
 The server SHALL evaluate player coordinates, server identifiers, and dimensions from plugin telemetry at each tick cycle using a 3D spatial grid hash, dispatching batched relative spatial updates in a compact binary format and suppressing updates for stationary players.

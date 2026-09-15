@@ -1,4 +1,4 @@
-import { Mic, MicOff, Volume2, Power, Settings, Headphones, VolumeX, PictureInPicture2, QrCode } from 'lucide-react';
+import { Mic, MicOff, Volume2, Power, Settings, Headphones, VolumeX, PictureInPicture2, QrCode, Sparkles } from 'lucide-react';
 import { AudioWaveform } from './AudioWaveform.js';
 
 interface ControlDockProps {
@@ -12,6 +12,8 @@ interface ControlDockProps {
   isPipSupported: boolean;
   isPipActive: boolean;
   isModerationMuted?: boolean;
+  aiNoiseSuppression?: boolean;
+  speechProbability?: number;
   onToggleMute: () => void;
   onToggleDeafen: () => void;
   onTogglePip: () => void;
@@ -33,6 +35,8 @@ export function ControlDock({
   isPipSupported,
   isPipActive,
   isModerationMuted,
+  aiNoiseSuppression = true,
+  speechProbability = 0,
   onToggleMute,
   onToggleDeafen,
   onTogglePip,
@@ -47,15 +51,18 @@ export function ControlDock({
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 p-3 sm:px-5 rounded-2xl bg-slate-950/85 backdrop-blur-xl border border-white/10 shadow-2xl">
         {/* Left: Mic toggle, Deafen toggle & Waveform */}
         <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start shrink-0">
+          {/* Mic Toggle */}
           <button
-            onClick={isModerationMuted ? undefined : onToggleMute}
+            onClick={onToggleMute}
             disabled={isModerationMuted}
-            className={`relative flex items-center justify-center w-11 h-11 rounded-xl font-semibold transition-all shadow-lg ${
+            className={`relative flex items-center justify-center w-11 h-11 rounded-xl font-semibold transition-all shadow-lg cursor-pointer ${
               isModerationMuted
-                ? 'bg-rose-950/40 text-rose-500 border border-rose-500/30 opacity-60 cursor-not-allowed'
+                ? 'bg-rose-950/60 text-rose-400 border border-rose-500/30 cursor-not-allowed opacity-80'
                 : isMuted
-                ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 hover:bg-rose-500/30 cursor-pointer'
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)] cursor-pointer'
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.2)]'
+                : isSpeaking
+                ? 'bg-emerald-500 text-slate-950 border border-emerald-400 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                : 'bg-slate-800 text-slate-300 border border-white/10 hover:bg-slate-700 hover:text-white'
             }`}
             title={
               isModerationMuted
@@ -90,12 +97,25 @@ export function ControlDock({
             </span>
           </button>
 
-          {/* Dynamic Audio Waveform */}
+          {/* Dynamic Audio Waveform & AI Badge */}
           <div className="flex items-center gap-2">
             <AudioWaveform
               analyser={isMuted ? null : analyser}
               isSpeaking={!isMuted && isSpeaking}
             />
+            {aiNoiseSuppression && (
+              <span
+                className={`hidden md:flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-mono border transition-all ${
+                  !isMuted && isSpeaking
+                    ? 'bg-purple-500/25 text-purple-300 border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.35)]'
+                    : 'bg-slate-900/60 text-slate-400 border-white/10'
+                }`}
+                title={`Supresión de Ruido por IA (RNNoise) activa${speechProbability > 0 ? ` - Probabilidad de voz: ${Math.round(speechProbability * 100)}%` : ''}`}
+              >
+                <Sparkles className={`w-3 h-3 ${!isMuted && isSpeaking ? 'text-purple-300 animate-pulse' : 'text-purple-400'}`} />
+                <span>IA</span>
+              </span>
+            )}
           </div>
         </div>
 

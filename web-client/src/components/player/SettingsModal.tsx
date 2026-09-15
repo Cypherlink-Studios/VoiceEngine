@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check, Eye, EyeOff, Radio, Music } from 'lucide-react';
+import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check, Eye, EyeOff, Radio, Music, Sparkles } from 'lucide-react';
 import { soundEffects } from '../../audio/SoundEffects.js';
 import { ChannelMember } from '../../net/VoiceSignaling.js';
 import { PeerRadarInfo } from '../Radar.js';
@@ -45,6 +45,15 @@ export interface SettingsModalProps {
   onSetMediaVolume?: (volume: number) => void;
   mediaMuted?: boolean;
   onToggleMediaMuted?: (muted: boolean) => void;
+  // AI DSP & Input Controls
+  aiNoiseSuppression?: boolean;
+  onToggleAiNoiseSuppression?: (enabled: boolean) => void;
+  inputGain?: number;
+  onChangeInputGain?: (gain: number) => void;
+  vadSensitivity?: number;
+  onChangeVadSensitivity?: (sensitivity: number) => void;
+  speechProbability?: number;
+  isFallbackMode?: boolean;
 }
 
 type TabType = 'devices' | 'players' | 'preferences';
@@ -81,6 +90,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSetMediaVolume,
   mediaMuted = false,
   onToggleMediaMuted,
+  aiNoiseSuppression = true,
+  onToggleAiNoiseSuppression,
+  inputGain = 1.0,
+  onChangeInputGain,
+  vadSensitivity = 0.5,
+  onChangeVadSensitivity,
+  speechProbability = 0,
+  isFallbackMode = false,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('devices');
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -140,8 +157,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     };
   }, [isOpen, analyserNode, activeTab]);
 
-  const thresholdPercent = Math.min(100, Math.round((vadThreshold / 0.15) * 100));
-  const isSpeechActive = micLevel >= thresholdPercent && micLevel > 3;
+  const sensitivityPercent = Math.round((vadSensitivity ?? (1.0 - (vadThreshold / 0.15))) * 100);
+  const aiProbPercent = Math.round((speechProbability ?? 0) * 100);
+  const isSpeechActive = aiNoiseSuppression
+    ? (speechProbability ?? 0) >= (0.80 - (vadSensitivity ?? 0.5) * 0.35) && micLevel > 3
+    : micLevel >= (100 - sensitivityPercent) && micLevel > 3;
 
   if (!isOpen) return null;
 
@@ -258,11 +278,72 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   ))}
                 </select>
 
-                {/* Microphone Level Visualizer & VAD Calibration */}
-                <div className="pt-2 space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-300 font-medium">Calibración de Entrada y Umbral VAD</span>
+                {/* AI Noise Suppression (RNNoise) Card */}
+                <div className="p-3.5 rounded-xl bg-slate-950/70 border border-purple-500/20 space-y-2 mt-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      <span className="text-xs font-semibold text-purple-200">Supresión de Ruido por IA (RNNoise)</span>
+                      {isFallbackMode && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Fallback Estándar
+                        </span>
+                      )}
+                    </div>
+                    {onToggleAiNoiseSuppression && (
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={aiNoiseSuppression}
+                          onChange={(e) => onToggleAiNoiseSuppression(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                      </label>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Aísla la voz humana y filtra en tiempo real tecleos mecánicos, ventiladores y ruidos de fondo mediante redes neuronales.
+                  </p>
+                </div>
+
+                {/* Input Gain Slider */}
+                {onChangeInputGain && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Volumen de Entrada (Ganancia)</span>
+                      </span>
+                      <span className="font-mono text-emerald-400 font-semibold">{Math.round(inputGain * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.0"
+                      max="2.0"
+                      step="0.05"
+                      value={inputGain}
+                      onChange={(e) => onChangeInputGain(parseFloat(e.target.value))}
+                      className="w-full accent-emerald-500 cursor-pointer"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-500">
+                      <span>Mudo (0%)</span>
+                      <span>Normal (100%)</span>
+                      <span>Amplificado (200%)</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Microphone Level Visualizer & VAD Calibration */}
+                <div className="pt-2 space-y-2.5 border-t border-white/10">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-300 font-medium">Nivel de Entrada y Detección de Voz</span>
+                    <div className="flex items-center gap-2">
+                      {aiNoiseSuppression && (
+                        <span className="font-mono text-[11px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
+                          Voz IA: {aiProbPercent}%
+                        </span>
+                      )}
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
                           isSpeechActive
@@ -270,15 +351,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             : 'bg-slate-800 text-slate-400 border border-white/10'
                         }`}
                       >
-                        {isSpeechActive ? 'Voz Transmitiendo' : 'Silencio'}
+                        {isSpeechActive ? 'Voz Transmitiendo' : 'Silencio / Ruido'}
                       </span>
                       <span className="font-mono text-emerald-400 text-xs">{micLevel}%</span>
                     </div>
                   </div>
 
-                  {/* Level bar with VAD threshold marker */}
+                  {/* Level bar */}
                   <div className="relative h-3.5 w-full bg-slate-950 rounded-full overflow-hidden border border-white/10 p-0.5">
-                    {/* Active volume bar */}
                     <div
                       className="h-full rounded-full transition-all duration-75"
                       style={{
@@ -286,39 +366,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         backgroundColor: isSpeechActive ? '#10b981' : '#38bdf8',
                       }}
                     />
-                    {/* Threshold vertical marker */}
-                    <div
-                      className="absolute top-0 bottom-0 w-1 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] z-10"
-                      style={{ left: `${thresholdPercent}%` }}
-                      title={`Umbral VAD actual: ${thresholdPercent}%`}
-                    />
-                  </div>
-                  <div className="flex justify-between items-center text-[11px] text-slate-500">
-                    <span>Mín (0%)</span>
-                    <span className="text-amber-400/90 font-mono">▲ Marcador de Umbral ({thresholdPercent}%)</span>
-                    <span>Máx (100%)</span>
                   </div>
 
-                  {/* Interactive VAD Calibration Slider */}
-                  {onChangeVadThreshold && (
-                    <div className="pt-2">
-                      <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                        <span className="font-medium text-slate-300">Ajuste de Umbral (Sensibilidad):</span>
-                        <span className="font-mono text-amber-400 font-semibold">{thresholdPercent}%</span>
+                  {/* Interactive VAD Sensitivity Slider */}
+                  {(onChangeVadSensitivity || onChangeVadThreshold) && (
+                    <div className="pt-1 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs text-slate-400">
+                        <span className="font-medium text-slate-300">Sensibilidad de Voz (VAD):</span>
+                        <span className="font-mono text-amber-400 font-semibold">{sensitivityPercent}%</span>
                       </div>
                       <input
                         type="range"
-                        min="0.005"
-                        max="0.15"
-                        step="0.005"
-                        value={vadThreshold}
-                        onChange={(e) => onChangeVadThreshold(parseFloat(e.target.value))}
+                        min="0.0"
+                        max="1.0"
+                        step="0.02"
+                        value={vadSensitivity}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (onChangeVadSensitivity) {
+                            onChangeVadSensitivity(val);
+                          }
+                          if (onChangeVadThreshold) {
+                            onChangeVadThreshold(Math.max(0.005, (1.0 - val) * 0.15));
+                          }
+                        }}
                         className="w-full accent-amber-500 cursor-pointer"
-                        title={`Umbral VAD: ${thresholdPercent}%`}
+                        title={`Sensibilidad VAD: ${sensitivityPercent}%`}
                       />
-                      <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                        <span>Mayor sensibilidad (0%)</span>
-                        <span>Filtro de ruido agresivo (100%)</span>
+                      <div className="flex justify-between text-[10px] text-slate-500">
+                        <span>Filtro estricto / ruidoso (0%)</span>
+                        <span>Alta sensibilidad / susurros (100%)</span>
                       </div>
                     </div>
                   )}
@@ -331,7 +408,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <span>Prueba de Auto-Escucha (Loopback)</span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Escúchate con 180ms de retraso sin transmitir a otros para ajustar tu micrófono.
+                        Escúchate procesado en tiempo real con 180ms de retraso para ajustar tu micrófono.
                       </p>
                     </div>
                     <button

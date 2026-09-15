@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
+import { MicrophonePipeline } from '../audio/MicrophonePipeline.js';
 import { VoiceSignaling, ChannelMember, ModerationNotice } from '../net/VoiceSignaling.js';
 import { Radar, PeerRadarInfo } from '../components/Radar.js';
 import { ControlDock } from '../components/player/ControlDock.js';
@@ -34,6 +35,19 @@ export function PlayerRoute() {
     const val = saved ? parseFloat(saved) : 0.04;
     return isNaN(val) ? 0.04 : val;
   });
+  const [aiNoiseSuppression, setAiNoiseSuppression] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:ai_noise_suppression') !== 'false'
+  );
+  const [inputGain, setInputGain] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem('voiceengine:input_gain') || '1.0');
+    return isNaN(v) ? 1.0 : v;
+  });
+  const [vadSensitivity, setVadSensitivity] = useState<number>(() => {
+    const v = parseFloat(localStorage.getItem('voiceengine:vad_sensitivity') || '0.5');
+    return isNaN(v) ? 0.5 : v;
+  });
+  const [speechProbability, setSpeechProbability] = useState<number>(0);
+  const [isFallbackMode, setIsFallbackMode] = useState<boolean>(false);
   const [masterVolume, setMasterVolume] = useState(1.0);
   const [peers, setPeers] = useState<PeerRadarInfo[]>([]);
 
@@ -120,6 +134,7 @@ export function PlayerRoute() {
 
   const signalingRef = useRef<VoiceSignaling | null>(null);
   const vadRef = useRef<VoiceActivityDetector | null>(null);
+  const micPipelineRef = useRef<MicrophonePipeline | null>(null);
   const pipelineRef = useRef<SpatialAudioPipeline | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const sendStreamRef = useRef<MediaStream | null>(null);
@@ -133,6 +148,8 @@ export function PlayerRoute() {
     if (sendTrackRef.current) {
       sendTrackRef.current.enabled = canTransmit;
     }
+    micPipelineRef.current?.setMuted(muted);
+    micPipelineRef.current?.setDeafened(deafened);
     pipelineRef.current?.setLoopbackGated(canTransmit);
   };
 
@@ -164,16 +181,43 @@ export function PlayerRoute() {
       });
       micStreamRef.current = stream;
 
-      // Clone microphone track for WebRTC transmission so the raw track remains enabled
-      // for continuous VAD detection and local visual analyser processing.
-      const rawTrack = stream.getAudioTracks()[0];
-      const sendTrack = rawTrack.clone();
+      // 2. Initialize MicrophonePipeline (48kHz AudioContext, 80Hz HPF, RNNoise WASM, Smooth Gate)
+      const micPipeline = new MicrophonePipeline(
+        stream,
+        {
+          onSpeakingChange: (speaking) => {
+            setIsSpeaking(speaking);
+            isSpeakingRef.current = speaking;
+            signalingRef.current?.notifySpeaking(speaking);
+            updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
+          },
+          onVolumeChange: () => {},
+          onSpeechProbabilityChange: (prob) => {
+            setSpeechProbability(prob);
+          },
+          onFallbackTriggered: (reason) => {
+            console.warn('[PlayerRoute] RNNoise fallback triggered:', reason);
+            setIsFallbackMode(true);
+          },
+        },
+        {
+          noiseSuppression: aiNoiseSuppression,
+          inputGain: inputGain,
+          vadSensitivity: vadSensitivity,
+        }
+      );
+      await micPipeline.init();
+      micPipelineRef.current = micPipeline;
+      setIsFallbackMode(micPipeline.isFallback());
+
+      // Pass processed WebRTC track from destination node
+      const sendTrack = micPipeline.getProcessedTrack();
       sendTrack.enabled = false;
       sendTrackRef.current = sendTrack;
       const sendStream = new MediaStream([sendTrack]);
       sendStreamRef.current = sendStream;
 
-      // 2. Initialize Audio Pipeline, Analyser, Preferences & VAD
+      // 3. Initialize Audio Pipeline, Analyser & Preferences
       const pipeline = new SpatialAudioPipeline();
       pipelineRef.current = pipeline;
       pipeline.setMasterVolume(masterVolume);
@@ -190,23 +234,7 @@ export function PlayerRoute() {
       soundEffects.setEnabled(sfxEnabled);
       soundEffects.setVolume(sfxVolume);
 
-      const localAnalyser = pipeline.createLocalAnalyser(stream);
-      setAnalyser(localAnalyser);
-
-      const vad = new VoiceActivityDetector(
-        stream,
-        {
-          onSpeakingChange: (speaking) => {
-            setIsSpeaking(speaking);
-            isSpeakingRef.current = speaking;
-            signalingRef.current?.notifySpeaking(speaking);
-            updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
-          },
-          onVolumeChange: () => {},
-        },
-        vadThreshold
-      );
-      vadRef.current = vad;
+      setAnalyser(micPipeline.getAnalyser());
 
       // 3. Connect to Voice Server WebSocket signaling
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -315,6 +343,9 @@ export function PlayerRoute() {
     vadRef.current?.stop();
     vadRef.current = null;
 
+    micPipelineRef.current?.destroy();
+    micPipelineRef.current = null;
+
     if (sendTrackRef.current) {
       sendTrackRef.current.stop();
       sendTrackRef.current = null;
@@ -414,7 +445,10 @@ export function PlayerRoute() {
       setIsLoopbackActive(false);
     } else {
       const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
-      pipelineRef.current.startLoopback(micStreamRef.current, 0.18, canTransmit);
+      const loopbackStream = micPipelineRef.current
+        ? new MediaStream([micPipelineRef.current.getProcessedTrack()])
+        : micStreamRef.current;
+      pipelineRef.current.startLoopback(loopbackStream, 0.18, canTransmit);
       setIsLoopbackActive(true);
     }
   };
@@ -496,56 +530,71 @@ export function PlayerRoute() {
         });
         const newTrack = newStream.getAudioTracks()[0];
         if (newTrack) {
-          if (micStreamRef.current) {
-            micStreamRef.current.getTracks().forEach((t) => t.stop());
-          }
-          if (sendTrackRef.current) {
-            sendTrackRef.current.stop();
-          }
-          if (sendStreamRef.current) {
-            sendStreamRef.current.getTracks().forEach((t) => t.stop());
-          }
-          micStreamRef.current = newStream;
-
-          const newSendTrack = newTrack.clone();
-          const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
-          newSendTrack.enabled = canTransmit;
-          sendTrackRef.current = newSendTrack;
-          const newSendStream = new MediaStream([newSendTrack]);
-          sendStreamRef.current = newSendStream;
-
-          await signalingRef.current?.replaceMicrophoneTrack(newSendTrack);
-
-          if (pipelineRef.current) {
-            const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
-            setAnalyser(newAnalyser);
-            if (isLoopbackActive) {
-              pipelineRef.current.startLoopback(newStream, 0.18, canTransmit);
+          if (micPipelineRef.current) {
+            micPipelineRef.current.setInputDevice(newStream);
+            if (micStreamRef.current) {
+              micStreamRef.current.getTracks().forEach((t) => t.stop());
             }
-          }
+            micStreamRef.current = newStream;
+            setAnalyser(micPipelineRef.current.getAnalyser());
 
-          if (vadRef.current) {
-            vadRef.current.stop();
-            const newVad = new VoiceActivityDetector(
-              newStream,
-              {
-                onSpeakingChange: (speaking) => {
-                  setIsSpeaking(speaking);
-                  isSpeakingRef.current = speaking;
-                  signalingRef.current?.notifySpeaking(speaking);
-                  updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
-                },
-                onVolumeChange: () => {},
-              },
-              vadThreshold
-            );
-            vadRef.current = newVad;
+            if (isLoopbackActive && pipelineRef.current) {
+              const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
+              const loopbackStream = new MediaStream([micPipelineRef.current.getProcessedTrack()]);
+              pipelineRef.current.startLoopback(loopbackStream, 0.18, canTransmit);
+            }
+          } else {
+            if (micStreamRef.current) {
+              micStreamRef.current.getTracks().forEach((t) => t.stop());
+            }
+            if (sendTrackRef.current) {
+              sendTrackRef.current.stop();
+            }
+            if (sendStreamRef.current) {
+              sendStreamRef.current.getTracks().forEach((t) => t.stop());
+            }
+            micStreamRef.current = newStream;
+
+            const newSendTrack = newTrack.clone();
+            const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
+            newSendTrack.enabled = canTransmit;
+            sendTrackRef.current = newSendTrack;
+            const newSendStream = new MediaStream([newSendTrack]);
+            sendStreamRef.current = newSendStream;
+
+            await signalingRef.current?.replaceMicrophoneTrack(newSendTrack);
+
+            if (pipelineRef.current) {
+              const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
+              setAnalyser(newAnalyser);
+              if (isLoopbackActive) {
+                pipelineRef.current.startLoopback(newStream, 0.18, canTransmit);
+              }
+            }
           }
         }
       } catch (err) {
         console.error('[PlayerRoute] Failed to switch microphone:', err);
       }
     }
+  };
+
+  const handleToggleAiNoiseSuppression = (enabled: boolean) => {
+    setAiNoiseSuppression(enabled);
+    localStorage.setItem('voiceengine:ai_noise_suppression', String(enabled));
+    micPipelineRef.current?.setNoiseSuppression(enabled);
+  };
+
+  const handleChangeInputGain = (gain: number) => {
+    setInputGain(gain);
+    localStorage.setItem('voiceengine:input_gain', String(gain));
+    micPipelineRef.current?.setInputGain(gain);
+  };
+
+  const handleChangeVadSensitivity = (sensitivity: number) => {
+    setVadSensitivity(sensitivity);
+    localStorage.setItem('voiceengine:vad_sensitivity', String(sensitivity));
+    micPipelineRef.current?.setVadSensitivity(sensitivity);
   };
 
   const handleSelectOutputDevice = async (deviceId: string) => {
@@ -987,6 +1036,8 @@ export function PlayerRoute() {
           isPipSupported={isPipSupported}
           isPipActive={pipWindow !== null}
           isModerationMuted={Boolean(moderationNotice?.action === 'mute' && moderationNotice.active)}
+          aiNoiseSuppression={aiNoiseSuppression}
+          speechProbability={speechProbability}
           onToggleMute={handleToggleMute}
           onToggleDeafen={handleToggleDeafen}
           onTogglePip={handleTogglePip}
@@ -1065,6 +1116,14 @@ export function PlayerRoute() {
         onSetMediaVolume={handleSetMediaVolume}
         mediaMuted={mediaMuted}
         onToggleMediaMuted={handleToggleMediaMuted}
+        aiNoiseSuppression={aiNoiseSuppression}
+        onToggleAiNoiseSuppression={handleToggleAiNoiseSuppression}
+        inputGain={inputGain}
+        onChangeInputGain={handleChangeInputGain}
+        vadSensitivity={vadSensitivity}
+        onChangeVadSensitivity={handleChangeVadSensitivity}
+        speechProbability={speechProbability}
+        isFallbackMode={isFallbackMode}
       />
     </div>
   );

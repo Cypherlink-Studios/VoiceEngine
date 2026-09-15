@@ -794,6 +794,7 @@ export class ClientGateway {
             !this.sessions.has(listenerSession.sessionId) ||
             !this.sessions.has(speakerSession.sessionId) ||
             listenerSession.ws.readyState !== WebSocket.OPEN ||
+            !listenerSession.recvTransport ||
             !speakerSession.producer ||
             speakerSession.producer.closed
           ) {
