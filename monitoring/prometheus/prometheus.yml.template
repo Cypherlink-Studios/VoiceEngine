@@ -1,0 +1,25 @@
+# ==============================================================================
+# VoiceEngine - Prometheus Scrape Configuration Template
+# ==============================================================================
+
+global:
+  scrape_interval: __SCRAPE_INTERVAL__
+  evaluation_interval: __SCRAPE_INTERVAL__
+  scrape_timeout: 4s
+
+scrape_configs:
+  # Primary VoiceEngine Voice Server & SFU Metrics
+  - job_name: 'voiceengine'
+    metrics_path: '/metrics'
+    scrape_interval: __SCRAPE_INTERVAL__
+    static_configs:
+      - targets: ['__VOICEENGINE_TARGET__']
+        labels:
+          app: 'voiceengine'
+          tier: 'voice-backend-sfu'
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['localhost:9090']
