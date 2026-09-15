@@ -13,7 +13,7 @@ This guide provides comprehensive instructions for deploying VoiceEngine on a se
                                  │
             ┌────────────────────┴────────────────────┐
             │                                         │
-     TCP 80, 443 (HTTPS/WSS)                   UDP 40000-40100 (WebRTC Media)
+     TCP 80, 443 (HTTPS/WSS)                   UDP 40000-49999 (WebRTC Media)
             │                                         │
             ▼                                         │
    ┌──────────────────┐                               │
@@ -57,7 +57,7 @@ Ensure the following ports are open in both your host firewall (**UFW**) and you
 | **80 / TCP** | HTTP | Certbot ACME domain validation and HTTPS redirection |
 | **443 / TCP** | HTTPS | Web client traffic and secure WebSockets (`/ws/*`) |
 | **25565 / TCP** | Minecraft | Player connections to PaperMC |
-| **40000:40100 / UDP** | WebRTC / Mediasoup | RTP/RTCP media streams for 3D positional audio |
+| **40000:49999 / UDP** | WebRTC / Mediasoup | RTP/RTCP media streams for 3D positional audio |
 
 ---
 
@@ -143,20 +143,27 @@ PUBLIC_IP=$(curl -s https://ifconfig.me)
 cat <<EOF > /opt/VoiceEngine/voice-server/.env
 PORT=3000
 HOST=0.0.0.0
+NODE_ENV=production
 SECRET_KEY=${SECRET}
+ENABLE_DEV_TOKENS=false
+
+# WebRTC / Mediasoup SFU & Multi-Worker Architecture
+ANNOUNCED_IP=${PUBLIC_IP}
+LISTEN_IP=0.0.0.0
+MEDIASOUP_NUM_WORKERS=2
+RTC_MIN_PORT=40000
+RTC_MAX_PORT=49999
 
 # Spatial proximity settings (in Minecraft blocks)
 MAX_VOICE_DISTANCE=30.0
 SNEAK_VOICE_DISTANCE=8.0
 
-# Mediasoup WebRTC Networking
-RTC_MIN_PORT=40000
-RTC_MAX_PORT=40100
-LISTEN_IP=0.0.0.0
-ANNOUNCED_IP=${PUBLIC_IP}
+# Observability & Discord Health Alerts (Optional)
+# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 
-# Development join tokens (disabled in production)
-ENABLE_DEV_TOKENS=false
+# Media & Storage Settings
+MEDIA_MAX_CACHE_SIZE_MB=1024
+MEDIA_MAX_CACHE_AGE_DAYS=7
 EOF
 ```
 
@@ -245,7 +252,7 @@ sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 25565/tcp
-sudo ufw allow 40000:40100/udp
+sudo ufw allow 40000:49999/udp
 sudo ufw enable
 ```
 
@@ -305,7 +312,7 @@ You should receive a JSON response similar to:
 
 ### 3. Audio Silent or "ICE Connection Failed"
 * Check that `ANNOUNCED_IP` in `/opt/VoiceEngine/voice-server/.env` contains the server's public IP address (not `127.0.0.1`).
-* Ensure UDP port range `40000-40100` is open in your cloud provider's firewall / security group.
+* Ensure UDP port range `40000-49999` is open in your cloud provider's firewall / security group.
 
 ### 4. Real-Time Log Inspection
 * **Voice server logs**:

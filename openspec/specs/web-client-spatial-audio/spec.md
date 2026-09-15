@@ -28,11 +28,15 @@ The client SHALL process local microphone input using client-side Voice Activity
 - **THEN** the client SHALL mute or pause the upstream track to eliminate background noise.
 
 ### Requirement: Binaural 3D Spatial Audio Rendering
-The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations, or bypass spatialization when receiving broadcast audio.
+The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations parsed from batched binary or JSON telemetry frames, or bypass spatialization when receiving broadcast audio.
 
 #### Scenario: Dynamic 3D positional positioning
-- **WHEN** a relative position packet is received for an audible peer without broadcast flags
-- **THEN** the client SHALL interpolate and apply the X, Y, and Z offsets to that peer's `PannerNode` relative to the local listener's yaw and pitch.
+- **WHEN** relative position updates are received for an audible peer via binary `ArrayBuffer` batch frames or fallback JSON frames without broadcast flags
+- **THEN** the client SHALL interpolate and apply the X, Y, and Z offsets to that peer's `PannerNode` relative to the local listener's yaw and pitch using smooth linear ramp transitions.
+
+#### Scenario: Deadband position retention
+- **WHEN** an audible peer is omitted from an incoming tick's spatial batch due to server-side deadband suppression
+- **THEN** the client SHALL retain the peer's existing PannerNode position and audio routing without resetting coordinates or pausing audio playback.
 
 #### Scenario: Submerged low-pass acoustic filtering
 - **WHEN** spatial telemetry flags that either the listener or speaker is submerged in water

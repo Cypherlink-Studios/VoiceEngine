@@ -386,4 +386,42 @@ describe('SpatialEngine', () => {
     const audible = engine.getAudiblePeersFor('listener-1');
     expect(audible).toHaveLength(0);
   });
+
+  it('correctly tracks and isolates partitions when players switch worlds or servers', () => {
+    const player: PlayerSpatialState = {
+      uuid: 'player-world-hopper',
+      username: 'Hopper',
+      world: 'world',
+      serverId: 'survival',
+      x: 10,
+      y: 64,
+      z: 10,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    };
+
+    engine.updatePlayer(player);
+    expect(engine.getPartitionCount()).toBe(1);
+    expect(engine.getActiveCellCount()).toBe(1);
+
+    // Player switches to the Nether
+    engine.updatePlayer({
+      ...player,
+      world: 'world_nether',
+      x: 100,
+      y: 64,
+      z: 100,
+    });
+
+    expect(engine.getPartitionCount()).toBe(1); // Old empty partition cleaned up
+    expect(engine.getActiveCellCount()).toBe(1);
+
+    // Remove player completely
+    engine.removePlayer('player-world-hopper');
+    expect(engine.getPartitionCount()).toBe(0);
+    expect(engine.getActiveCellCount()).toBe(0);
+  });
 });
+

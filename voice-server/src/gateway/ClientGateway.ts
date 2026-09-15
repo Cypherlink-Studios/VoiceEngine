@@ -8,8 +8,9 @@ import { PluginGateway } from './PluginGateway.js';
 import { ClientSession, ModerationActionPayload } from '../types.js';
 import { SettingsManager } from '../config/SettingsManager.js';
 import { AudioEmitterManager } from '../media/AudioEmitterManager.js';
-import { config } from '../config.js';
 import * as mediasoup from 'mediasoup';
+import { encodeSpatialBatch, BinaryPeerSpatial } from '../spatial/BinarySpatialCodec.js';
+import { config } from '../config.js';
 
 export class ClientGateway {
   private wss: WebSocketServer;
@@ -30,6 +31,12 @@ export class ClientGateway {
   private bannedDevices = new Map<string, { reason?: string; expiresAt?: number }>();
   private mutedUuids = new Map<string, { reason?: string; expiresAt?: number }>();
   private deafenedUuids = new Map<string, { reason?: string; expiresAt?: number }>();
+
+  // Asynchronous Mediasoup Consumer Reconciliation Queue
+  private isReconciling = false;
+  private pendingConsumerCreations = new Map<string, { listenerSession: ClientSession; speakerSession: ClientSession; peer: any }>();
+  private pendingConsumerPauses = new Map<string, { listenerSession: ClientSession; peerUuid: string; consumer: mediasoup.types.Consumer }>();
+  private pendingConsumerResumes = new Map<string, { listenerSession: ClientSession; peerUuid: string; consumer: mediasoup.types.Consumer }>();
 
   constructor(
     wss: WebSocketServer,
@@ -115,9 +122,10 @@ export class ClientGateway {
               clientRtpCapabilities = msg.rtpCapabilities;
               const sessionId = uuidv4();
 
-              // Create Mediasoup Transports
-              const sendTransport = await this.sfu.createWebRtcTransport();
-              const recvTransport = await this.sfu.createWebRtcTransport();
+              // Create Mediasoup Transports on least-loaded worker router
+              const router = this.sfu.getLeastLoadedRouter();
+              const sendTransport = await this.sfu.createWebRtcTransport(router);
+              const recvTransport = await this.sfu.createWebRtcTransport(router);
 
               const isMuted = Boolean(tokenRecord.isMuted) || this.isPlayerMuted(tokenRecord.playerUuid);
               const isDeafened = this.isPlayerDeafened(tokenRecord.playerUuid);
@@ -136,6 +144,7 @@ export class ClientGateway {
                 deviceId,
                 isMuted,
                 isDeafened,
+                supportsBinarySpatial: Boolean(msg.binarySpatial || msg.supportsBinary),
               };
 
               const existingSession = this.playerSessions.get(session.playerUuid);
@@ -224,6 +233,10 @@ export class ClientGateway {
               });
 
               session.producer = producer;
+              const sendRouter = this.sfu.getTransportRouter(session.sendTransport.id);
+              if (sendRouter) {
+                this.sfu.registerProducer(producer, sendRouter);
+              }
               if (session.isMuted) {
                 await producer.pause();
                 ws.send(
@@ -391,6 +404,8 @@ export class ClientGateway {
   private startProximityLoop(): void {
     // Evaluates proximity and channel routing every 100ms (10 Hz)
     this.loopInterval = setInterval(async () => {
+      const now = Date.now();
+
       for (const listenerSession of this.playerSessions.values()) {
         if (listenerSession.ws.readyState !== WebSocket.OPEN || !listenerSession.recvTransport) {
           continue;
@@ -399,77 +414,91 @@ export class ClientGateway {
         const channel = listenerSession.activeChannel || 'proximity';
 
         if (channel === 'proximity') {
-          // --- 1. Proximity 3D Audio Routing & Distance Pausing ---
-          const audiblePeers = this.spatialEngine.getAudiblePeersFor(listenerSession.playerUuid);
-          const activePeerUuids = new Set<string>();
-
-          for (const peer of audiblePeers) {
-            const speakerSession = this.playerSessions.get(peer.peerUuid);
-            // Only route if speaker is also in proximity channel and producing audio
-            if (
-              !speakerSession ||
-              !speakerSession.producer ||
-              (speakerSession.activeChannel && speakerSession.activeChannel !== 'proximity')
-            ) {
-              continue;
+          // --- 1. Proximity 3D Audio Routing with Deadband & Binary Batching ---
+          const { audiblePeerUuids, updates } = this.spatialEngine.getAudiblePeersEvaluation(
+            listenerSession.playerUuid,
+            true,
+            now
+          );
+          const validAudibleSpeakerUuids = new Set<string>();
+          for (const uuid of audiblePeerUuids) {
+            const speaker = this.playerSessions.get(uuid);
+            if (speaker && speaker.producer && (!speaker.activeChannel || speaker.activeChannel === 'proximity')) {
+              validAudibleSpeakerUuids.add(uuid);
             }
+          }
 
-            activePeerUuids.add(peer.peerUuid);
-            let consumer = listenerSession.consumers.get(peer.peerUuid);
+          const binaryBatch: BinaryPeerSpatial[] = [];
 
-            // If the consumer is referencing a stale producer from the speaker, clean it up
-            if (consumer && (!consumer.closed && consumer.producerId !== speakerSession.producer.id)) {
+          // Manage consumer lifecycle (creation / resume) for all valid audible speakers
+          for (const speakerUuid of validAudibleSpeakerUuids) {
+            const speakerSession = this.playerSessions.get(speakerUuid)!;
+
+            let consumer = listenerSession.consumers.get(speakerUuid);
+            if (consumer && (!consumer.closed && consumer.producerId !== speakerSession.producer!.id)) {
               try {
                 consumer.close();
               } catch {}
-              listenerSession.consumers.delete(peer.peerUuid);
+              listenerSession.consumers.delete(speakerUuid);
               consumer = undefined;
             }
 
             if (!consumer || consumer.closed) {
-              try {
-                consumer = await this.sfu.createConsumer(
-                  listenerSession.recvTransport,
-                  speakerSession.producer.id,
-                  this.sfu.getRtpCapabilities()
-                );
-
-                if (listenerSession.isDeafened) {
-                  await consumer.pause();
-                }
-
-                listenerSession.consumers.set(peer.peerUuid, consumer);
-
-                listenerSession.ws.send(
-                  JSON.stringify({
-                    type: 'new_consumer',
-                    peerUuid: peer.peerUuid,
-                    peerUsername: peer.peerUsername,
-                    consumerId: consumer.id,
-                    producerId: speakerSession.producer.id,
-                    rtpParameters: consumer.rtpParameters,
-                    relX: peer.relX,
-                    relY: peer.relY,
-                    relZ: peer.relZ,
-                    distance: peer.distance,
-                    isSubmerged: peer.isSubmerged,
-                    isChannel: false,
-                    isBroadcast: peer.isBroadcast || false,
-                  })
-                );
-              } catch (err) {
-                console.error(`[ClientGateway] Failed to create proximity consumer for ${peer.peerUuid}:`, err);
+              const creationKey = `${listenerSession.playerUuid}:${speakerUuid}`;
+              if (!this.pendingConsumerCreations.has(creationKey)) {
+                const peerUpdate = updates.find((u) => u.peerUuid === speakerUuid);
+                const peerInfo = peerUpdate || {
+                  peerUuid: speakerUuid,
+                  peerUsername: speakerSession.username,
+                  relX: 0,
+                  relY: 0,
+                  relZ: 0,
+                  distance: 0,
+                  isSubmerged: false,
+                  isBroadcast: false,
+                  isAudible: true,
+                };
+                this.pendingConsumerCreations.set(creationKey, {
+                  listenerSession,
+                  speakerSession,
+                  peer: peerInfo,
+                });
               }
+            } else if (consumer.paused && !listenerSession.isDeafened) {
+              const resumeKey = `${listenerSession.playerUuid}:${speakerUuid}`;
+              this.pendingConsumerResumes.set(resumeKey, {
+                listenerSession,
+                peerUuid: speakerUuid,
+                consumer,
+              });
+            }
+          }
+
+          // Dispatch spatial coordinate updates that passed the deadband threshold
+          for (const peer of updates) {
+            if (!validAudibleSpeakerUuids.has(peer.peerUuid)) {
+              continue;
+            }
+
+            const speakerSession = this.playerSessions.get(peer.peerUuid);
+            if (!speakerSession || !speakerSession.producer) {
+              continue;
+            }
+
+            const isPaused = Boolean(listenerSession.isDeafened);
+
+            if (listenerSession.supportsBinarySpatial) {
+              binaryBatch.push({
+                peerUuid: peer.peerUuid,
+                relX: peer.relX,
+                relY: peer.relY,
+                relZ: peer.relZ,
+                distance: peer.distance,
+                isSubmerged: peer.isSubmerged,
+                isPaused,
+                isBroadcast: peer.isBroadcast || false,
+              });
             } else {
-              // If consumer was paused due to distance, resume RTP transmission if not deafened
-              if (consumer.paused && !listenerSession.isDeafened) {
-                try {
-                  await consumer.resume();
-                } catch (err) {
-                  console.error(`[ClientGateway] Failed to resume consumer for ${peer.peerUuid}:`, err);
-                }
-              }
-
               listenerSession.ws.send(
                 JSON.stringify({
                   type: 'peer_spatial_update',
@@ -480,7 +509,7 @@ export class ClientGateway {
                   relZ: peer.relZ,
                   distance: peer.distance,
                   isSubmerged: peer.isSubmerged,
-                  isPaused: consumer.paused,
+                  isPaused,
                   isBroadcast: peer.isBroadcast || false,
                 })
               );
@@ -488,10 +517,8 @@ export class ClientGateway {
           }
 
           // Distance pausing for inaudible proximity consumers
-          // Instead of destroying consumers on distance threshold crossings, pause them.
-          // This keeps WebRTC transceivers intact and drops RTP packets to 0 with zero SDP renegotiation.
           for (const [peerUuid, consumer] of listenerSession.consumers.entries()) {
-            if (!activePeerUuids.has(peerUuid)) {
+            if (!validAudibleSpeakerUuids.has(peerUuid)) {
               const speakerSession = this.playerSessions.get(peerUuid);
               const stillInProximity =
                 speakerSession && (!speakerSession.activeChannel || speakerSession.activeChannel === 'proximity');
@@ -513,28 +540,58 @@ export class ClientGateway {
               } else {
                 // Speaker is still in proximity mode, but out of audible range -> Pause consumer
                 if (!consumer.paused) {
-                  try {
-                    await consumer.pause();
-                  } catch (err) {
-                    console.error(`[ClientGateway] Failed to pause consumer for ${peerUuid}:`, err);
-                  }
+                  const pauseKey = `${listenerSession.playerUuid}:${peerUuid}`;
+                  this.pendingConsumerPauses.set(pauseKey, {
+                    listenerSession,
+                    peerUuid,
+                    consumer,
+                  });
 
-                  listenerSession.ws.send(
-                    JSON.stringify({
-                      type: 'peer_spatial_update',
+                  if (listenerSession.supportsBinarySpatial) {
+                    binaryBatch.push({
                       peerUuid,
-                      peerUsername: speakerSession.username,
-                      distance: 999,
                       relX: 0,
                       relY: 0,
                       relZ: -999,
+                      distance: 999,
                       isSubmerged: false,
                       isPaused: true,
-                    })
-                  );
+                      isBroadcast: false,
+                    });
+                  } else {
+                    listenerSession.ws.send(
+                      JSON.stringify({
+                        type: 'peer_spatial_update',
+                        peerUuid,
+                        peerUsername: speakerSession.username,
+                        distance: 999,
+                        relX: 0,
+                        relY: 0,
+                        relZ: -999,
+                        isSubmerged: false,
+                        isPaused: true,
+                      })
+                    );
+                  }
                 }
               }
             }
+          }
+
+          // If speaker walked out of audible range before consumer was created, cancel pending creation
+          for (const key of this.pendingConsumerCreations.keys()) {
+            if (key.startsWith(`${listenerSession.playerUuid}:`)) {
+              const targetPeerUuid = key.split(':')[1];
+              if (!validAudibleSpeakerUuids.has(targetPeerUuid)) {
+                this.pendingConsumerCreations.delete(key);
+              }
+            }
+          }
+
+          // Dispatch compact binary batch frame if any updates were collected
+          if (listenerSession.supportsBinarySpatial && binaryBatch.length > 0) {
+            const buffer = encodeSpatialBatch(binaryBatch);
+            listenerSession.ws.send(buffer);
           }
         } else {
           // --- 2. Fixed Discord-Style Channel Audio Routing ---
@@ -676,7 +733,120 @@ export class ClientGateway {
           }
         }
       }
+
+      // Trigger asynchronous reconciliation of Mediasoup consumer actions
+      this.triggerConsumerReconciliation().catch((err) => {
+        console.error('[ClientGateway] Error during consumer reconciliation:', err);
+      });
     }, 100);
+  }
+
+  private async triggerConsumerReconciliation(): Promise<void> {
+    if (this.isReconciling) {
+      return;
+    }
+    this.isReconciling = true;
+
+    try {
+      // 1. Process pending consumer pauses
+      if (this.pendingConsumerPauses.size > 0) {
+        const pauses = Array.from(this.pendingConsumerPauses.entries());
+        this.pendingConsumerPauses.clear();
+        for (const [, item] of pauses) {
+          if (!item.consumer.closed && !item.consumer.paused) {
+            try {
+              await item.consumer.pause();
+            } catch (err: any) {
+              if (err?.name !== 'WorkerClosedError' && !err?.message?.includes('closed')) {
+                console.warn(`[ClientGateway] Failed to pause consumer for ${item.peerUuid}:`, err);
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Process pending consumer resumes
+      if (this.pendingConsumerResumes.size > 0) {
+        const resumes = Array.from(this.pendingConsumerResumes.entries());
+        this.pendingConsumerResumes.clear();
+        for (const [, item] of resumes) {
+          if (!item.consumer.closed && item.consumer.paused && !item.listenerSession.isDeafened) {
+            try {
+              await item.consumer.resume();
+            } catch (err: any) {
+              if (err?.name !== 'WorkerClosedError' && !err?.message?.includes('closed')) {
+                console.warn(`[ClientGateway] Failed to resume consumer for ${item.peerUuid}:`, err);
+              }
+            }
+          }
+        }
+      }
+
+      // 3. Process pending consumer creations
+      if (this.pendingConsumerCreations.size > 0) {
+        const creations = Array.from(this.pendingConsumerCreations.entries());
+        this.pendingConsumerCreations.clear();
+        for (const [, item] of creations) {
+          const { listenerSession, speakerSession, peer } = item;
+
+          // Verify session validity
+          if (
+            !this.sessions.has(listenerSession.sessionId) ||
+            !this.sessions.has(speakerSession.sessionId) ||
+            listenerSession.ws.readyState !== WebSocket.OPEN ||
+            !speakerSession.producer ||
+            speakerSession.producer.closed
+          ) {
+            continue;
+          }
+
+          const existingConsumer = listenerSession.consumers.get(speakerSession.playerUuid);
+          if (existingConsumer && !existingConsumer.closed) {
+            continue;
+          }
+
+          try {
+            const consumer = await this.sfu.createConsumer(
+              listenerSession.recvTransport,
+              speakerSession.producer.id,
+              this.sfu.getRtpCapabilities()
+            );
+
+            if (listenerSession.isDeafened) {
+              await consumer.pause();
+            }
+
+            listenerSession.consumers.set(speakerSession.playerUuid, consumer);
+
+            listenerSession.ws.send(
+              JSON.stringify({
+                type: 'new_consumer',
+                peerUuid: speakerSession.playerUuid,
+                peerUsername: speakerSession.username,
+                consumerId: consumer.id,
+                producerId: speakerSession.producer.id,
+                rtpParameters: consumer.rtpParameters,
+                relX: peer.relX,
+                relY: peer.relY,
+                relZ: peer.relZ,
+                distance: peer.distance,
+                isSubmerged: peer.isSubmerged,
+                isBroadcast: peer.isBroadcast || false,
+              })
+            );
+          } catch (err: any) {
+            if (err?.name !== 'WorkerClosedError' && !err?.message?.includes('closed')) {
+              console.error(
+                `[ClientGateway] Failed to create consumer for ${listenerSession.playerUuid} <- ${speakerSession.playerUuid}:`,
+                err
+              );
+            }
+          }
+        }
+      }
+    } finally {
+      this.isReconciling = false;
+    }
   }
 
   private broadcastChannelMembers(channelId: string): void {
@@ -738,6 +908,23 @@ export class ClientGateway {
 
     this.sessions.delete(session.sessionId);
     this.playerSessions.delete(session.playerUuid);
+
+    // Cancel any pending reconciliation actions involving this session
+    for (const key of this.pendingConsumerCreations.keys()) {
+      if (key.startsWith(`${session.playerUuid}:`) || key.endsWith(`:${session.playerUuid}`)) {
+        this.pendingConsumerCreations.delete(key);
+      }
+    }
+    for (const key of this.pendingConsumerPauses.keys()) {
+      if (key.startsWith(`${session.playerUuid}:`) || key.endsWith(`:${session.playerUuid}`)) {
+        this.pendingConsumerPauses.delete(key);
+      }
+    }
+    for (const key of this.pendingConsumerResumes.keys()) {
+      if (key.startsWith(`${session.playerUuid}:`) || key.endsWith(`:${session.playerUuid}`)) {
+        this.pendingConsumerResumes.delete(key);
+      }
+    }
 
     for (const consumer of session.consumers.values()) {
       try {

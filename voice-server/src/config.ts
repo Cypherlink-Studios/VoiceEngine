@@ -57,11 +57,11 @@ export const config = {
   
   // Mediasoup SFU settings
   mediasoup: {
-    numWorkers: 1,
+    numWorkers: Math.max(1, parseInt(process.env.MEDIASOUP_NUM_WORKERS || '1', 10)),
     workerSettings: {
       logLevel: 'warn' as const,
       rtcMinPort: parseInt(process.env.RTC_MIN_PORT || '40000', 10),
-      rtcMaxPort: parseInt(process.env.RTC_MAX_PORT || '40100', 10),
+      rtcMaxPort: parseInt(process.env.RTC_MAX_PORT || '49999', 10),
     },
     router: {
       mediaCodecs: [

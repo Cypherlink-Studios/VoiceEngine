@@ -3,6 +3,7 @@ import { types as mediasoupTypes } from 'mediasoup-client';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { MediaPipeline } from '../audio/MediaPipeline.js';
 import { PeerRadarInfo } from '../components/Radar.js';
+import { decodeSpatialBatch } from './BinarySpatialDecoder.js';
 
 export interface ChannelMember {
   uuid: string;
@@ -103,23 +104,31 @@ export class VoiceSignaling {
 
     this.device = new Device();
     this.ws = new WebSocket(this.wsUrl);
+    this.ws.binaryType = 'arraybuffer';
 
     this.ws.onopen = async () => {
       this.startPingLoop();
       this.mediaPipeline.setWsSend((data) => this.send(data));
       const deviceId = this.getOrCreateDeviceId();
-      // Send authentication request
+      // Send authentication request with binary spatial support flag
       this.send({
         type: 'client_auth',
         token: this.token,
         deviceId,
+        supportsBinary: true,
       });
     };
 
     this.ws.onmessage = async (event) => {
       try {
-        const msg = JSON.parse(event.data);
-        await this.handleMessage(msg, micStream);
+        if (event.data instanceof ArrayBuffer) {
+          this.handleBinarySpatialBatch(event.data);
+          return;
+        }
+        if (typeof event.data === 'string') {
+          const msg = JSON.parse(event.data);
+          await this.handleMessage(msg, micStream);
+        }
       } catch (err) {
         console.error('[VoiceSignaling] Error parsing message:', err);
       }
@@ -375,6 +384,58 @@ export class VoiceSignaling {
         this.dispatchPeersUpdatedThrottled();
         break;
       }
+    }
+  }
+
+  private handleBinarySpatialBatch(data: ArrayBuffer): void {
+    const batch = decodeSpatialBatch(data);
+    let updated = false;
+
+    for (const p of batch) {
+      this.pipeline.updatePeerPosition(
+        p.peerUuid,
+        p.relX,
+        p.relY,
+        p.relZ,
+        p.isSubmerged,
+        p.isPaused,
+        p.isBroadcast
+      );
+
+      if (p.isPaused) {
+        if (this.peersInfo.has(p.peerUuid)) {
+          this.peersInfo.delete(p.peerUuid);
+          updated = true;
+        }
+      } else {
+        const resolvedUsername = this.knownUsernames.get(p.peerUuid) || 'Player';
+        const current = this.peersInfo.get(p.peerUuid);
+        if (current) {
+          current.distance = p.distance;
+          current.relX = p.relX;
+          current.relY = p.relY;
+          current.relZ = p.relZ;
+          current.isSubmerged = p.isSubmerged;
+          current.username = resolvedUsername;
+          current.isBroadcast = p.isBroadcast;
+        } else {
+          this.peersInfo.set(p.peerUuid, {
+            uuid: p.peerUuid,
+            username: resolvedUsername,
+            distance: p.distance,
+            relX: p.relX,
+            relY: p.relY,
+            relZ: p.relZ,
+            isSubmerged: p.isSubmerged,
+            isBroadcast: p.isBroadcast,
+          });
+        }
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      this.dispatchPeersUpdatedThrottled();
     }
   }
 

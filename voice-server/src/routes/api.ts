@@ -5,6 +5,12 @@ import { AdminAuthManager } from '../auth/AdminAuthManager.js';
 import { SpatialEngine } from '../spatial/SpatialEngine.js';
 import { ClientGateway } from '../gateway/ClientGateway.js';
 import { PluginGateway } from '../gateway/PluginGateway.js';
+import { MediasoupManager } from '../sfu/MediasoupManager.js';
+import {
+  getMetricsContentType,
+  getMetricsSnapshot,
+  updateDynamicMetrics,
+} from '../metrics/PrometheusMetrics.js';
 
 export function createApiRouter(
   settingsManager: SettingsManager,
@@ -12,9 +18,22 @@ export function createApiRouter(
   adminAuthManager: AdminAuthManager,
   spatialEngine: SpatialEngine,
   getClientGateway: () => ClientGateway | undefined,
-  getPluginGateway: () => PluginGateway | undefined
+  getPluginGateway: () => PluginGateway | undefined,
+  getSfu?: () => MediasoupManager | undefined
 ): Router {
   const router = Router();
+
+  // Prometheus Metrics Exposition Endpoint
+  router.get('/metrics', async (_req: Request, res: Response) => {
+    try {
+      updateDynamicMetrics(spatialEngine, getSfu?.(), getClientGateway());
+      res.set('Content-Type', getMetricsContentType());
+      res.end(await getMetricsSnapshot());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error generating metrics';
+      res.status(500).send(message);
+    }
+  });
 
   // Public Configuration Endpoint
   router.get('/config/public', (_req: Request, res: Response) => {
@@ -80,6 +99,8 @@ export function createApiRouter(
   router.get('/admin/metrics', requireAdmin, (_req: Request, res: Response) => {
     const clientGateway = getClientGateway();
     const pluginGateway = getPluginGateway();
+    const sfu = getSfu?.();
+    const suppression = spatialEngine.getSuppressionStats();
 
     res.json({
       success: true,
@@ -89,6 +110,11 @@ export function createApiRouter(
       pluginConnected: pluginGateway ? pluginGateway.isPluginConnected() : false,
       trackedPlayers: spatialEngine.getAllPlayers().length,
       uptimeSeconds: Math.floor(process.uptime()),
+      // Enhanced Multi-Worker & Spatial Metrics
+      workers: sfu ? sfu.getWorkerStats() : [],
+      spatialHashCells: spatialEngine.getActiveCellCount(),
+      spatialPartitions: spatialEngine.getPartitionCount(),
+      deadband: suppression,
     });
   });
 

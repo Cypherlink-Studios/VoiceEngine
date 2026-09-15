@@ -67,6 +67,8 @@ export interface ServerVoiceConfig {
   maxVoiceDistance: number;
   sneakVoiceDistance: number;
   defaultBitrate: number;
+  spatialDeadbandDistance?: number;
+  spatialDeadbandYaw?: number;
 }
 
 export interface FixedChannelConfig {
@@ -100,6 +102,7 @@ export interface ClientSession {
   deviceId?: string;
   isMuted?: boolean;
   isDeafened?: boolean;
+  supportsBinarySpatial?: boolean;
 }
 
 export interface ModerationActionPayload {

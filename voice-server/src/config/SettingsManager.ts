@@ -17,6 +17,8 @@ export const DEFAULT_SETTINGS: ServerSettings = {
     maxVoiceDistance: 30.0,
     sneakVoiceDistance: 8.0,
     defaultBitrate: 64000,
+    spatialDeadbandDistance: 0.08,
+    spatialDeadbandYaw: 2.0,
   },
   fixedChannels: [
     {
@@ -138,12 +140,16 @@ export class SettingsManager {
     const sneakVoiceDist = typeof voice.sneakVoiceDistance === 'number' && voice.sneakVoiceDistance > 0 && voice.sneakVoiceDistance <= maxVoiceDist ? voice.sneakVoiceDistance : defaultCopy.voice.sneakVoiceDistance;
     const maxSlots = typeof voice.maxSlots === 'number' && voice.maxSlots >= 1 ? Math.floor(voice.maxSlots) : defaultCopy.voice.maxSlots;
     const defaultBitrate = typeof voice.defaultBitrate === 'number' && voice.defaultBitrate >= 16000 && voice.defaultBitrate <= 128000 ? voice.defaultBitrate : defaultCopy.voice.defaultBitrate;
+    const spatialDeadbandDistance = typeof voice.spatialDeadbandDistance === 'number' && voice.spatialDeadbandDistance >= 0 ? voice.spatialDeadbandDistance : 0.08;
+    const spatialDeadbandYaw = typeof voice.spatialDeadbandYaw === 'number' && voice.spatialDeadbandYaw >= 0 ? voice.spatialDeadbandYaw : 2.0;
 
     const cleanVoice = {
       maxSlots,
       maxVoiceDistance: maxVoiceDist,
       sneakVoiceDistance: sneakVoiceDist,
       defaultBitrate,
+      spatialDeadbandDistance,
+      spatialDeadbandYaw,
     };
 
     // Validate fixedChannels

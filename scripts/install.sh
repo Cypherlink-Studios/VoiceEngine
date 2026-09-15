@@ -93,6 +93,22 @@ else
     log_info "Using secret key provided via environment variable."
 fi
 
+# Number of Mediasoup workers (defaults to CPU core count)
+DETECTED_CORES=$(nproc 2>/dev/null || echo 2)
+MEDIASOUP_NUM_WORKERS="${MEDIASOUP_NUM_WORKERS:-$DETECTED_CORES}"
+log_info "Configured Mediasoup workers: ${MEDIASOUP_NUM_WORKERS}"
+
+# Optional Discord Webhook URL for watchdog health alerts
+DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
+if [ -z "$DISCORD_WEBHOOK_URL" ] && [ -t 0 ]; then
+    read -rp "Discord Webhook URL for health alerts (optional, press Enter to skip): " INPUT_DISCORD
+    DISCORD_WEBHOOK_URL="${INPUT_DISCORD:-}"
+fi
+if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+    log_info "Configured Discord health watchdog alerts."
+fi
+
+
 # ------------------------------------------------------------------------------
 # 3. System Package Provisioning
 # ------------------------------------------------------------------------------
@@ -229,20 +245,35 @@ log_info "Generating configuration file at ${REPO_DIR}/voice-server/.env..."
 cat <<EOF > "${REPO_DIR}/voice-server/.env"
 PORT=3000
 HOST=0.0.0.0
+NODE_ENV=production
 SECRET_KEY=${VOICE_SECRET}
+ENABLE_DEV_TOKENS=false
+
+# WebRTC / Mediasoup SFU & Multi-Worker Architecture
+ANNOUNCED_IP=${VOICE_IP}
+LISTEN_IP=0.0.0.0
+MEDIASOUP_NUM_WORKERS=${MEDIASOUP_NUM_WORKERS}
+RTC_MIN_PORT=40000
+RTC_MAX_PORT=49999
 
 # Spatial proximity thresholds (in Minecraft blocks)
 MAX_VOICE_DISTANCE=30.0
 SNEAK_VOICE_DISTANCE=8.0
 
-# Mediasoup WebRTC networking
-RTC_MIN_PORT=40000
-RTC_MAX_PORT=40100
-LISTEN_IP=0.0.0.0
-ANNOUNCED_IP=${VOICE_IP}
+# Observability & Watchdog Health Alerts
+EOF
 
-# Development join tokens (disabled in production)
-ENABLE_DEV_TOKENS=false
+if [ -n "$DISCORD_WEBHOOK_URL" ]; then
+    echo "DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}" >> "${REPO_DIR}/voice-server/.env"
+else
+    echo "# DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook_id/your_webhook_token" >> "${REPO_DIR}/voice-server/.env"
+fi
+
+cat <<EOF >> "${REPO_DIR}/voice-server/.env"
+
+# Media & Storage Settings
+MEDIA_MAX_CACHE_SIZE_MB=1024
+MEDIA_MAX_CACHE_AGE_DAYS=7
 EOF
 log_success "Created voice-server/.env configuration file."
 
@@ -346,7 +377,7 @@ ufw allow 22/tcp comment 'SSH' || true
 ufw allow 80/tcp comment 'HTTP / Certbot' || true
 ufw allow 443/tcp comment 'HTTPS / VoiceEngine' || true
 ufw allow 25565/tcp comment 'Minecraft Paper' || true
-ufw allow 40000:40100/udp comment 'Mediasoup WebRTC Media' || true
+ufw allow 40000:49999/udp comment 'Mediasoup WebRTC Media' || true
 
 if ! ufw status | grep -q "Status: active"; then
     log_info "Enabling UFW firewall..."

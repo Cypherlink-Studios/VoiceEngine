@@ -18,6 +18,12 @@ import { createMediaRouter } from './routes/media.js';
 import { MediaCacheService } from './media/MediaCacheService.js';
 import { AudioEmitterManager } from './media/AudioEmitterManager.js';
 import { BinaryResolver } from './media/BinaryResolver.js';
+import {
+  getMetricsContentType,
+  getMetricsSnapshot,
+  updateDynamicMetrics,
+} from './metrics/PrometheusMetrics.js';
+import { DiscordNotifier } from './alerting/DiscordNotifier.js';
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -91,6 +97,17 @@ BinaryResolver.checkDependencies().then((deps) => {
   console.warn('[MediaCache] Could not verify media tools:', err);
 });
 
+// Prometheus Metrics Scraper Endpoint
+app.get('/metrics', async (_req, res) => {
+  try {
+    updateDynamicMetrics(spatialEngine, sfu, clientGateway);
+    res.set('Content-Type', getMetricsContentType());
+    res.end(await getMetricsSnapshot());
+  } catch (err) {
+    res.status(500).send('Error collecting Prometheus metrics');
+  }
+});
+
 // API Routes
 app.use(
   '/api',
@@ -100,7 +117,8 @@ app.use(
     adminAuthManager,
     spatialEngine,
     () => clientGateway,
-    () => pluginGateway
+    () => pluginGateway,
+    () => sfu
   )
 );
 app.use('/api/media', createMediaRouter(mediaCacheService));
@@ -173,8 +191,13 @@ app.get('*', (_req, res, next) => {
   });
 });
 
+const discordNotifier = new DiscordNotifier();
+
 export async function startServer(): Promise<void> {
   await sfu.init();
+  if (process.env.DISCORD_WEBHOOK_URL) {
+    discordNotifier.startEventLoopLagMonitor(3000, 30);
+  }
   pluginGateway = new PluginGateway(
     pluginWss,
     config.secretKey,
@@ -208,6 +231,8 @@ export async function stopServer(): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log('[VoiceServer] Stopping server components...');
+
+  discordNotifier.stop();
 
   if (clientGateway) {
     clientGateway.shutdown();
@@ -272,5 +297,6 @@ export {
   audioEmitterManager,
   clientGateway,
   pluginGateway,
+  discordNotifier,
 };
 

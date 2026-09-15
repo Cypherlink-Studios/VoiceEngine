@@ -6,6 +6,7 @@ import { PluginGateway } from '../src/gateway/PluginGateway.js';
 import { TokenStore } from '../src/auth/TokenStore.js';
 import { SpatialEngine } from '../src/spatial/SpatialEngine.js';
 import { MediasoupManager } from '../src/sfu/MediasoupManager.js';
+import { decodeSpatialBatch } from '../src/spatial/BinarySpatialCodec.js';
 
 describe('ClientGateway', () => {
   let server: Server;
@@ -377,6 +378,144 @@ describe('ClientGateway', () => {
     expect(alexReceivedPause).toBe(true);
     expect(alexReceivedResume).toBe(true);
     expect(alexReceivedConsumerClosed).toBe(true);
+  });
+
+  it('dispatches binary batch frames to clients advertising supportsBinary', async () => {
+    const steveUuid = '11111111-1111-1111-1111-111111111111';
+    const alexUuid = '22222222-2222-2222-2222-222222222222';
+
+    tokenStore.registerToken({
+      token: 'STEVE_BIN',
+      playerUuid: steveUuid,
+      playerName: 'SteveBin',
+      expiresAt: Date.now() + 60000,
+    });
+    tokenStore.registerToken({
+      token: 'ALEX_BIN',
+      playerUuid: alexUuid,
+      playerName: 'AlexBin',
+      expiresAt: Date.now() + 60000,
+    });
+
+    spatialEngine.updatePlayer({
+      uuid: steveUuid,
+      username: 'SteveBin',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+    spatialEngine.updatePlayer({
+      uuid: alexUuid,
+      username: 'AlexBin',
+      world: 'world',
+      x: 5,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+
+    const steveWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const alexWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    let receivedBinaryBatch = false;
+
+    await new Promise<void>((resolve) => {
+      steveWs.on('open', () => {
+        steveWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'STEVE_BIN',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      steveWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          steveWs.send(
+            JSON.stringify({
+              type: 'produce',
+              kind: 'audio',
+              rtpParameters: {
+                codecs: [
+                  {
+                    mimeType: 'audio/opus',
+                    clockRate: 48000,
+                    channels: 2,
+                    payloadType: 111,
+                  },
+                ],
+                encodings: [{ ssrc: 22222222 }],
+              },
+            })
+          );
+        } else if (msg.type === 'produced') {
+          // Steve is now producing audio, authenticate Alex
+          alexWs.send(
+            JSON.stringify({
+              type: 'client_auth',
+              token: 'ALEX_BIN',
+              supportsBinary: true,
+              rtpCapabilities: sfu.getRtpCapabilities(),
+            })
+          );
+        }
+      });
+
+      alexWs.on('message', (data, isBinary) => {
+        if (typeof data === 'string' || (!isBinary && data.toString().startsWith('{'))) {
+          try {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'auth_success' || msg.type === 'new_consumer') {
+              // Move Steve to trigger a deadband update
+              spatialEngine.updatePlayer({
+                uuid: steveUuid,
+                username: 'SteveBin',
+                world: 'world',
+                x: 2,
+                y: 64,
+                z: 0,
+                yaw: 0,
+                pitch: 0,
+                isSneaking: false,
+                isSubmerged: false,
+              });
+            }
+          } catch {}
+        }
+
+        if (isBinary || data instanceof Buffer) {
+          try {
+            const buffer =
+              data instanceof Buffer
+                ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+                : (data as ArrayBuffer);
+            const peers = decodeSpatialBatch(buffer);
+            const steve = peers.find((p) => p.peerUuid === steveUuid);
+            if (steve) {
+              expect(steve.distance).toBeGreaterThan(0);
+              receivedBinaryBatch = true;
+              steveWs.close();
+              alexWs.close();
+              resolve();
+            }
+          } catch {
+            // Ignore parse errors on non-batch buffers
+          }
+        }
+      });
+    });
+
+    expect(receivedBinaryBatch).toBe(true);
   });
 });
 
