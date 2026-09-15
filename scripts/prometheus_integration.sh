@@ -33,10 +33,148 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
+# ------------------------------------------------------------------------------
+# Port Inspection & Conflict Resolution Helpers
+# ------------------------------------------------------------------------------
+is_port_in_use() {
+    local port="$1"
+    # Check using ss if available
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tuln 2>/dev/null | grep -qE "(:|\[::\]|0\.0\.0\.0:)${port}\b"; then
+            return 0
+        fi
+    fi
+    # Check using lsof if available
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof -iTCP:"${port}" -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    # Check using netstat if available
+    if command -v netstat >/dev/null 2>&1; then
+        if netstat -tuln 2>/dev/null | grep -qE "(:|\[::\]|0\.0\.0\.0:)${port}\b"; then
+            return 0
+        fi
+    fi
+    # Fallback to bash pseudo-device /dev/tcp (checks active socket binding)
+    if (exec 3<>/dev/tcp/127.0.0.1/"${port}") 2>/dev/null; then
+        exec 3<&-
+        exec 3>&-
+        return 0
+    fi
+    return 1
+}
+
+get_port_process() {
+    local port="$1"
+    local proc_info=""
+    if command -v lsof >/dev/null 2>&1; then
+        proc_info=$(lsof -iTCP:"${port}" -sTCP:LISTEN -P -n 2>/dev/null | awk 'NR>1 {print $1, "(PID: " $2 ")"}' | head -n 1)
+    fi
+    if [ -z "$proc_info" ] && command -v fuser >/dev/null 2>&1; then
+        local pid
+        pid=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' | xargs 2>/dev/null || true)
+        if [ -n "$pid" ]; then
+            local pname
+            pname=$(ps -p "$pid" -o comm= 2>/dev/null || echo "process")
+            proc_info="${pname} (PID: ${pid})"
+        fi
+    fi
+    if [ -z "$proc_info" ] && command -v ss >/dev/null 2>&1; then
+        proc_info=$(ss -tulpn "sport = :${port}" 2>/dev/null | grep -o 'users:((".*"))' | head -n 1)
+    fi
+    if [ -z "$proc_info" ]; then
+        echo "an active service"
+    else
+        echo "$proc_info"
+    fi
+}
+
+find_next_free_port() {
+    local start_port="$1"
+    local candidate="$start_port"
+    local max_attempts=50
+    local attempt=0
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        if ! is_port_in_use "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate=$((candidate + 1))
+        attempt=$((attempt + 1))
+    done
+    echo "$start_port"
+    return 1
+}
+
+resolve_port_conflict() {
+    local service_name="$1"
+    local current_port="$2"
+    local var_name="$3"
+
+    if ! is_port_in_use "$current_port"; then
+        log_info "Port ${current_port} is available for ${service_name}."
+        return 0
+    fi
+
+    local proc
+    proc=$(get_port_process "$current_port")
+    local suggested_port
+    suggested_port=$(find_next_free_port $((current_port + 1)))
+
+    log_warn "Port collision detected: Port ${current_port} is currently in use by ${proc}!"
+
+    if [ "$NON_INTERACTIVE" = "true" ] || [ ! -t 0 ]; then
+        log_info "Non-interactive mode active: Automatically reallocating ${service_name} to free port ${suggested_port}."
+        printf -v "$var_name" '%s' "$suggested_port"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}${BOLD}[!] Port Conflict Resolution for ${service_name}:${NC}"
+    echo -e "  Default port ${BOLD}${current_port}${NC} is occupied by ${CYAN}${proc}${NC}."
+    echo -e "  Suggested available port: ${GREEN}${suggested_port}${NC}"
+
+    local chosen_port=""
+    while true; do
+        read -rp "Enter port to use for ${service_name} [${suggested_port}]: " INPUT_PORT
+        chosen_port="${INPUT_PORT:-$suggested_port}"
+
+        if [[ ! "$chosen_port" =~ ^[0-9]+$ ]] || [ "$chosen_port" -lt 1 ] || [ "$chosen_port" -gt 65535 ]; then
+            log_error "Invalid port number '${chosen_port}'. Please enter a valid port between 1 and 65535."
+            continue
+        fi
+
+        if [ "$chosen_port" != "$current_port" ] && is_port_in_use "$chosen_port"; then
+            local occupying
+            occupying=$(get_port_process "$chosen_port")
+            log_warn "Port ${chosen_port} is also occupied by ${occupying}."
+            local next_free
+            next_free=$(find_next_free_port $((chosen_port + 1)))
+            echo -e "  Suggested alternative: ${GREEN}${next_free}${NC}"
+            continue
+        fi
+
+        break
+    done
+
+    printf -v "$var_name" '%s' "$chosen_port"
+    log_success "Port for ${service_name} set to ${chosen_port}."
+}
+
 # Resolve directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MONITORING_DIR="${REPO_DIR}/monitoring"
+
+# Auto-detect VoiceEngine port from voice-server/.env if present
+VOICE_PORT="3000"
+if [ -f "${REPO_DIR}/voice-server/.env" ]; then
+    DETECTED_VOICE_PORT=$(grep -E '^[[:space:]]*PORT=' "${REPO_DIR}/voice-server/.env" 2>/dev/null | cut -d'=' -f2 | tr -d ' "\r\n' || true)
+    if [ -n "$DETECTED_VOICE_PORT" ]; then
+        VOICE_PORT="$DETECTED_VOICE_PORT"
+    fi
+fi
 
 # Default configuration parameters
 MODE=""
@@ -46,7 +184,6 @@ RETENTION="15d"
 SECURITY="localhost"
 GRAFANA_PORT="3001"
 PROMETHEUS_PORT="9090"
-VOICEENGINE_HOST="3000"
 NON_INTERACTIVE="false"
 UNINSTALL="false"
 
@@ -65,6 +202,7 @@ print_usage() {
     echo -e "  --security <policy>          Access policy: 'localhost' (SSH tunnel), 'open' (UFW open), or 'nginx'"
     echo -e "  --grafana-port <port>        Host port for Grafana (default: 3001)"
     echo -e "  --prometheus-port <port>     Host port for Prometheus (default: 9090)"
+    echo -e "  --voice-port <port>          Target port where VoiceEngine is running (default: 3000 or detected from .env)"
     echo -e "  -y, --yes                    Non-interactive mode (use defaults or specified flags)"
     echo -e "  --uninstall                  Tear down and remove monitoring containers/services"
     echo -e "  -h, --help                   Show this help message and exit"
@@ -72,6 +210,7 @@ print_usage() {
     echo -e "Examples:"
     echo -e "  sudo bash scripts/prometheus_integration.sh"
     echo -e "  sudo bash scripts/prometheus_integration.sh --mode docker --with-grafana -y"
+    echo -e "  sudo bash scripts/prometheus_integration.sh --prometheus-port 9091 --grafana-port 3002"
     echo -e "  sudo bash scripts/prometheus_integration.sh --uninstall"
 }
 
@@ -110,6 +249,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --prometheus-port)
             PROMETHEUS_PORT="$2"
+            shift 2
+            ;;
+        --voice-port)
+            VOICE_PORT="$2"
             shift 2
             ;;
         -y|--yes)
@@ -170,11 +313,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Probe VoiceEngine /metrics endpoint
-if curl -fsS --max-time 2 "http://127.0.0.1:${VOICEENGINE_HOST}/metrics" >/dev/null 2>&1; then
-    log_success "Detected active VoiceEngine metrics endpoint at http://127.0.0.1:${VOICEENGINE_HOST}/metrics"
+if curl -fsS --max-time 2 "http://127.0.0.1:${VOICE_PORT}/metrics" >/dev/null 2>&1; then
+    log_success "Detected active VoiceEngine metrics endpoint at http://127.0.0.1:${VOICE_PORT}/metrics"
 else
-    log_warn "VoiceEngine endpoint at http://127.0.0.1:${VOICEENGINE_HOST}/metrics is not reachable yet."
-    log_warn "Prometheus will begin scraping automatically once VoiceEngine starts."
+    log_warn "VoiceEngine endpoint at http://127.0.0.1:${VOICE_PORT}/metrics is not reachable yet."
+    log_warn "Prometheus will begin scraping automatically once VoiceEngine starts on port ${VOICE_PORT}."
 fi
 
 # ------------------------------------------------------------------------------
@@ -245,8 +388,22 @@ fi
 # Fallback default if mode was not set
 MODE="${MODE:-docker}"
 
+# ------------------------------------------------------------------------------
+# Port Verification & Collision Resolution
+# ------------------------------------------------------------------------------
+log_info "Verifying port availability and checking for potential conflicts..."
+resolve_port_conflict "Prometheus" "$PROMETHEUS_PORT" PROMETHEUS_PORT
+
+if [ "$WITH_GRAFANA" = "true" ]; then
+    if [ "$GRAFANA_PORT" -eq "$PROMETHEUS_PORT" ]; then
+        GRAFANA_PORT=$(find_next_free_port $((PROMETHEUS_PORT + 1)))
+    fi
+    resolve_port_conflict "Grafana" "$GRAFANA_PORT" GRAFANA_PORT
+fi
+
 log_info "Deployment Configuration Summary:"
 log_info "  • Mode:             ${MODE}"
+log_info "  • VoiceEngine Port: ${VOICE_PORT}"
 log_info "  • Include Grafana:  ${WITH_GRAFANA}"
 log_info "  • Scrape Interval:  ${SCRAPE_INTERVAL}"
 log_info "  • Retention:        ${RETENTION}"
@@ -266,9 +423,9 @@ fi
 log_info "Generating Prometheus configuration..."
 mkdir -p "${MONITORING_DIR}/prometheus"
 
-TARGET_HOST="host.docker.internal:3000"
+TARGET_HOST="host.docker.internal:${VOICE_PORT}"
 if [ "$MODE" = "systemd" ]; then
-    TARGET_HOST="127.0.0.1:3000"
+    TARGET_HOST="127.0.0.1:${VOICE_PORT}"
 fi
 
 sed -e "s|__SCRAPE_INTERVAL__|${SCRAPE_INTERVAL}|g" \
@@ -377,10 +534,21 @@ elif [ "$MODE" = "systemd" ]; then
 
     cp "${MONITORING_DIR}/prometheus/prometheus.yml" /etc/prometheus/prometheus.yml
 
+    # Configure custom listen address if port differs from default (9090) or bind IP is restricted
+    if [ "$PROMETHEUS_PORT" != "9090" ] || [ "$BIND_IP" != "0.0.0.0" ]; then
+        log_info "Configuring Prometheus listen address to ${BIND_IP}:${PROMETHEUS_PORT} in /etc/default/prometheus..."
+        mkdir -p /etc/default
+        if [ -f /etc/default/prometheus ] && grep -q "^ARGS=" /etc/default/prometheus; then
+            sed -i "s|^ARGS=.*|ARGS=\"--web.listen-address=${BIND_IP}:${PROMETHEUS_PORT}\"|g" /etc/default/prometheus
+        else
+            echo "ARGS=\"--web.listen-address=${BIND_IP}:${PROMETHEUS_PORT}\"" >> /etc/default/prometheus
+        fi
+    fi
+
     systemctl daemon-reload
     systemctl restart prometheus
     systemctl enable prometheus
-    log_success "Native prometheus.service updated and active."
+    log_success "Native prometheus.service updated and active on port ${PROMETHEUS_PORT}."
 
     if [ "$WITH_GRAFANA" = "true" ]; then
         log_info "Installing Grafana package..."
@@ -391,15 +559,15 @@ elif [ "$MODE" = "systemd" ]; then
         apt-get update -y
         apt-get install -y grafana
 
-        # Configure port 3001 to prevent collision with VoiceEngine
+        # Configure port to prevent collision with VoiceEngine and other services
         mkdir -p /etc/grafana/provisioning/datasources
         mkdir -p /etc/grafana/provisioning/dashboards
         cp "${MONITORING_DIR}/grafana/datasources/prometheus-datasource.yml" /etc/grafana/provisioning/datasources/
-        sed -i 's|http://prometheus:9090|http://127.0.0.1:9090|g' /etc/grafana/provisioning/datasources/prometheus-datasource.yml
+        sed -i "s|http://prometheus:9090|http://127.0.0.1:${PROMETHEUS_PORT}|g" /etc/grafana/provisioning/datasources/prometheus-datasource.yml
         cp "${MONITORING_DIR}/grafana/dashboards/dashboard-provider.yml" /etc/grafana/provisioning/dashboards/
         cp "${MONITORING_DIR}/grafana/dashboards/voiceengine-overview.json" /etc/grafana/provisioning/dashboards/
 
-        # Set HTTP port to 3001 in grafana.ini
+        # Set HTTP port to configured GRAFANA_PORT in grafana.ini
         sed -i "s|;http_port = 3000|http_port = ${GRAFANA_PORT}|g" /etc/grafana/grafana.ini
 
         systemctl daemon-reload

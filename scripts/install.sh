@@ -31,6 +31,135 @@ log_error() {
 }
 
 # ------------------------------------------------------------------------------
+# Port Inspection & Conflict Resolution Helpers
+# ------------------------------------------------------------------------------
+is_port_in_use() {
+    local port="$1"
+    # Check using ss if available
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tuln 2>/dev/null | grep -qE "(:|\[::\]|0\.0\.0\.0:)${port}\b"; then
+            return 0
+        fi
+    fi
+    # Check using lsof if available
+    if command -v lsof >/dev/null 2>&1; then
+        if lsof -iTCP:"${port}" -sTCP:LISTEN -P -n >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    # Check using netstat if available
+    if command -v netstat >/dev/null 2>&1; then
+        if netstat -tuln 2>/dev/null | grep -qE "(:|\[::\]|0\.0\.0\.0:)${port}\b"; then
+            return 0
+        fi
+    fi
+    # Fallback to bash pseudo-device /dev/tcp (checks active socket binding)
+    if (exec 3<>/dev/tcp/127.0.0.1/"${port}") 2>/dev/null; then
+        exec 3<&-
+        exec 3>&-
+        return 0
+    fi
+    return 1
+}
+
+get_port_process() {
+    local port="$1"
+    local proc_info=""
+    if command -v lsof >/dev/null 2>&1; then
+        proc_info=$(lsof -iTCP:"${port}" -sTCP:LISTEN -P -n 2>/dev/null | awk 'NR>1 {print $1, "(PID: " $2 ")"}' | head -n 1)
+    fi
+    if [ -z "$proc_info" ] && command -v fuser >/dev/null 2>&1; then
+        local pid
+        pid=$(fuser "${port}/tcp" 2>/dev/null | tr -s ' ' | xargs 2>/dev/null || true)
+        if [ -n "$pid" ]; then
+            local pname
+            pname=$(ps -p "$pid" -o comm= 2>/dev/null || echo "process")
+            proc_info="${pname} (PID: ${pid})"
+        fi
+    fi
+    if [ -z "$proc_info" ] && command -v ss >/dev/null 2>&1; then
+        proc_info=$(ss -tulpn "sport = :${port}" 2>/dev/null | grep -o 'users:((".*"))' | head -n 1)
+    fi
+    if [ -z "$proc_info" ]; then
+        echo "an active service"
+    else
+        echo "$proc_info"
+    fi
+}
+
+find_next_free_port() {
+    local start_port="$1"
+    local candidate="$start_port"
+    local max_attempts=50
+    local attempt=0
+    while [ "$attempt" -lt "$max_attempts" ]; do
+        if ! is_port_in_use "$candidate"; then
+            echo "$candidate"
+            return 0
+        fi
+        candidate=$((candidate + 1))
+        attempt=$((attempt + 1))
+    done
+    echo "$start_port"
+    return 1
+}
+
+resolve_port_conflict() {
+    local service_name="$1"
+    local current_port="$2"
+    local var_name="$3"
+
+    if ! is_port_in_use "$current_port"; then
+        log_info "Port ${current_port} is available for ${service_name}."
+        return 0
+    fi
+
+    local proc
+    proc=$(get_port_process "$current_port")
+    local suggested_port
+    suggested_port=$(find_next_free_port $((current_port + 1)))
+
+    log_warn "Port collision detected: Port ${current_port} is currently in use by ${proc}!"
+
+    if [ "${NON_INTERACTIVE:-false}" = "true" ] || [ ! -t 0 ]; then
+        log_info "Non-interactive mode active: Automatically reallocating ${service_name} to free port ${suggested_port}."
+        printf -v "$var_name" '%s' "$suggested_port"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}${BOLD}[!] Port Conflict Resolution for ${service_name}:${NC}"
+    echo -e "  Default port ${BOLD}${current_port}${NC} is occupied by ${CYAN}${proc}${NC}."
+    echo -e "  Suggested available port: ${GREEN}${suggested_port}${NC}"
+
+    local chosen_port=""
+    while true; do
+        read -rp "Enter port to use for ${service_name} [${suggested_port}]: " INPUT_PORT
+        chosen_port="${INPUT_PORT:-$suggested_port}"
+
+        if [[ ! "$chosen_port" =~ ^[0-9]+$ ]] || [ "$chosen_port" -lt 1 ] || [ "$chosen_port" -gt 65535 ]; then
+            log_error "Invalid port number '${chosen_port}'. Please enter a valid port between 1 and 65535."
+            continue
+        fi
+
+        if [ "$chosen_port" != "$current_port" ] && is_port_in_use "$chosen_port"; then
+            local occupying
+            occupying=$(get_port_process "$chosen_port")
+            log_warn "Port ${chosen_port} is also occupied by ${occupying}."
+            local next_free
+            next_free=$(find_next_free_port $((chosen_port + 1)))
+            echo -e "  Suggested alternative: ${GREEN}${next_free}${NC}"
+            continue
+        fi
+
+        break
+    done
+
+    printf -v "$var_name" '%s' "$chosen_port"
+    log_success "Port for ${service_name} set to ${chosen_port}."
+}
+
+# ------------------------------------------------------------------------------
 # 1. Privileges and OS Compatibility Verification
 # ------------------------------------------------------------------------------
 if [ "$EUID" -ne 0 ]; then
@@ -107,6 +236,11 @@ fi
 if [ -n "$DISCORD_WEBHOOK_URL" ]; then
     log_info "Configured Discord health watchdog alerts."
 fi
+
+# VoiceEngine Backend HTTP and WebSocket Port
+VOICE_PORT="${VOICE_PORT:-3000}"
+resolve_port_conflict "VoiceEngine Backend" "$VOICE_PORT" VOICE_PORT
+log_info "Configured VoiceEngine port: ${VOICE_PORT}"
 
 
 # ------------------------------------------------------------------------------
@@ -243,7 +377,7 @@ log_success "Paper plugin built successfully in paper-plugin/build/libs/"
 # ------------------------------------------------------------------------------
 log_info "Generating configuration file at ${REPO_DIR}/voice-server/.env..."
 cat <<EOF > "${REPO_DIR}/voice-server/.env"
-PORT=3000
+PORT=${VOICE_PORT}
 HOST=0.0.0.0
 NODE_ENV=production
 SECRET_KEY=${VOICE_SECRET}
@@ -321,7 +455,7 @@ server {
     server_name ${VOICE_DOMAIN};
 
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:${VOICE_PORT};
         proxy_http_version 1.1;
 
         # WebSocket Upgrade headers
@@ -393,6 +527,7 @@ echo -e "${GREEN}=====================================================${NC}"
 echo -e "${GREEN}      VoiceEngine Deployment Completed!             ${NC}"
 echo -e "${GREEN}=====================================================${NC}"
 echo -e "• Service Status:        systemctl status voiceengine"
+echo -e "• Backend Port:          ${VOICE_PORT}"
 echo -e "• Web Client URL:        https://${VOICE_DOMAIN}"
 echo -e "• Backend Secret Key:    ${VOICE_SECRET}"
 echo -e "• Paper Plugin Artifact: ${REPO_DIR}/paper-plugin/build/libs/VoiceEngine-paper-1.0.0-SNAPSHOT.jar"
@@ -400,7 +535,7 @@ echo ""
 echo -e "${YELLOW}FINAL STEPS ON YOUR PAPER MINECRAFT SERVER:${NC}"
 echo -e "1. Copy the plugin JAR to your Paper server's 'plugins/' folder."
 echo -e "2. Configure 'plugins/VoiceEngine/config.yml' with:"
-echo -e "   voice-server-url: \"ws://127.0.0.1:3000/ws/plugin\""
+echo -e "   voice-server-url: \"ws://127.0.0.1:${VOICE_PORT}/ws/plugin\""
 echo -e "   web-client-url: \"https://${VOICE_DOMAIN}\""
 echo -e "   secret-key: \"${VOICE_SECRET}\""
 echo ""

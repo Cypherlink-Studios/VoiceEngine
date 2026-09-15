@@ -103,13 +103,28 @@ sudo bash scripts/prometheus_integration.sh \
 | `--security` | `localhost`, `nginx`, `open` | `localhost` | Network binding and firewall policy |
 | `--grafana-port` | Integer port | `3001` | Host port mapped to Grafana |
 | `--prometheus-port` | Integer port | `9090` | Host port mapped to Prometheus |
+| `--voice-port` | Integer port | `3000` | Port where VoiceEngine is running (auto-detected from `.env`) |
 | `-y`, `--yes` | None | `false` | Non-interactive mode using defaults |
 | `--uninstall` | None | `false` | Stop and remove monitoring stack |
 | `-h`, `--help` | None | - | Display help and argument reference |
 
 ---
 
-## 4. Secure Access via SSH Tunneling
+## 4. Port Conflict Resolution (Pterodactyl & Multi-Tenant VPSs)
+
+VPS environments hosting game control panels (such as **Pterodactyl Wings / Panel**), existing Docker containers, or auxiliary monitoring stacks often have common ports already occupied (e.g., `3000` used by Node apps or web panels, `3001` used by other frontends, or `9090` used by system metrics daemons).
+
+The VoiceEngine deployment scripts (`scripts/prometheus_integration.sh` and `scripts/install.sh`) feature intelligent port inspection and conflict handling:
+
+1. **Multi-Tool Detection**: Inspects socket bindings using `ss`, `lsof`, `netstat`, and `/dev/tcp` socket probing.
+2. **Process Identification**: Identifies the exact process name and PID occupying the port (e.g. `wings (PID: 1234)` or `docker-proxy (PID: 5678)`).
+3. **Interactive Reallocation**: In interactive mode, the wizard warns the operator, suggests the next available free port (e.g., `9091` or `3002`), and allows accepting or specifying a custom port.
+4. **Unattended Auto-Resolution (`-y`)**: When running non-interactively, collisions are automatically resolved to the next free port without failing or aborting the deployment.
+5. **Dynamic Target Scrapes**: Prometheus automatically scrapes the exact VoiceEngine port (`--voice-port` or auto-detected from `voice-server/.env`).
+
+---
+
+## 5. Secure Access via SSH Tunneling
 
 By default, Prometheus and Grafana are bound to `127.0.0.1` to protect sensitive operational metrics from public exposure.
 

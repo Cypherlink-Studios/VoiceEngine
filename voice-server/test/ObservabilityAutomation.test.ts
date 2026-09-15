@@ -91,12 +91,29 @@ describe('Observability Stack Automation Suite', () => {
       expect(script).toContain('--grafana-port');
       expect(script).toContain('--uninstall');
 
-      // Port collision prevention: Grafana port defaults to 3001
+      // Port collision prevention and conflict resolution
       expect(script).toContain('GRAFANA_PORT="3001"');
+      expect(script).toContain('--voice-port');
+      expect(script).toContain('is_port_in_use()');
+      expect(script).toContain('get_port_process()');
+      expect(script).toContain('find_next_free_port()');
+      expect(script).toContain('resolve_port_conflict()');
 
-      // Docker Compose target host mapping
+      // Docker Compose target host mapping with dynamic VoiceEngine port
       expect(script).toContain('host.docker.internal:host-gateway');
-      expect(script).toContain('host.docker.internal:3000');
+      expect(script).toContain('host.docker.internal:${VOICE_PORT}');
+    });
+
+    it('should include port conflict detection and resolution in the install.sh deployment script', () => {
+      const installScriptPath = path.join(repoRoot, 'scripts/install.sh');
+      expect(fs.existsSync(installScriptPath)).toBe(true);
+
+      const installScript = fs.readFileSync(installScriptPath, 'utf8');
+      expect(installScript).toContain('is_port_in_use()');
+      expect(installScript).toContain('find_next_free_port()');
+      expect(installScript).toContain('resolve_port_conflict "VoiceEngine Backend" "$VOICE_PORT" VOICE_PORT');
+      expect(installScript).toContain('PORT=${VOICE_PORT}');
+      expect(installScript).toContain('proxy_pass http://127.0.0.1:${VOICE_PORT};');
     });
   });
 
