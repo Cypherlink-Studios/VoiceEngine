@@ -3,6 +3,7 @@ import { Settings, Mic, Headphones, Users, Volume2, Activity, Sliders, X, Check,
 import { soundEffects } from '../../audio/SoundEffects.js';
 import { ChannelMember } from '../../net/VoiceSignaling.js';
 import { PeerRadarInfo } from '../Radar.js';
+import { useTranslation, LanguageSelector } from '../../i18n/index.js';
 
 export interface AudioConstraintsConfig {
   echoCancellation: boolean;
@@ -99,6 +100,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   speechProbability = 0,
   isFallbackMode = false,
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('devices');
   const [inputDevices, setInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [outputDevices, setOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -202,14 +204,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Settings className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">Configuración de Audio</h2>
-              <p className="text-xs text-slate-400">Dispositivos, volúmenes de jugadores y preferencias</p>
+              <h2 className="text-lg font-semibold text-slate-100">{t('settings.title')}</h2>
+              <p className="text-xs text-slate-400">{t('settings.subtitle')}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Cerrar (Esc)"
+            title={t('settings.closeTooltip')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -226,7 +228,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <Mic className="w-4 h-4" />
-            <span>Dispositivos</span>
+            <span>{t('settings.tabs.devices')}</span>
           </button>
 
           <button
@@ -238,7 +240,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Jugadores ({activePlayers.length})</span>
+            <span>{t('settings.tabs.players', { count: activePlayers.length })}</span>
           </button>
 
           <button
@@ -250,7 +252,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }`}
           >
             <Sliders className="w-4 h-4" />
-            <span>Preferencias & Red</span>
+            <span>{t('settings.tabs.preferences')}</span>
           </button>
         </div>
 
@@ -263,17 +265,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
                   <Mic className="w-4 h-4 text-emerald-400" />
-                  <span>Dispositivo de Entrada (Micrófono)</span>
+                  <span>{t('settings.devices.inputTitle')}</span>
                 </label>
                 <select
                   value={selectedInputId}
                   onChange={(e) => onSelectInputDevice(e.target.value)}
                   className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
                 >
-                  <option value="">Predeterminado del sistema</option>
+                  <option value="">{t('settings.devices.defaultDevice')}</option>
                   {inputDevices.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>
-                      {d.label || `Micrófono (${d.deviceId.slice(0, 8)}...)`}
+                      {d.label || `${t('settings.devices.selectInput')} (${d.deviceId.slice(0, 8)}...)`}
                     </option>
                   ))}
                 </select>
@@ -283,10 +285,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-purple-400" />
-                      <span className="text-xs font-semibold text-purple-200">Supresión de Ruido por IA (RNNoise)</span>
+                      <span className="text-xs font-semibold text-purple-200">{t('settings.devices.aiNoiseTitle')}</span>
                       {isFallbackMode && (
                         <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          Fallback Estándar
+                          {t('settings.devices.aiNoiseFallbackBadge')}
                         </span>
                       )}
                     </div>
@@ -303,7 +305,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Aísla la voz humana y filtra en tiempo real tecleos mecánicos, ventiladores y ruidos de fondo mediante redes neuronales.
+                    {t('settings.devices.aiNoiseDesc')}
                   </p>
                 </div>
 
@@ -313,7 +315,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-300 font-medium flex items-center gap-1.5">
                         <Sliders className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Volumen de Entrada (Ganancia)</span>
+                        <span>{t('settings.devices.inputGainTitle')}</span>
                       </span>
                       <span className="font-mono text-emerald-400 font-semibold">{Math.round(inputGain * 100)}%</span>
                     </div>
@@ -327,9 +329,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       className="w-full accent-emerald-500 cursor-pointer"
                     />
                     <div className="flex justify-between text-[10px] text-slate-500">
-                      <span>Mudo (0%)</span>
-                      <span>Normal (100%)</span>
-                      <span>Amplificado (200%)</span>
+                      <span>{t('settings.devices.gainMute')}</span>
+                      <span>{t('settings.devices.gainNormal')}</span>
+                      <span>{t('settings.devices.gainBoost')}</span>
                     </div>
                   </div>
                 )}
@@ -337,11 +339,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* Microphone Level Visualizer & VAD Calibration */}
                 <div className="pt-2 space-y-2.5 border-t border-white/10">
                   <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-300 font-medium">Nivel de Entrada y Detección de Voz</span>
+                    <span className="text-slate-300 font-medium">{t('settings.devices.vadTitle')}</span>
                     <div className="flex items-center gap-2">
                       {aiNoiseSuppression && (
                         <span className="font-mono text-[11px] text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/20">
-                          Voz IA: {aiProbPercent}%
+                          {t('settings.devices.voiceAi', { percent: aiProbPercent })}
                         </span>
                       )}
                       <span
@@ -351,7 +353,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             : 'bg-slate-800 text-slate-400 border border-white/10'
                         }`}
                       >
-                        {isSpeechActive ? 'Voz Transmitiendo' : 'Silencio / Ruido'}
+                        {isSpeechActive ? t('settings.devices.transmitting') : t('settings.devices.silent')}
                       </span>
                       <span className="font-mono text-emerald-400 text-xs">{micLevel}%</span>
                     </div>
@@ -372,7 +374,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {(onChangeVadSensitivity || onChangeVadThreshold) && (
                     <div className="pt-1 space-y-1.5">
                       <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span className="font-medium text-slate-300">Sensibilidad de Voz (VAD):</span>
+                        <span className="font-medium text-slate-300">{t('settings.devices.vadSensitivity')}</span>
                         <span className="font-mono text-amber-400 font-semibold">{sensitivityPercent}%</span>
                       </div>
                       <input
@@ -391,11 +393,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           }
                         }}
                         className="w-full accent-amber-500 cursor-pointer"
-                        title={`Sensibilidad VAD: ${sensitivityPercent}%`}
+                        title={`${t('settings.devices.vadSensitivity')} ${sensitivityPercent}%`}
                       />
                       <div className="flex justify-between text-[10px] text-slate-500">
-                        <span>Filtro estricto / ruidoso (0%)</span>
-                        <span>Alta sensibilidad / susurros (100%)</span>
+                        <span>{t('settings.devices.strictFilter')}</span>
+                        <span>{t('settings.devices.whisperFilter')}</span>
                       </div>
                     </div>
                   )}
@@ -405,10 +407,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="pr-3">
                       <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                         <Radio className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Prueba de Auto-Escucha (Loopback)</span>
+                        <span>{t('settings.devices.loopbackTitle')}</span>
                       </div>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Escúchate procesado en tiempo real con 180ms de retraso para ajustar tu micrófono.
+                        {t('settings.devices.loopbackDesc')}
                       </p>
                     </div>
                     <button
@@ -420,7 +422,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
                       }`}
                     >
-                      {isLoopbackActive ? 'Detener Prueba' : 'Iniciar Prueba'}
+                      {isLoopbackActive ? t('settings.devices.loopbackStop') : t('settings.devices.loopbackStart')}
                     </button>
                   </div>
                 </div>
@@ -431,7 +433,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium text-slate-200 flex items-center gap-2">
                     <Headphones className="w-4 h-4 text-emerald-400" />
-                    <span>Dispositivo de Salida (Auriculares / Altavoces)</span>
+                    <span>{t('settings.devices.outputTitle')}</span>
                   </label>
                   <button
                     onClick={handleTestOutput}
@@ -439,7 +441,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     className="text-xs px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors flex items-center gap-1.5"
                   >
                     <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{testSoundPlaying ? 'Reproduciendo...' : 'Probar sonido'}</span>
+                    <span>{testSoundPlaying ? t('settings.devices.testingSound') : t('settings.devices.testSoundButton')}</span>
                   </button>
                 </div>
                 <select
@@ -447,22 +449,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(e) => onSelectOutputDevice(e.target.value)}
                   className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 transition-colors"
                 >
-                  <option value="">Predeterminado del sistema</option>
+                  <option value="">{t('settings.devices.defaultDevice')}</option>
                   {outputDevices.map((d) => (
                     <option key={d.deviceId} value={d.deviceId}>
-                      {d.label || `Altavoz (${d.deviceId.slice(0, 8)}...)`}
+                      {d.label || `${t('settings.devices.selectOutput')} (${d.deviceId.slice(0, 8)}...)`}
                     </option>
                   ))}
                 </select>
                 <p className="text-[11px] text-slate-500">
-                  Nota: La selección de salida requiere compatibilidad del navegador con AudioContext.setSinkId.
+                  {t('settings.devices.outputNote')}
                 </p>
               </div>
 
               {/* Hardware Audio Filters */}
               <div className="space-y-3 pt-2 border-t border-white/10">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Filtros de Procesamiento de Voz
+                  {t('settings.devices.voiceFiltersTitle')}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950/50 border border-white/10 cursor-pointer hover:border-white/20 transition-colors">
@@ -474,7 +476,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }
                       className="rounded bg-slate-800 border-white/20 text-emerald-500 focus:ring-emerald-500"
                     />
-                    <span className="text-xs text-slate-200">Cancelación de Eco</span>
+                    <span className="text-xs text-slate-200">{t('settings.devices.echoCancellation')}</span>
                   </label>
 
                   <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950/50 border border-white/10 cursor-pointer hover:border-white/20 transition-colors">
@@ -486,7 +488,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }
                       className="rounded bg-slate-800 border-white/20 text-emerald-500 focus:ring-emerald-500"
                     />
-                    <span className="text-xs text-slate-200">Supresión de Ruido</span>
+                    <span className="text-xs text-slate-200">{t('settings.devices.noiseSuppression')}</span>
                   </label>
 
                   <label className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-950/50 border border-white/10 cursor-pointer hover:border-white/20 transition-colors">
@@ -498,7 +500,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       }
                       className="rounded bg-slate-800 border-white/20 text-emerald-500 focus:ring-emerald-500"
                     />
-                    <span className="text-xs text-slate-200">Ganancia Automática</span>
+                    <span className="text-xs text-slate-200">{t('settings.devices.autoGainControl')}</span>
                   </label>
                 </div>
               </div>
@@ -511,7 +513,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between gap-3">
                 <input
                   type="text"
-                  placeholder="Buscar jugador por nombre..."
+                  placeholder={t('settings.players.searchPlaceholder')}
                   value={playerFilter}
                   onChange={(e) => setPlayerFilter(e.target.value)}
                   className="flex-1 bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
@@ -520,13 +522,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onClick={onResetAllVolumes}
                   className="px-3 py-2 text-xs font-medium rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-white/10 transition-colors"
                 >
-                  Restablecer a 100%
+                  {t('settings.players.reset100')}
                 </button>
               </div>
 
               {activePlayers.length === 0 ? (
                 <div className="text-center py-10 text-slate-500 text-sm">
-                  No hay jugadores activos o audibles en este momento.
+                  {t('settings.players.emptyPlayers')}
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
@@ -552,7 +554,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           <div className="truncate">
                             <div className="text-sm font-medium text-slate-200">{player.username}</div>
                             <div className="text-[10px] text-slate-400">
-                              {player.isProximity ? 'Proximidad 3D' : 'Canal Fijo'}
+                              {player.isProximity ? t('settings.players.proximityBadge') : t('settings.players.channelBadge')}
                             </div>
                           </div>
                         </div>
@@ -570,7 +572,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             className="flex-1 h-1.5 bg-slate-700/80 rounded-lg appearance-none cursor-pointer accent-emerald-500 disabled:opacity-40"
                           />
                           <span className="w-10 text-right font-mono text-xs text-emerald-400">
-                            {isMuted ? 'MUTE' : `${percent}%`}
+                            {isMuted ? t('settings.players.mutedIndicator') : `${percent}%`}
                           </span>
                         </div>
 
@@ -583,7 +585,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
                           }`}
                         >
-                          {isMuted ? 'Desmutear' : 'Silenciar'}
+                          {isMuted ? t('settings.players.unmuteButton') : t('settings.players.muteButton')}
                         </button>
                       </div>
                     );
@@ -596,10 +598,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 3: PREFERENCES & NETWORK */}
           {activeTab === 'preferences' && (
             <div className="space-y-6">
+              {/* Language Selection */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  {t('settings.preferences.languageTitle')}
+                </h3>
+                <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-3">
+                  <p className="text-xs text-slate-400">
+                    {t('settings.preferences.languageDesc')}
+                  </p>
+                  <LanguageSelector variant="full" />
+                </div>
+              </div>
+
               {/* Media & Music Volume Controls */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Música y Medios Espaciales (Media)
+                  {t('settings.preferences.mediaSectionTitle')}
                 </h3>
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-4">
                   <div className="flex items-center justify-between">
@@ -608,9 +623,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <Music className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-slate-200">Silenciar Medios y Música</div>
+                        <div className="text-sm font-medium text-slate-200">{t('settings.preferences.mediaMuteTitle')}</div>
                         <div className="text-xs text-slate-400">
-                          Silencia transmisiones de audio y música de fondo sin alterar el volumen de voz
+                          {t('settings.preferences.mediaMuteDesc')}
                         </div>
                       </div>
                     </div>
@@ -631,7 +646,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {!mediaMuted && (
                     <div className="space-y-2 pt-2 border-t border-white/10">
                       <div className="flex justify-between text-xs text-slate-400">
-                        <span>Volumen de Medios y Música</span>
+                        <span>{t('settings.preferences.mediaVolumeTitle')}</span>
                         <span className="font-mono text-cyan-400">{Math.round((mediaVolume ?? 1.0) * 100)}%</span>
                       </div>
                       <input
@@ -651,14 +666,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Sound Effects */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Efectos de Sonido de Interfaz (SFX)
+                  {t('settings.preferences.sfxSectionTitle')}
                 </h3>
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-medium text-slate-200">Sonidos de Interfaz</div>
+                      <div className="text-sm font-medium text-slate-200">{t('settings.preferences.sfxTitle')}</div>
                       <div className="text-xs text-slate-400">
-                        Chimes y beeps sutiles para conectar, desconectar y conmutar mute/canales
+                        {t('settings.preferences.sfxDesc')}
                       </div>
                     </div>
                     <button
@@ -678,7 +693,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {sfxEnabled && (
                     <div className="space-y-2 pt-2 border-t border-white/10">
                       <div className="flex justify-between text-xs text-slate-400">
-                        <span>Volumen de Efectos</span>
+                        <span>{t('settings.preferences.sfxVolumeTitle')}</span>
                         <span className="font-mono text-emerald-400">{Math.round(sfxVolume * 100)}%</span>
                       </div>
                       <input
@@ -698,7 +713,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Streamer Mode & Privacy */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Privacidad & Modo Streamer
+                  {t('settings.preferences.streamerSectionTitle')}
                 </h3>
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-3 pr-4">
@@ -706,9 +721,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       {streamerMode ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-slate-200">Modo Streamer (Anti-Sniping)</div>
+                      <div className="text-sm font-medium text-slate-200">{t('settings.preferences.streamerTitle')}</div>
                       <div className="text-xs text-slate-400">
-                        Oculta tokens de sesión, URLs con credenciales y coordenadas relativas de jugadores en el radar.
+                        {t('settings.preferences.streamerDesc')}
                       </div>
                     </div>
                   </div>
@@ -730,23 +745,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Keyboard shortcuts */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Atajos de Teclado
+                  {t('settings.preferences.shortcutsTitle')}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
-                    <span className="text-sm text-slate-300">Mutear Mic</span>
+                    <span className="text-sm text-slate-300">{t('settings.preferences.muteMicShortcut')}</span>
                     <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
                       M
                     </kbd>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
-                    <span className="text-sm text-slate-300">Ensordecer</span>
+                    <span className="text-sm text-slate-300">{t('settings.preferences.deafenShortcut')}</span>
                     <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
                       D
                     </kbd>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-white/10">
-                    <span className="text-sm text-slate-300">Cerrar Menús</span>
+                    <span className="text-sm text-slate-300">{t('settings.preferences.closeMenusShortcut')}</span>
                     <kbd className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-md font-mono text-xs border border-white/10">
                       Esc
                     </kbd>
@@ -757,7 +772,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Network Latency Stats */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Diagnóstico de Red y Conexión
+                  {t('settings.preferences.diagnosticsTitle')}
                 </h3>
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -773,13 +788,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <Activity className="w-5 h-5" />
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-slate-200">Latencia WebSocket (RTT)</div>
+                      <div className="text-sm font-medium text-slate-200">{t('settings.preferences.wsLatency')}</div>
                       <div className="text-xs text-slate-400">
                         {pingMs !== null && pingMs < 70
-                          ? 'Conexión excelente'
+                          ? t('settings.preferences.pingExcellent')
                           : pingMs !== null && pingMs < 150
-                          ? 'Conexión estable'
-                          : 'Latencia elevada o reconectando'}
+                          ? t('settings.preferences.pingStable')
+                          : t('settings.preferences.pingHigh')}
                       </div>
                     </div>
                   </div>
@@ -799,7 +814,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold text-sm transition-colors flex items-center gap-2"
           >
             <Check className="w-4 h-4" />
-            <span>Listo</span>
+            <span>{t('common.ready')}</span>
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { PublicFixedChannel } from '../layout/BrandProvider.js';
 import { Radio, Users, Volume2, Shield } from 'lucide-react';
 import { ChannelMember } from '../../net/VoiceSignaling.js';
+import { useTranslation } from '../../i18n/index.js';
 
 interface ChannelDrawerProps {
   activeChannel: string;
@@ -19,14 +20,16 @@ export function ChannelDrawer({
   onSelectChannel,
   onMemberClick,
 }: ChannelDrawerProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-3 w-full max-w-md bg-slate-900/60 backdrop-blur-md rounded-2xl border border-white/10 p-4 shadow-xl">
       <div className="flex items-center justify-between border-b border-white/10 pb-2">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
           <Radio className="w-4 h-4 text-emerald-400" />
-          <span>Voice Channels</span>
+          <span>{t('channels.title')}</span>
         </div>
-        <span className="text-[11px] text-slate-400">Click to switch</span>
+        <span className="text-[11px] text-slate-400">{t('channels.switchHint')}</span>
       </div>
 
       {/* Proximity 3D Option */}
@@ -50,14 +53,14 @@ export function ChannelDrawer({
           </div>
           <div>
             <div className="text-sm font-medium text-white flex items-center gap-2">
-              <span>Proximity Chat (3D)</span>
+              <span>{t('channels.proximityTitle')}</span>
               {activeChannel === 'proximity' && (
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Active
+                  {t('channels.activeBadge')}
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-400">Positional spatial audio based on in-game coordinates</div>
+            <div className="text-xs text-slate-400">{t('channels.proximityDesc')}</div>
           </div>
         </div>
 
@@ -70,7 +73,7 @@ export function ChannelDrawer({
       {/* Fixed Channels (Discord-Style) */}
       <div className="flex flex-col gap-2">
         <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-400 px-1 pt-1">
-          Global Rooms (Stereo)
+          {t('channels.globalRooms')}
         </div>
 
         {fixedChannels.map((channel) => {
@@ -103,7 +106,7 @@ export function ChannelDrawer({
                       <span>{channel.name}</span>
                       {isActive && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                          Active
+                          {t('channels.activeBadge')}
                         </span>
                       )}
                     </div>
@@ -133,7 +136,7 @@ export function ChannelDrawer({
                         onMemberClick?.(member);
                       }}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950/80 hover:bg-slate-900 border border-white/10 hover:border-white/25 text-xs text-slate-200 cursor-pointer transition-colors"
-                      title={`Clic para ajustar volumen de ${member.username}`}
+                      title={t('channels.adjustVolumeTooltip', { user: member.username })}
                     >
                       <div className="relative">
                         <img

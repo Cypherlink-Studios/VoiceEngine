@@ -15,10 +15,12 @@ import { QrCompanionModal } from '../components/player/QrCompanionModal.js';
 import { PipOverlay } from '../components/player/PipOverlay.js';
 import { soundEffects } from '../audio/SoundEffects.js';
 import { useBrand } from '../components/layout/BrandProvider.js';
+import { useTranslation, LanguageSelector } from '../i18n/index.js';
 
 export function PlayerRoute() {
   const [searchParams] = useSearchParams();
   const { config } = useBrand();
+  const { t } = useTranslation();
 
   const [tokenInput, setTokenInput] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
@@ -311,7 +313,7 @@ export function PlayerRoute() {
       await signaling.connect(sendStream);
     } catch (err: unknown) {
       console.error('[PlayerRoute] Connection failed:', err);
-      const message = err instanceof Error ? err.message : 'Microphone access denied or connection failed.';
+      const message = err instanceof Error ? err.message : t('auth.genericError');
       setErrorMsg(message);
       setIsConnecting(false);
     }
@@ -830,15 +832,16 @@ export function PlayerRoute() {
           </div>
         </div>
 
-        {/* User Identity / Status */}
+        {/* User Identity / Status & Language */}
         <div className="flex items-center gap-3">
+          <LanguageSelector variant="compact" />
           {streamerMode && (
             <div
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold text-indigo-300 bg-indigo-500/20 border border-indigo-500/40 shadow-sm"
-              title="Modo Streamer activado: tokens y datos sensibles ocultos"
+              title={t('auth.streamerTitle')}
             >
               <EyeOff className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Modo Streamer</span>
+              <span className="hidden sm:inline">{t('auth.streamerBadge')}</span>
             </div>
           )}
           {isConnected && localPlayer ? (
@@ -850,18 +853,18 @@ export function PlayerRoute() {
               />
               <div className="text-left">
                 <div className="text-xs font-semibold text-white leading-tight">
-                  {streamerMode ? 'Jugador' : localPlayer.username}
+                  {streamerMode ? t('auth.playerFallback') : localPlayer.username}
                 </div>
                 <div className="text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Connected</span>
+                  <span>{t('auth.connectedStatus')}</span>
                 </div>
               </div>
             </div>
           ) : (
             <div className="text-xs text-slate-400 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Zero-Mod Proximity Audio</span>
+              <span>{t('auth.zeroModSubtitle')}</span>
             </div>
           )}
         </div>
@@ -876,18 +879,26 @@ export function PlayerRoute() {
             </div>
             <div>
               <div className="font-bold uppercase tracking-wider text-[10px] text-amber-400 flex items-center gap-1.5">
-                <span>Acción de Moderación</span>
+                <span>{t('moderation.bannerTitle')}</span>
                 <span>•</span>
-                <span>{moderationNotice.action === 'mute' ? 'Silenciado' : moderationNotice.action === 'deafen' ? 'Ensordecido' : moderationNotice.action}</span>
+                <span>
+                  {moderationNotice.action === 'mute'
+                    ? t('moderation.actionMute')
+                    : moderationNotice.action === 'deafen'
+                    ? t('moderation.actionDeafen')
+                    : moderationNotice.action}
+                </span>
               </div>
-              <p className="text-slate-200 mt-0.5">{moderationNotice.reason || 'Sanción aplicada por el personal de moderación.'}</p>
+              <p className="text-slate-200 mt-0.5">{moderationNotice.reason || t('moderation.defaultReason')}</p>
             </div>
           </div>
           {moderationNotice.expiresAt && moderationNotice.expiresAt > 0 && (
             <div className="text-right shrink-0 ml-4">
-              <span className="text-[10px] text-slate-400 uppercase block font-mono">Expira en</span>
+              <span className="text-[10px] text-slate-400 uppercase block font-mono">{t('moderation.expiresIn')}</span>
               <span className="font-mono text-amber-400 font-bold">
-                {Math.max(0, Math.ceil((moderationNotice.expiresAt - Date.now()) / 1000))}s
+                {t('moderation.expiresSeconds', {
+                  secs: Math.max(0, Math.ceil((moderationNotice.expiresAt - Date.now()) / 1000)),
+                })}
               </span>
             </div>
           )}
@@ -914,18 +925,17 @@ export function PlayerRoute() {
             </div>
 
             <h2 className="text-xl font-bold text-white mb-1">
-              Join Proximity Voice
+              {t('auth.joinTitle')}
             </h2>
             <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-              {config.branding.welcomeMessage ||
-                'Type /voice in the Minecraft chat to get your direct connect link.'}
+              {config.branding.welcomeMessage || t('auth.defaultWelcome')}
             </p>
 
             <div className="w-full flex flex-col gap-3">
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="ENTER JOIN CODE"
+                  placeholder={t('auth.joinCodePlaceholder')}
                   value={tokenInput}
                   onChange={(e) => setTokenInput(e.target.value.toUpperCase())}
                   className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-center text-sm font-mono tracking-widest text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all uppercase"
@@ -942,11 +952,11 @@ export function PlayerRoute() {
                 }}
               >
                 {isConnecting ? (
-                  <span>Connecting microphone...</span>
+                  <span>{t('auth.connectingButton')}</span>
                 ) : (
                   <>
                     <Headphones className="w-4 h-4" />
-                    <span>Connect Voice</span>
+                    <span>{t('auth.connectButton')}</span>
                   </>
                 )}
               </button>
@@ -954,7 +964,7 @@ export function PlayerRoute() {
 
             <div className="mt-6 flex items-center gap-2 text-[11px] text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Binaural 3D Spatial Audio • Vanilla Minecraft Compatible</span>
+              <span>{t('auth.binauralSubtitle')}</span>
             </div>
           </div>
         ) : (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from '../../i18n/index.js';
 
 export interface PlayerVolumePopoverProps {
   peerUuid: string;
@@ -31,6 +32,7 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
   onClose,
   className = '',
 }) => {
+  const { t } = useTranslation();
   const percent = Math.round(volume * 100);
 
   return (
@@ -54,7 +56,7 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
             {distance !== undefined && (
               <div className="text-[10px] font-mono text-slate-400">
                 {streamerMode
-                  ? `~${Math.round(distance)}m • coords ocultas`
+                  ? `~${Math.round(distance)}m • ${t('popovers.hiddenCoords')}`
                   : `${Math.round(distance)}m (${relX?.toFixed(0)}, ${relY?.toFixed(0)}, ${relZ?.toFixed(0)})`}
               </div>
             )}
@@ -63,7 +65,7 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
-          title="Cerrar"
+          title={t('common.close')}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -74,8 +76,8 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
       {/* Volume slider */}
       <div className="mt-3 space-y-2">
         <div className="flex justify-between items-center text-xs">
-          <span className="text-slate-400">Volumen Local</span>
-          <span className="font-semibold font-mono text-emerald-400">{isMuted ? '0% (Silenciado)' : `${percent}%`}</span>
+          <span className="text-slate-400">{t('popovers.volume')}</span>
+          <span className="font-semibold font-mono text-emerald-400">{isMuted ? `0% (${t('popovers.mutedStatus')})` : `${percent}%`}</span>
         </div>
         <input
           type="range"
@@ -101,7 +103,7 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
 
       {/* Mute action */}
       <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-        <span className="text-xs text-slate-400">Silenciar para mí</span>
+        <span className="text-xs text-slate-400">{t('popovers.muteForMe')}</span>
         <button
           onClick={() => onMuteToggle(peerUuid, !isMuted)}
           className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors ${
@@ -116,14 +118,14 @@ export const PlayerVolumePopover: React.FC<PlayerVolumePopoverProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
               </svg>
-              <span>Desmutear</span>
+              <span>{t('popovers.unmute')}</span>
             </>
           ) : (
             <>
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
               </svg>
-              <span>Silenciar</span>
+              <span>{t('popovers.mute')}</span>
             </>
           )}
         </button>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Smartphone, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import QRCode from 'qrcode';
+import { useTranslation } from '../../i18n/index.js';
 
 export interface QrCompanionModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
   sessionUrl,
   streamerMode,
 }) => {
+  const { t } = useTranslation();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [revealInStreamerMode, setRevealInStreamerMode] = useState<boolean>(false);
 
@@ -53,7 +55,7 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          title="Cerrar"
+          title={t('common.close')}
         >
           <X className="w-5 h-5" />
         </button>
@@ -61,10 +63,10 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
         {/* Header */}
         <div className="flex items-center gap-2.5 mb-1 text-emerald-400">
           <Smartphone className="w-6 h-6" />
-          <h2 className="text-lg font-bold text-white">Consola Móvil</h2>
+          <h2 className="text-lg font-bold text-white">{t('qr.mobileConsoleTitle')}</h2>
         </div>
         <p className="text-xs text-slate-400 text-center mb-5 max-w-[280px]">
-          Escanea este código con tu teléfono o tablet para usarlo como panel de voz táctil en tu escritorio.
+          {t('qr.description')}
         </p>
 
         {/* QR Code Container */}
@@ -72,14 +74,14 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
           {isMasked ? (
             <div className="flex flex-col items-center justify-center p-4 text-center bg-slate-950 rounded-xl w-full h-full border border-white/10">
               <EyeOff className="w-8 h-8 text-amber-400 mb-2" />
-              <p className="text-xs font-semibold text-slate-200 mb-1">Modo Streamer Activo</p>
-              <p className="text-[11px] text-slate-400 mb-3">El código QR contiene tu token de sesión.</p>
+              <p className="text-xs font-semibold text-slate-200 mb-1">{t('qr.streamerModeTitle')}</p>
+              <p className="text-[11px] text-slate-400 mb-3">{t('qr.streamerModeNotice')}</p>
               <button
                 onClick={() => setRevealInStreamerMode(true)}
                 className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span>Mostrar QR</span>
+                <span>{t('qr.showQr')}</span>
               </button>
             </div>
           ) : qrDataUrl ? (
@@ -90,7 +92,7 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
             />
           ) : (
             <div className="flex items-center justify-center text-slate-500 text-xs animate-pulse">
-              Generando código QR...
+              {t('qr.generating')}
             </div>
           )}
         </div>
@@ -99,15 +101,15 @@ export const QrCompanionModal: React.FC<QrCompanionModalProps> = ({
         <div className="mt-5 w-full bg-slate-950/60 border border-white/10 rounded-xl p-3 text-[11px] text-slate-400 space-y-1.5">
           <div className="flex items-center gap-2 text-slate-300">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>Sin descargas ni apps: corre en el navegador móvil.</span>
+            <span>{t('qr.perkNoApps')}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-300">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>Mantiene la pantalla encendida automáticamente.</span>
+            <span>{t('qr.perkWakeLock')}</span>
           </div>
           <div className="flex items-center gap-2 text-slate-300">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span>Vibración háptica al mutear o cambiar de canal.</span>
+            <span>{t('qr.perkHaptics')}</span>
           </div>
         </div>
       </div>
