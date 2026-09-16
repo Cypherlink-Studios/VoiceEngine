@@ -36,10 +36,12 @@ export class MicrophonePipeline {
   private isFallbackMode = false;
   private isInitialized = false;
 
-  private hangoverTimer: ReturnType<typeof setTimeout> | null = null;
-  private animFrameId: number | null = null;
+  private workerTicker: Worker | null = null;
+  private intervalTicker: ReturnType<typeof setInterval> | null = null;
   private latestSpeechProb = 0;
+  private lastSpeechTime = 0;
   private isDestroyed = false;
+  private analysisBuffer = new Float32Array(512);
 
   constructor(
     stream: MediaStream,
@@ -62,6 +64,13 @@ export class MicrophonePipeline {
       sampleRate: 48000,
       latencyHint: 'interactive',
     });
+
+    // Auto-resume audio context if suspended when tab transitions to background
+    this.audioContext.onstatechange = () => {
+      if (this.audioContext.state === 'suspended' && !this.isDestroyed) {
+        this.audioContext.resume().catch(() => {});
+      }
+    };
 
     // 1. 80Hz High-Pass Filter: strips sub-bass rumble, desk taps, AC hum, breath pops
     this.highPassFilter = this.audioContext.createBiquadFilter();
@@ -169,6 +178,7 @@ export class MicrophonePipeline {
       if (event.data?.type === 'vad' && typeof event.data.probability === 'number') {
         this.latestSpeechProb = event.data.probability;
         this.callbacks.onSpeechProbabilityChange?.(this.latestSpeechProb);
+        this.evaluateVad();
       }
     };
 
@@ -281,64 +291,90 @@ export class MicrophonePipeline {
     this.updateGateGain();
   }
 
+  private evaluateVad(): void {
+    if (this.isDestroyed || !this.isInitialized) return;
+
+    this.analyserNode.getFloatTimeDomainData(this.analysisBuffer);
+
+    let sumSquares = 0;
+    for (let i = 0; i < this.analysisBuffer.length; i++) {
+      sumSquares += this.analysisBuffer[i] * this.analysisBuffer[i];
+    }
+    const rms = Math.sqrt(sumSquares / this.analysisBuffer.length);
+    const normalizedVolume = Math.min(1.0, rms * 4.0);
+    this.callbacks.onVolumeChange?.(normalizedVolume);
+
+    // Hybrid VAD Decision:
+    // When RNNoise is active and not bypassed: combine neural voice probability with minimum volume floor
+    // When fallback or bypassed: use sensitivity-calibrated RMS volume threshold
+    let isSpeechDetected = false;
+
+    if (!this.isFallbackMode && this.noiseSuppressionEnabled && this.rnnoiseNode) {
+      // Sensitivity maps:
+      // 0.0 (aggressive noise filter) -> requires 80% voice probability and higher volume
+      // 1.0 (high sensitivity) -> requires 45% voice probability and lower volume
+      const requiredProb = 0.80 - this.vadSensitivity * 0.35;
+      const minRmsFloor = Math.max(0.005, 0.035 - this.vadSensitivity * 0.03);
+      isSpeechDetected = this.latestSpeechProb >= requiredProb && rms >= minRmsFloor;
+    } else {
+      // RMS threshold calibration (0.005 to 0.12)
+      const rmsThreshold = 0.12 - this.vadSensitivity * 0.11;
+      isSpeechDetected = rms >= rmsThreshold;
+    }
+
+    const now = performance.now();
+    if (isSpeechDetected) {
+      this.lastSpeechTime = now;
+
+      if (!this.isSpeaking) {
+        this.isSpeaking = true;
+        this.callbacks.onSpeakingChange?.(true);
+        this.updateGateGain();
+      }
+    } else if (this.isSpeaking) {
+      if (now - this.lastSpeechTime >= this.hangoverMs) {
+        this.isSpeaking = false;
+        this.callbacks.onSpeakingChange?.(false);
+        this.updateGateGain();
+      }
+    }
+  }
+
   private startMonitoringLoop(): void {
-    const buffer = new Float32Array(this.analyserNode.fftSize);
-
-    const tick = () => {
-      if (this.isDestroyed) return;
-
-      this.analyserNode.getFloatTimeDomainData(buffer);
-
-      let sumSquares = 0;
-      for (let i = 0; i < buffer.length; i++) {
-        sumSquares += buffer[i] * buffer[i];
-      }
-      const rms = Math.sqrt(sumSquares / buffer.length);
-      const normalizedVolume = Math.min(1.0, rms * 4.0);
-      this.callbacks.onVolumeChange?.(normalizedVolume);
-
-      // Hybrid VAD Decision:
-      // When RNNoise is active and not bypassed: combine neural voice probability with minimum volume floor
-      // When fallback or bypassed: use sensitivity-calibrated RMS volume threshold
-      let isSpeechDetected = false;
-
-      if (!this.isFallbackMode && this.noiseSuppressionEnabled && this.rnnoiseNode) {
-        // Sensitivity maps:
-        // 0.0 (aggressive noise filter) -> requires 80% voice probability and higher volume
-        // 1.0 (high sensitivity) -> requires 45% voice probability and lower volume
-        const requiredProb = 0.80 - this.vadSensitivity * 0.35;
-        const minRmsFloor = Math.max(0.005, 0.035 - this.vadSensitivity * 0.03);
-        isSpeechDetected = this.latestSpeechProb >= requiredProb && rms >= minRmsFloor;
-      } else {
-        // RMS threshold calibration (0.005 to 0.12)
-        const rmsThreshold = 0.12 - this.vadSensitivity * 0.11;
-        isSpeechDetected = rms >= rmsThreshold;
-      }
-
-      if (isSpeechDetected) {
-        if (this.hangoverTimer) {
-          clearTimeout(this.hangoverTimer);
-          this.hangoverTimer = null;
-        }
-
-        if (!this.isSpeaking) {
-          this.isSpeaking = true;
-          this.callbacks.onSpeakingChange?.(true);
-          this.updateGateGain();
-        }
-      } else if (this.isSpeaking && !this.hangoverTimer) {
-        this.hangoverTimer = setTimeout(() => {
-          this.isSpeaking = false;
-          this.hangoverTimer = null;
-          this.callbacks.onSpeakingChange?.(false);
-          this.updateGateGain();
-        }, this.hangoverMs);
-      }
-
-      this.animFrameId = requestAnimationFrame(tick);
-    };
-
-    this.animFrameId = requestAnimationFrame(tick);
+    // Spawn a dedicated inline Web Worker timer to tick continuously at 25ms (~40Hz)
+    // Web Worker timers are exempt from background tab timer throttling and display repaint pausing
+    try {
+      const workerCode = `
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) {
+              timer = setInterval(function() {
+                self.postMessage('tick');
+              }, 25);
+            }
+          } else if (e.data === 'stop') {
+            if (timer) {
+              clearInterval(timer);
+              timer = null;
+            }
+          }
+        };
+      `;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob);
+      this.workerTicker = new Worker(workerUrl);
+      this.workerTicker.onmessage = () => {
+        this.evaluateVad();
+      };
+      this.workerTicker.postMessage('start');
+      URL.revokeObjectURL(workerUrl);
+    } catch {
+      // Graceful fallback if Worker or Blob URLs are restricted
+      this.intervalTicker = setInterval(() => {
+        this.evaluateVad();
+      }, 25);
+    }
   }
 
   private updateGateGain(): void {
@@ -354,14 +390,17 @@ export class MicrophonePipeline {
   public destroy(): void {
     this.isDestroyed = true;
 
-    if (this.animFrameId !== null) {
-      cancelAnimationFrame(this.animFrameId);
-      this.animFrameId = null;
+    if (this.workerTicker) {
+      try {
+        this.workerTicker.postMessage('stop');
+        this.workerTicker.terminate();
+      } catch {}
+      this.workerTicker = null;
     }
 
-    if (this.hangoverTimer) {
-      clearTimeout(this.hangoverTimer);
-      this.hangoverTimer = null;
+    if (this.intervalTicker !== null) {
+      clearInterval(this.intervalTicker);
+      this.intervalTicker = null;
     }
 
     if (this.rnnoiseNode) {

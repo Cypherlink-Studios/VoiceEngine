@@ -277,6 +277,10 @@ export class ClientGateway {
 
             case 'speaking': {
               if (!session) return;
+              if (session.isMuted) {
+                session.isSpeaking = false;
+                return;
+              }
               session.isSpeaking = !!msg.speaking;
               if (!session.activeChannel || session.activeChannel === 'proximity') {
                 this.pluginGateway.notifySpeechStatus(session.playerUuid, session.isSpeaking);

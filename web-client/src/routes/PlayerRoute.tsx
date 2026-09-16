@@ -148,6 +148,7 @@ export function PlayerRoute() {
     if (sendTrackRef.current) {
       sendTrackRef.current.enabled = canTransmit;
     }
+    signalingRef.current?.notifySpeaking(canTransmit);
     micPipelineRef.current?.setMuted(muted);
     micPipelineRef.current?.setDeafened(deafened);
     pipelineRef.current?.setLoopbackGated(canTransmit);
@@ -186,9 +187,8 @@ export function PlayerRoute() {
         stream,
         {
           onSpeakingChange: (speaking) => {
-            setIsSpeaking(speaking);
             isSpeakingRef.current = speaking;
-            signalingRef.current?.notifySpeaking(speaking);
+            setIsSpeaking(speaking && !isMutedRef.current && !isDeafenedRef.current);
             updateAudioTransmission(speaking, isMutedRef.current, isDeafenedRef.current);
           },
           onVolumeChange: () => {},
@@ -279,12 +279,9 @@ export function PlayerRoute() {
           if (notice.action === 'mute') {
             setIsMuted(notice.active);
             isMutedRef.current = notice.active;
+            setIsSpeaking(isSpeakingRef.current && !notice.active && !isDeafenedRef.current);
             updateAudioTransmission(isSpeakingRef.current, notice.active, isDeafenedRef.current);
             if (notice.active) {
-              setIsSpeaking(false);
-              isSpeakingRef.current = false;
-              vadRef.current?.reset();
-              signalingRef.current?.notifySpeaking(false);
               soundEffects.playMute();
             } else {
               soundEffects.playUnmute();
@@ -293,6 +290,8 @@ export function PlayerRoute() {
             setIsDeafened(notice.active);
             isDeafenedRef.current = notice.active;
             pipelineRef.current?.setDeafened(notice.active);
+            setIsSpeaking(isSpeakingRef.current && !isMutedRef.current && !notice.active);
+            updateAudioTransmission(isSpeakingRef.current, isMutedRef.current, notice.active);
             if (notice.active) {
               soundEffects.playDeafen();
             } else {
@@ -397,9 +396,6 @@ export function PlayerRoute() {
 
     if (nextMuted) {
       setIsSpeaking(false);
-      isSpeakingRef.current = false;
-      vadRef.current?.reset();
-      signalingRef.current?.notifySpeaking(false);
       soundEffects.playMute();
       triggerHaptic(30);
     } else {
@@ -408,6 +404,7 @@ export function PlayerRoute() {
         isDeafenedRef.current = false;
         pipelineRef.current?.setDeafened(false);
       }
+      setIsSpeaking(isSpeakingRef.current && !isDeafenedRef.current);
       soundEffects.playUnmute();
       triggerHaptic(40);
     }
@@ -423,15 +420,13 @@ export function PlayerRoute() {
       setIsMuted(true);
       isMutedRef.current = true;
       setIsSpeaking(false);
-      isSpeakingRef.current = false;
-      vadRef.current?.reset();
-      signalingRef.current?.notifySpeaking(false);
-      updateAudioTransmission(false, true, true);
+      updateAudioTransmission(isSpeakingRef.current, true, true);
       soundEffects.playDeafen();
       triggerHaptic([30, 40, 30]);
     } else {
       setIsMuted(false);
       isMutedRef.current = false;
+      setIsSpeaking(isSpeakingRef.current);
       updateAudioTransmission(isSpeakingRef.current, false, false);
       soundEffects.playUndeafen();
       triggerHaptic(40);

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer, Server } from 'http';
 import { ClientGateway } from '../src/gateway/ClientGateway.js';
@@ -516,6 +516,47 @@ describe('ClientGateway', () => {
     });
 
     expect(receivedBinaryBatch).toBe(true);
+  });
+
+  it('suppresses speech notification and keeps session.isSpeaking false when session is muted by moderation', async () => {
+    tokenStore.registerToken({
+      token: 'MUTED1',
+      playerUuid: 'uuid-muted',
+      playerName: 'MutedPlayer',
+      expiresAt: Date.now() + 60000,
+      isMuted: true,
+    });
+
+    const notifySpeechStatusSpy = vi.spyOn(pluginGateway, 'notifySpeechStatus');
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'MUTED1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          // Attempt to send speaking frame while muted
+          ws.send(JSON.stringify({ type: 'speaking', speaking: true }));
+          setTimeout(() => {
+            ws.close();
+            resolve();
+          }, 50);
+        }
+      });
+    });
+
+    expect(notifySpeechStatusSpy).not.toHaveBeenCalled();
+    notifySpeechStatusSpy.mockRestore();
   });
 });
 

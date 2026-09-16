@@ -83,8 +83,12 @@ The backend SHALL host an authenticated WebSocket control endpoint supporting co
 - **THEN** the backend SHALL reject the connection with an `IP_MISMATCH` error code (`4003`) and close the socket.
 
 #### Scenario: Targeted speaking state notification dispatch
-- **WHEN** a client initiates or terminates speech
+- **WHEN** a client initiates or terminates speech while not muted
 - **THEN** the backend SHALL dispatch speech_status indicators to the specific Paper backend socket where the player is currently situated based on spatial telemetry.
+
+#### Scenario: Moderation-muted speaking indicator suppression
+- **WHEN** a client transmits a speaking state update while the player session is marked as muted by server moderation
+- **THEN** the backend SHALL ignore the speaking signal, maintain internal session speaking state as false, and suppress dispatching speech_status notifications to Paper sockets or radio channel peers.
 
 ### Requirement: Fixed Channel Stereo Audio Routing
 The backend SFU SHALL route audio for players inside the same fixed channel in stereo according to the channel's configured scope (global across the network or restricted to the current server), strictly isolated from the proximity 3D routing cycle.

@@ -20,7 +20,7 @@ The web client SHALL support instant onboarding through URL tokens, acquiring mi
 The client SHALL process local microphone input using a dedicated client-side audio DSP pipeline at 48kHz, integrating subsonic high-pass filtering, neural noise suppression, hybrid voice activity detection combining neural speech probability with volume thresholds, smooth envelope gating, input gain calibration, and automatic fallback.
 
 #### Scenario: Voice activation threshold exceeded
-- **WHEN** incoming microphone audio contains human speech where the neural speech probability exceeds the calibrated threshold (e.g., $P_{voice} \ge 0.65$) and exceeds minimum background volume
+- **WHEN** incoming microphone audio contains human speech where the neural speech probability exceeds the calibrated threshold (e.g., $P_{voice} \ge 0.65$) and exceeds minimum background volume while the client is unmuted
 - **THEN** the client SHALL transition the upstream audio gain to full volume using an exponential smooth attack envelope (~15ms), transmit audio packets over WebRTC, and notify the backend of active speech.
 
 #### Scenario: Silence and hangover duration
@@ -46,6 +46,14 @@ The client SHALL process local microphone input using a dedicated client-side au
 #### Scenario: Toggling AI noise suppression
 - **WHEN** a user toggles the AI noise suppression option in settings
 - **THEN** the input pipeline SHALL bypass or re-enable the RNNoise worklet processing stage in real time without renegotiating the WebRTC PeerConnection or dropping the stream.
+
+#### Scenario: Continuous background and minimized tab VAD operation
+- **WHEN** the web client tab is minimized, placed in the background, or running without an active Document Picture-in-Picture overlay
+- **THEN** the audio input pipeline SHALL continue evaluating voice activity detection and upstream transmission gating via unthrottled background timers or audio thread worklet cycles, maintaining active microphone communication without interruption.
+
+#### Scenario: Speech notification suppression during mute or deafen
+- **WHEN** local microphone input exceeds voice detection thresholds while the user is locally muted, deafened, or server-moderation muted
+- **THEN** the web client SHALL suppress speech notification signals to the signaling server, maintain the WebRTC audio send track in a disabled state, and refrain from rendering the speaking ring on the user's local avatar.
 
 ### Requirement: Binaural 3D Spatial Audio Rendering
 The web client SHALL process incoming peer audio streams through the Web Audio API using HRTF `PannerNode` instances positioned according to in-game relative coordinates and orientations parsed from batched binary or JSON telemetry frames, dynamic distance-based atmospheric absorption filtering, an underwater muffled low-pass filter, master output bus brickwall peak limiting, or bypass spatialization when receiving broadcast audio.

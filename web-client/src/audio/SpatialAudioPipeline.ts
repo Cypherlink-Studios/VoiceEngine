@@ -38,6 +38,14 @@ export class SpatialAudioPipeline {
   constructor() {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     this.audioContext = new AudioContextClass();
+
+    // Auto-resume audio context if suspended when tab transitions to background
+    this.audioContext.onstatechange = () => {
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
+    };
+
     this.masterGain = this.audioContext.createGain();
 
     // Master Output Brickwall Limiter & Anti-Clipping Compressor
