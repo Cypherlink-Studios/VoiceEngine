@@ -10,8 +10,6 @@ const resolveMediaDirs = (): string[] => {
     dirs.push(path.resolve(process.env.MEDIA_DIR));
   }
   const candidatePaths = [
-    path.resolve(process.cwd(), '../../SERVERS/1.21.8/Test_Server-001/plugins/VoiceEngine/media'),
-    path.resolve(process.cwd(), '../SERVERS/1.21.8/Test_Server-001/plugins/VoiceEngine/media'),
     path.resolve(process.cwd(), '../plugins/VoiceEngine/media'),
     path.resolve(process.cwd(), 'plugins/VoiceEngine/media'),
   ];
