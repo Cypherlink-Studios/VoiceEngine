@@ -25,7 +25,7 @@ VoiceEngine provides real-time 3D spatialized voice chat for Minecraft players w
 
 ```
 VoiceEngine/
-├── paper-plugin/       # Paper Minecraft Plugin (Java 25, Gradle Kotlin DSL)
+├── paper-plugin/       # Paper Minecraft Plugin (Java 17, Gradle Kotlin DSL)
 ├── voice-server/       # WebRTC SFU & Signaling Backend (TypeScript, Mediasoup)
 ├── web-client/         # Modern Web Application (Vite, React, Tailwind CSS)
 └── openspec/           # OpenSpec Change Management & Specifications
@@ -36,7 +36,7 @@ VoiceEngine/
 ## 🚀 Quick Start
 
 ### 1. Requirements
-- Java 21+ (configured with Gradle toolchain support for Java 25)
+- Java 17+
 - Node.js 20+ and npm
 
 ### 2. Voice Server (Node.js & Mediasoup)
