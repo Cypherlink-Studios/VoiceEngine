@@ -364,10 +364,10 @@ For complete details, see the [Prometheus & Grafana Observability Guide](docs/ob
 * **Observability Guide**: [Prometheus and Grafana setup, metrics reference, and Discord alerts](docs/observability/PROMETHEUS_GRAFANA.md)
 * **Paper Plugin User Guide**: [Commands, permissions, speaker blocks, and developer API](docs/plugin/paper/README.md)
 * **Velocity Proxy User Guide**: [Proxy topology, server switching, and SQLite moderation](docs/plugin/velocity/README.md)
-* **Product & Technical Audit**: [Full product audit, audience matrix, and trust analysis](docs/product-audit.md)
-* **Feature Inventory**: [Complete verified implementation matrix](docs/feature-inventory.md)
-* **Product Issues & Roadmap**: [Maintainer decisions and backlog items](docs/product-issues.md)
-* **Marketing Asset Guide**: [Visual and media capture specifications](docs/marketing-assets.md)
+* **Product & Technical Audit**: [Full product audit, audience matrix, and trust analysis](docs/.internal/product-audit.md)
+* **Feature Inventory**: [Complete verified implementation matrix](docs/.internal/feature-inventory.md)
+* **Product Issues & Roadmap**: [Maintainer decisions and backlog items](docs/.internal/product-issues.md)
+* **Marketing Asset Guide**: [Visual and media capture specifications](docs/.internal/marketing-assets.md)
 
 ---
 
