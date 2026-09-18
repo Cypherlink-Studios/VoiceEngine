@@ -221,11 +221,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex border-b border-white/10 px-6 bg-slate-950/20 gap-2">
           <button
             onClick={() => setActiveTab('devices')}
-            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${
-              activeTab === 'devices'
-                ? 'border-emerald-500 text-emerald-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${activeTab === 'devices'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
           >
             <Mic className="w-4 h-4" />
             <span>{t('settings.tabs.devices')}</span>
@@ -233,11 +232,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={() => setActiveTab('players')}
-            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${
-              activeTab === 'players'
-                ? 'border-emerald-500 text-emerald-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${activeTab === 'players'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
           >
             <Users className="w-4 h-4" />
             <span>{t('settings.tabs.players', { count: activePlayers.length })}</span>
@@ -245,11 +243,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={() => setActiveTab('preferences')}
-            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${
-              activeTab === 'preferences'
-                ? 'border-emerald-500 text-emerald-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
+            className={`flex items-center gap-2 py-3 px-4 border-b-2 text-sm font-medium transition-colors ${activeTab === 'preferences'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
           >
             <Sliders className="w-4 h-4" />
             <span>{t('settings.tabs.preferences')}</span>
@@ -347,11 +344,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </span>
                       )}
                       <span
-                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                          isSpeechActive
-                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
-                            : 'bg-slate-800 text-slate-400 border border-white/10'
-                        }`}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${isSpeechActive
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400 border border-white/10'
+                          }`}
                       >
                         {isSpeechActive ? t('settings.devices.transmitting') : t('settings.devices.silent')}
                       </span>
@@ -374,7 +370,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {(onChangeVadSensitivity || onChangeVadThreshold) && (
                     <div className="pt-1 space-y-1.5">
                       <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span className="font-medium text-slate-300">{t('settings.devices.vadSensitivity')}</span>
+                        <span className="font-medium text-slate-300">{t('settings.devices.vadSensitivityTitle')}</span>
                         <span className="font-mono text-amber-400 font-semibold">{sensitivityPercent}%</span>
                       </div>
                       <input
@@ -393,7 +389,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           }
                         }}
                         className="w-full accent-amber-500 cursor-pointer"
-                        title={`${t('settings.devices.vadSensitivity')} ${sensitivityPercent}%`}
+                        title={`${t('settings.devices.vadSensitivityTitle')} ${sensitivityPercent}%`}
                       />
                       <div className="flex justify-between text-[10px] text-slate-500">
                         <span>{t('settings.devices.strictFilter')}</span>
@@ -416,11 +412,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <button
                       type="button"
                       onClick={onToggleLoopback}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer ${
-                        isLoopbackActive
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
-                      }`}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0 cursor-pointer ${isLoopbackActive
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
+                        }`}
                     >
                       {isLoopbackActive ? t('settings.devices.loopbackStop') : t('settings.devices.loopbackStart')}
                     </button>
@@ -579,11 +574,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {/* Mute button */}
                         <button
                           onClick={() => onSetPeerMuted(player.uuid, !isMuted)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
-                            isMuted
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
-                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
-                          }`}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${isMuted
+                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30'
+                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-white/10'
+                            }`}
                         >
                           {isMuted ? t('settings.players.unmuteButton') : t('settings.players.muteButton')}
                         </button>
@@ -631,14 +625,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <button
                       onClick={() => onToggleMediaMuted?.(!mediaMuted)}
-                      className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${
-                        mediaMuted ? 'bg-rose-500' : 'bg-slate-700'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${mediaMuted ? 'bg-rose-500' : 'bg-slate-700'
+                        }`}
                     >
                       <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${
-                          mediaMuted ? 'translate-x-7' : 'translate-x-1'
-                        }`}
+                        className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${mediaMuted ? 'translate-x-7' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -678,14 +670,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                     <button
                       onClick={() => onToggleSfx(!sfxEnabled)}
-                      className={`w-12 h-6 rounded-full transition-colors relative ${
-                        sfxEnabled ? 'bg-emerald-500' : 'bg-slate-700'
-                      }`}
+                      className={`w-12 h-6 rounded-full transition-colors relative ${sfxEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                        }`}
                     >
                       <div
-                        className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${
-                          sfxEnabled ? 'translate-x-7' : 'translate-x-1'
-                        }`}
+                        className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${sfxEnabled ? 'translate-x-7' : 'translate-x-1'
+                          }`}
                       />
                     </button>
                   </div>
@@ -729,14 +719,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                   <button
                     onClick={() => onToggleStreamerMode(!streamerMode)}
-                    className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${
-                      streamerMode ? 'bg-indigo-500' : 'bg-slate-700'
-                    }`}
+                    className={`w-12 h-6 rounded-full transition-colors relative shrink-0 cursor-pointer ${streamerMode ? 'bg-indigo-500' : 'bg-slate-700'
+                      }`}
                   >
                     <div
-                      className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${
-                        streamerMode ? 'translate-x-7' : 'translate-x-1'
-                      }`}
+                      className={`w-4 h-4 rounded-full bg-white transition-transform transform absolute top-1 ${streamerMode ? 'translate-x-7' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </div>
@@ -777,13 +765,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="p-4 rounded-2xl bg-slate-950/60 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`p-2.5 rounded-xl border ${
-                        pingMs !== null && pingMs < 70
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : pingMs !== null && pingMs < 150
+                      className={`p-2.5 rounded-xl border ${pingMs !== null && pingMs < 70
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : pingMs !== null && pingMs < 150
                           ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                      }`}
+                        }`}
                     >
                       <Activity className="w-5 h-5" />
                     </div>
@@ -793,8 +780,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         {pingMs !== null && pingMs < 70
                           ? t('settings.preferences.pingExcellent')
                           : pingMs !== null && pingMs < 150
-                          ? t('settings.preferences.pingStable')
-                          : t('settings.preferences.pingHigh')}
+                            ? t('settings.preferences.pingStable')
+                            : t('settings.preferences.pingHigh')}
                       </div>
                     </div>
                   </div>
