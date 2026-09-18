@@ -56,6 +56,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         // 2. Initialize Core Handlers
         this.tokenManager = new TokenManager(voiceConfig.tokenTtl(), 6);
         this.speechFeedbackHandler = new SpeechFeedbackHandler();
+        this.speechFeedbackHandler.setParticlesEnabled(voiceConfig.speakingParticles());
         this.telemetryCollector = new TelemetryCollector();
         this.audioManager = new AudioManager(
             getDataFolder(),
@@ -64,6 +65,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             voiceConfig.audioParticlesEnabled()
         );
         this.speakerManager = new SpeakerManager(getDataFolder(), () -> audioManager);
+        this.speakerManager.setEnabled(voiceConfig.speakersEnabled());
+        this.speakerManager.setParticlesEnabled(voiceConfig.speakersParticlesEnabled());
         this.speakerManager.load();
         this.audioManager.load();
 
@@ -82,6 +85,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             () -> voiceBackendClient,
             () -> voiceConfig.serverId(),
             () -> speakerManager.getActiveSpeakerStates(voiceConfig.serverId()),
+            () -> voiceConfig,
             voiceConfig.tickRateHz()
         );
         this.telemetryService.start();
@@ -192,6 +196,10 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             initVoiceBackendClient();
         }
 
+        if (speechFeedbackHandler != null) {
+            speechFeedbackHandler.setParticlesEnabled(voiceConfig.speakingParticles());
+        }
+
         if (audioManager != null) {
             audioManager.setPersistenceEnabled(voiceConfig.audioPersistenceEnabled());
             audioManager.setParticlesEnabled(voiceConfig.audioParticlesEnabled());
@@ -199,6 +207,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         }
 
         if (speakerManager != null) {
+            speakerManager.setEnabled(voiceConfig.speakersEnabled());
+            speakerManager.setParticlesEnabled(voiceConfig.speakersParticlesEnabled());
             speakerManager.load();
         }
 

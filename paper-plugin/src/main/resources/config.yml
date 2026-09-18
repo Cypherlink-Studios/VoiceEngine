@@ -28,6 +28,30 @@ server-id: "default"
 # When enabled, suppresses local /voice commands and join notices, delegating to Velocity.
 proxy-mode: "auto"
 
+# In-Game Gameplay Mechanics & Visuals
+mechanics:
+  # Reduce voice chat radius to 8 blocks when players sneak (Shift)
+  whisper-on-sneak: true
+
+  # Apply muffled low-pass filter acoustics when submerged in water
+  underwater-acoustics: true
+
+  # Display musical note particles above player heads while speaking
+  speaking-particles: true
+
+  # Spectator voice behavior:
+  # - listen-only: Spectators hear living players, but living players cannot hear spectators
+  # - isolated: Spectators and living players cannot hear each other
+  # - all: Spectators hear and can be heard by living players normally
+  spectator-mode: "listen-only"
+
+# Speaker Blocks System (Jukeboxes / World Megaphones)
+speakers:
+  # Master toggle for speaker blocks and /voice speaker commands
+  enabled: true
+  # Display subtle note particles at active speaker locations
+  particles-enabled: true
+
 # Audio Emitters & Media Playback Settings
 audio:
   # Enable the audio emitter system
@@ -36,4 +60,5 @@ audio:
   persistence-enabled: true
   # Render visual note particles at active spatial emitter locations
   particles-enabled: true
+
 

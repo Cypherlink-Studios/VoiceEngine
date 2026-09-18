@@ -74,6 +74,14 @@ public class SpeakerCommands {
         return List.of("true", "false");
     }
 
+    private boolean checkEnabled(CommandSender sender) {
+        if (!speakerManager.isEnabled()) {
+            translationService.send(sender, "command.speaker.disabled");
+            return false;
+        }
+        return true;
+    }
+
     @Command("voice|ve|voiceengine|audio speaker create <id> [radius]")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Create a new speaker block at targeted block")
@@ -82,6 +90,9 @@ public class SpeakerCommands {
         @Argument("id") String id,
         @Argument("radius") @Range(min = "1", max = "500") Double radius
     ) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         if (!(sender instanceof Player player)) {
             translationService.send(sender, "command.connect.only_players");
             return;
@@ -122,6 +133,9 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Remove a registered speaker block")
     public void onRemove(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         boolean removed = speakerManager.removeSpeaker(id);
         if (removed) {
             translationService.send(sender, "command.speaker.removed",
@@ -142,6 +156,9 @@ public class SpeakerCommands {
         @Argument(value = "id", suggestions = "speakers") String id,
         @Argument(value = "player", suggestions = "onlinePlayers") String playerName
     ) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         Player targetPlayer = Bukkit.getPlayer(playerName);
         if (targetPlayer == null) {
             translationService.send(sender, "command.moderation.player_not_found",
@@ -167,6 +184,9 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Unlink voice transmission from a speaker block")
     public void onUnlink(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         boolean unlinked = speakerManager.unlinkSpeaker(id);
         if (unlinked) {
             translationService.send(sender, "command.speaker.unlinked",
@@ -187,6 +207,9 @@ public class SpeakerCommands {
         @Argument(value = "id", suggestions = "speakers") String id,
         @Argument(value = "requireRedstone", suggestions = "booleans") boolean requireRedstone
     ) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         boolean updated = speakerManager.setRequireRedstone(id, requireRedstone);
         if (updated) {
             translationService.send(sender, "command.speaker.redstone_set",
@@ -209,6 +232,9 @@ public class SpeakerCommands {
         @Argument(value = "source", suggestions = "mediaFiles") @Quoted String source,
         @Flag("loop") boolean loop
     ) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         boolean bound = speakerManager.bindAudio(id, source, loop);
         if (bound) {
             translationService.send(sender, "command.speaker.play_started",
@@ -227,6 +253,9 @@ public class SpeakerCommands {
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("Stop audio media playback on a speaker block")
     public void onSpeakerStop(CommandSender sender, @Argument(value = "id", suggestions = "speakers") String id) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         boolean stopped = speakerManager.unbindAudio(id);
         if (stopped) {
             translationService.send(sender, "command.speaker.play_stopped",
@@ -239,10 +268,32 @@ public class SpeakerCommands {
         }
     }
 
+    @Command("voice|ve|voiceengine|audio speaker particles [state]")
+    @Permission("voiceengine.admin.speaker")
+    @CommandDescription("Toggle or set speaker visual particles")
+    public void onParticles(
+        CommandSender sender,
+        @Argument(value = "state", suggestions = "booleans") Boolean state
+    ) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
+
+        boolean newState = (state != null) ? state : !speakerManager.isParticlesEnabled();
+        speakerManager.setParticlesEnabled(newState);
+
+        translationService.send(sender, "command.speaker.particles_toggled",
+            Placeholder.parsed("state", String.valueOf(newState))
+        );
+    }
+
     @Command("voice|ve|voiceengine|audio speaker list")
     @Permission("voiceengine.admin.speaker")
     @CommandDescription("List all registered speaker blocks")
     public void onList(CommandSender sender) {
+        if (!checkEnabled(sender)) {
+            return;
+        }
         Collection<SpeakerBlock> speakers = speakerManager.getAllSpeakers();
         if (speakers.isEmpty()) {
             translationService.send(sender, "command.speaker.no_speakers");

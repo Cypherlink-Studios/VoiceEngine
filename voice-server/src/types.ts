@@ -13,6 +13,7 @@ export interface PlayerSpatialState {
   pitch: number;
   isSneaking: boolean;
   isSubmerged: boolean;
+  isSpectator?: boolean;
   lastUpdated?: number;
 }
 

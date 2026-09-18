@@ -12,6 +12,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class SpeechFeedbackHandler {
     private final Set<UUID> speakingPlayers = ConcurrentHashMap.newKeySet();
+    private volatile boolean particlesEnabled = true;
+
+    public void setParticlesEnabled(boolean enabled) {
+        this.particlesEnabled = enabled;
+    }
+
+    public boolean isParticlesEnabled() {
+        return this.particlesEnabled;
+    }
 
     public void setSpeaking(UUID playerUuid, boolean speaking) {
         if (speaking) {
@@ -26,13 +35,16 @@ public class SpeechFeedbackHandler {
     }
 
     public void renderVisualIndicators() {
-        if (speakingPlayers.isEmpty()) {
+        if (!particlesEnabled || speakingPlayers.isEmpty()) {
             return;
         }
 
         for (UUID uuid : speakingPlayers) {
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
+                if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR || player.isDead()) {
+                    continue;
+                }
                 Location headLoc = player.getEyeLocation().add(0, 0.4, 0);
                 // Subtle musical note particle above player head
                 player.getWorld().spawnParticle(

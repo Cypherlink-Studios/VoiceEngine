@@ -423,5 +423,118 @@ describe('SpatialEngine', () => {
     expect(engine.getPartitionCount()).toBe(0);
     expect(engine.getActiveCellCount()).toBe(0);
   });
+
+  describe('Spectator Mode Proximity Routing', () => {
+    const livingSteve: PlayerSpatialState = {
+      uuid: 'steve-alive',
+      username: 'Steve',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isSpectator: false,
+    };
+
+    const livingAlex: PlayerSpatialState = {
+      uuid: 'alex-alive',
+      username: 'Alex',
+      world: 'world',
+      x: 5,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isSpectator: false,
+    };
+
+    const spectatorGhost1: PlayerSpatialState = {
+      uuid: 'ghost-1',
+      username: 'Casper',
+      world: 'world',
+      x: 2,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isSpectator: true,
+    };
+
+    const spectatorGhost2: PlayerSpatialState = {
+      uuid: 'ghost-2',
+      username: 'Specter',
+      world: 'world',
+      x: 4,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isSpectator: true,
+    };
+
+    it('enforces unidirectional listen-only mode: spectators hear living players, but living players cannot hear spectators', () => {
+      engine.setSpectatorMode('listen-only');
+      engine.updatePlayer(livingSteve);
+      engine.updatePlayer(livingAlex);
+      engine.updatePlayer(spectatorGhost1);
+      engine.updatePlayer(spectatorGhost2);
+
+      // Living Steve should hear living Alex, but NOT hear ghosts
+      const steveAudible = engine.getAudiblePeersFor('steve-alive');
+      const steveAudibleUuids = steveAudible.map((p) => p.peerUuid);
+      expect(steveAudibleUuids).toContain('alex-alive');
+      expect(steveAudibleUuids).not.toContain('ghost-1');
+      expect(steveAudibleUuids).not.toContain('ghost-2');
+
+      // Spectator Casper should hear living Steve, living Alex, and fellow ghost Specter
+      const casperAudible = engine.getAudiblePeersFor('ghost-1');
+      const casperAudibleUuids = casperAudible.map((p) => p.peerUuid);
+      expect(casperAudibleUuids).toContain('steve-alive');
+      expect(casperAudibleUuids).toContain('alex-alive');
+      expect(casperAudibleUuids).toContain('ghost-2');
+    });
+
+    it('enforces isolated mode: living players and spectators are completely segregated', () => {
+      engine.setSpectatorMode('isolated');
+      engine.updatePlayer(livingSteve);
+      engine.updatePlayer(livingAlex);
+      engine.updatePlayer(spectatorGhost1);
+      engine.updatePlayer(spectatorGhost2);
+
+      // Living Steve should only hear living Alex
+      const steveAudible = engine.getAudiblePeersFor('steve-alive');
+      const steveAudibleUuids = steveAudible.map((p) => p.peerUuid);
+      expect(steveAudibleUuids).toEqual(['alex-alive']);
+
+      // Spectator Casper should only hear fellow spectator Specter
+      const casperAudible = engine.getAudiblePeersFor('ghost-1');
+      const casperAudibleUuids = casperAudible.map((p) => p.peerUuid);
+      expect(casperAudibleUuids).toEqual(['ghost-2']);
+    });
+
+    it('allows unrestricted proximity across all players when spectator mode is all', () => {
+      engine.setSpectatorMode('all');
+      engine.updatePlayer(livingSteve);
+      engine.updatePlayer(livingAlex);
+      engine.updatePlayer(spectatorGhost1);
+      engine.updatePlayer(spectatorGhost2);
+
+      // In 'all' mode, living Steve hears everyone within distance
+      const steveAudible = engine.getAudiblePeersFor('steve-alive');
+      const steveAudibleUuids = steveAudible.map((p) => p.peerUuid);
+      expect(steveAudibleUuids).toContain('alex-alive');
+      expect(steveAudibleUuids).toContain('ghost-1');
+      expect(steveAudibleUuids).toContain('ghost-2');
+    });
+  });
 });
 

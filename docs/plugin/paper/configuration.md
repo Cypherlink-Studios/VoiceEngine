@@ -39,6 +39,30 @@ server-id: "default"
 # When enabled, suppresses local /voice commands and join notices, delegating to Velocity.
 proxy-mode: "auto"
 
+# In-Game Gameplay Mechanics & Visuals
+mechanics:
+  # Reduce voice chat radius to 8 blocks when players sneak (Shift)
+  whisper-on-sneak: true
+
+  # Apply muffled low-pass filter acoustics when submerged in water
+  underwater-acoustics: true
+
+  # Display musical note particles above player heads while speaking
+  speaking-particles: true
+
+  # Spectator voice behavior:
+  # - listen-only: Spectators hear living players, but living players cannot hear spectators
+  # - isolated: Spectators and living players cannot hear each other
+  # - all: Spectators hear and can be heard by living players normally
+  spectator-mode: "listen-only"
+
+# Speaker Blocks System (Jukeboxes / World Megaphones)
+speakers:
+  # Master toggle for speaker blocks and /voice speaker commands
+  enabled: true
+  # Display subtle note particles at active speaker locations
+  particles-enabled: true
+
 # Audio Emitters & Media Playback Settings
 audio:
   # Enable the audio emitter system
@@ -142,3 +166,63 @@ audio:
 - `audio.enabled`: Global kill-switch for 3D audio emitters and media playback.
 - `audio.persistence-enabled`: When `true`, active emitters are saved to `plugins/VoiceEngine/audio.yml` and automatically restored across server restarts or reloads.
 - `audio.particles-enabled`: When `true`, active 3D emitters display subtle note particles at their spatial coordinates so staff can locate them in-game. Can also be toggled live via `/voice audio particles <on|off|toggle>`.
+
+---
+
+## Gameplay Mechanics (`mechanics`)
+
+Configure in-game audio physics, feedback effects, and spectator privacy policies:
+
+```yaml
+mechanics:
+  whisper-on-sneak: true
+  underwater-acoustics: true
+  speaking-particles: true
+  spectator-mode: "listen-only"
+```
+
+### `whisper-on-sneak`
+- **Type**: `Boolean`
+- **Default**: `true`
+- **Description**: When `true`, crouching / sneaking (`Shift`) reduces the player's voice transmission radius down to whisper range (8 blocks). When set to `false`, voice transmission radius remains at normal speaking range regardless of crouching state.
+
+### `underwater-acoustics`
+- **Type**: `Boolean`
+- **Default**: `true`
+- **Description**: When `true`, being submerged in water applies low-pass acoustic filtering (muffled effect) to the player's voice transmission. When set to `false`, normal air acoustics are preserved even while diving underwater.
+
+### `speaking-particles`
+- **Type**: `Boolean`
+- **Default**: `true`
+- **Description**: When `true`, subtle musical note particles appear above players' heads while microphone voice activity is detected. Note particles are automatically suppressed for spectators or dead players regardless of this setting.
+
+### `spectator-mode`
+- **Type**: `String (Enum)`
+- **Default**: `"listen-only"`
+- **Options**:
+  - `"listen-only"` (Recommended): Spectators and dead players can hear living players proximity audio, but living players cannot hear spectators. Prevents ghosting while letting spectators enjoy server chatter.
+  - `"isolated"`: Spectators and living players are completely isolated from one another. Spectators only hear other spectators; living players only hear living players. Ideal for competitive mini-games.
+  - `"all"`: Unrestricted voice communication between spectators and living players.
+
+---
+
+## Speaker Blocks (`speakers`)
+
+Configure the physical speaker block (megaphone / jukebox) subsystem:
+
+```yaml
+speakers:
+  enabled: true
+  particles-enabled: true
+```
+
+### `speakers.enabled`
+- **Type**: `Boolean`
+- **Default**: `true`
+- **Description**: Master kill-switch for speaker blocks. When `false`, speaker persistence, redstone listeners, and `/voice speaker` commands are disabled.
+
+### `speakers.particles-enabled`
+- **Type**: `Boolean`
+- **Default**: `true`
+- **Description**: When `true`, active speaker blocks emit subtle note particles to visually indicate that sound is being relayed. Can also be toggled dynamically in-game with `/voice speaker particles [true|false]`.
+

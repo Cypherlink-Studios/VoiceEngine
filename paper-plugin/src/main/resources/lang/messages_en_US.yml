@@ -37,6 +37,8 @@ command:
     list_header: "<prefix_admin><gold>--- Registered Speaker Blocks (<count>) ---</gold>"
     list_item: "<gray>- <yellow><id></yellow>: (<x>, <y>, <z>) in <world> | Radius: <radius>m | Linked: <aqua><linked></aqua> | Redstone: <redstone> | Media: <media></gray>"
     no_speakers: "<prefix_admin><gray>No speaker blocks registered.</gray>"
+    disabled: "<prefix_admin><red>Speaker blocks are disabled in the server configuration.</red>"
+    particles_toggled: "<prefix_admin><green>Speaker particle feedback set to: <yellow><state></yellow>.</green>"
   audio:
     play_started: "<prefix_admin><green>Started spatial audio <yellow><id></yellow> at (<x>, <y>, <z>) radius <radius>m (loop: <loop>).</green>"
     broadcast_started: "<prefix_admin><green>Started global broadcast <yellow><id></yellow> (loop: <loop>).</green>"

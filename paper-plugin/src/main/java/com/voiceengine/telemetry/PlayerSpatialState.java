@@ -16,7 +16,8 @@ public record PlayerSpatialState(
     float yaw,
     float pitch,
     boolean isSneaking,
-    boolean isSubmerged
+    boolean isSubmerged,
+    boolean isSpectator
 ) {
     public PlayerSpatialState(
         UUID uuid,
@@ -30,11 +31,30 @@ public record PlayerSpatialState(
         boolean isSneaking,
         boolean isSubmerged
     ) {
-        this(uuid, username, "default", world, x, y, z, yaw, pitch, isSneaking, isSubmerged);
+        this(uuid, username, "default", world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false);
     }
 
-    public static PlayerSpatialState fromPlayer(Player player, String serverId) {
+    public PlayerSpatialState(
+        UUID uuid,
+        String username,
+        String serverId,
+        String world,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float pitch,
+        boolean isSneaking,
+        boolean isSubmerged
+    ) {
+        this(uuid, username, serverId, world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false);
+    }
+
+    public static PlayerSpatialState fromPlayer(Player player, String serverId, boolean whisperOnSneak, boolean underwaterAcoustics) {
         Location loc = player.getLocation();
+        boolean sneaking = whisperOnSneak && player.isSneaking();
+        boolean submerged = underwaterAcoustics && player.isInWater();
+        boolean spectator = player.getGameMode() == org.bukkit.GameMode.SPECTATOR || player.isDead();
         return new PlayerSpatialState(
             player.getUniqueId(),
             player.getName(),
@@ -45,13 +65,18 @@ public record PlayerSpatialState(
             round(loc.getZ()),
             roundAngle(loc.getYaw()),
             roundAngle(loc.getPitch()),
-            player.isSneaking(),
-            player.isInWater()
+            sneaking,
+            submerged,
+            spectator
         );
     }
 
+    public static PlayerSpatialState fromPlayer(Player player, String serverId) {
+        return fromPlayer(player, serverId, true, true);
+    }
+
     public static PlayerSpatialState fromPlayer(Player player) {
-        return fromPlayer(player, "default");
+        return fromPlayer(player, "default", true, true);
     }
 
     private static double round(double value) {

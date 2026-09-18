@@ -19,6 +19,7 @@ class SpeakerCommandsTest {
     @BeforeEach
     void setUp() {
         speakerManager = mock(SpeakerManager.class);
+        when(speakerManager.isEnabled()).thenReturn(true);
         translationService = mock(TranslationService.class);
         audioManager = mock(AudioManager.class);
         speakerCommands = new SpeakerCommands(speakerManager, translationService, audioManager);
@@ -30,7 +31,8 @@ class SpeakerCommandsTest {
         speakerCommands.onCreate(sender, "speaker1", 30.0);
 
         verify(translationService).send(sender, "command.connect.only_players");
-        verifyNoInteractions(speakerManager);
+        verify(speakerManager).isEnabled();
+        verifyNoMoreInteractions(speakerManager);
     }
 
     @Test
@@ -79,5 +81,30 @@ class SpeakerCommandsTest {
         speakerCommands.onSpeakerStop(sender, "speaker1");
         verify(speakerManager).unbindAudio("speaker1");
         verify(translationService).send(eq(sender), eq("command.speaker.play_stopped"), any());
+    }
+
+    @Test
+    void testCommandsDisabledWhenSpeakerManagerDisabled() {
+        when(speakerManager.isEnabled()).thenReturn(false);
+        CommandSender sender = mock(CommandSender.class);
+
+        speakerCommands.onRemove(sender, "speaker1");
+        verify(translationService).send(sender, "command.speaker.disabled");
+        verify(speakerManager, never()).removeSpeaker(anyString());
+    }
+
+    @Test
+    void testParticlesToggle() {
+        CommandSender sender = mock(CommandSender.class);
+        when(speakerManager.isParticlesEnabled()).thenReturn(true);
+
+        // Toggle (state == null)
+        speakerCommands.onParticles(sender, null);
+        verify(speakerManager).setParticlesEnabled(false);
+        verify(translationService).send(eq(sender), eq("command.speaker.particles_toggled"), any());
+
+        // Explicit state
+        speakerCommands.onParticles(sender, true);
+        verify(speakerManager).setParticlesEnabled(true);
     }
 }

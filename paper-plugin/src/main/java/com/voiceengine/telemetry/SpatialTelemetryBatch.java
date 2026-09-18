@@ -11,20 +11,25 @@ public record SpatialTelemetryBatch(
     String serverId,
     long timestamp,
     List<PlayerSpatialState> players,
-    List<SpeakerBlockState> speakers
+    List<SpeakerBlockState> speakers,
+    String spectatorMode
 ) {
     private static final Gson GSON = new GsonBuilder().create();
 
     public SpatialTelemetryBatch(long timestamp, List<PlayerSpatialState> players) {
-        this("telemetry_batch", "default", timestamp, players, List.of());
+        this("telemetry_batch", "default", timestamp, players, List.of(), "listen-only");
     }
 
     public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players) {
-        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, List.of());
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, List.of(), "listen-only");
     }
 
     public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players, List<SpeakerBlockState> speakers) {
-        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of());
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), "listen-only");
+    }
+
+    public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players, List<SpeakerBlockState> speakers, String spectatorMode) {
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), spectatorMode != null ? spectatorMode : "listen-only");
     }
 
     public String toJson() {

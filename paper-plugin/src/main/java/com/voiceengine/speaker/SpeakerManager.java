@@ -25,6 +25,8 @@ public class SpeakerManager {
     private final Supplier<AudioManager> audioManagerSupplier;
     private final Map<String, SpeakerBlock> speakers = new ConcurrentHashMap<>();
     private final Map<String, Boolean> previousPowerState = new ConcurrentHashMap<>();
+    private volatile boolean enabled = true;
+    private volatile boolean particlesEnabled = true;
 
     public SpeakerManager(File dataFolder) {
         this(dataFolder, null);
@@ -35,9 +37,25 @@ public class SpeakerManager {
         this.audioManagerSupplier = audioManagerSupplier;
     }
 
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public void setParticlesEnabled(boolean particlesEnabled) {
+        this.particlesEnabled = particlesEnabled;
+    }
+
+    public boolean isParticlesEnabled() {
+        return this.particlesEnabled;
+    }
+
     public synchronized void load() {
         speakers.clear();
-        if (!speakersFile.exists()) {
+        if (!enabled || !speakersFile.exists()) {
             return;
         }
 
@@ -109,6 +127,9 @@ public class SpeakerManager {
     }
 
     public synchronized void save() {
+        if (!enabled) {
+            return;
+        }
         try {
             YamlConfiguration config = new YamlConfiguration();
             ConfigurationSection section = config.createSection("speakers");
@@ -279,6 +300,9 @@ public class SpeakerManager {
     }
 
     public List<SpeakerBlockState> getActiveSpeakerStates(String serverId) {
+        if (!enabled || speakers.isEmpty()) {
+            return List.of();
+        }
         List<SpeakerBlockState> states = new ArrayList<>();
         for (SpeakerBlock speaker : speakers.values()) {
             boolean active = isSpeakerActive(speaker);
@@ -329,7 +353,7 @@ public class SpeakerManager {
     }
 
     public void renderVisualIndicators(SpeechFeedbackHandler feedbackHandler) {
-        if (feedbackHandler == null || speakers.isEmpty()) {
+        if (!enabled || !particlesEnabled || feedbackHandler == null || speakers.isEmpty()) {
             return;
         }
 

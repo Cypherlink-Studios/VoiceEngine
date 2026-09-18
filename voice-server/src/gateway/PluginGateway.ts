@@ -123,6 +123,9 @@ export class PluginGateway {
               this.clientGateway.syncActivePunishments(message.punishments);
             }
           } else if (message.type === 'telemetry_batch' && Array.isArray(message.players)) {
+            if (message.spectatorMode === 'all' || message.spectatorMode === 'listen-only' || message.spectatorMode === 'isolated') {
+              this.spatialEngine.setSpectatorMode(message.spectatorMode);
+            }
             const batchServerId = message.serverId || meta?.serverId || 'default';
             const enrichedPlayers = message.players.map((p: any) => ({
               ...p,

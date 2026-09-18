@@ -15,23 +15,37 @@ public class TelemetryService implements VoiceEngineService {
     private final Supplier<VoiceBackendClient> clientSupplier;
     private final Supplier<String> serverIdSupplier;
     private final Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier;
+    private final Supplier<com.voiceengine.config.VoiceConfig> configSupplier;
     private int tickRateHz;
     private BukkitTask task;
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, int tickRateHz) {
-        this(plugin, collector, clientSupplier, () -> "default", java.util.List::of, tickRateHz);
+        this(plugin, collector, clientSupplier, () -> "default", java.util.List::of, null, tickRateHz);
     }
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, Supplier<String> serverIdSupplier, int tickRateHz) {
-        this(plugin, collector, clientSupplier, serverIdSupplier, java.util.List::of, tickRateHz);
+        this(plugin, collector, clientSupplier, serverIdSupplier, java.util.List::of, null, tickRateHz);
     }
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, Supplier<String> serverIdSupplier, Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier, int tickRateHz) {
+        this(plugin, collector, clientSupplier, serverIdSupplier, speakerSupplier, null, tickRateHz);
+    }
+
+    public TelemetryService(
+        Plugin plugin,
+        TelemetryCollector collector,
+        Supplier<VoiceBackendClient> clientSupplier,
+        Supplier<String> serverIdSupplier,
+        Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier,
+        Supplier<com.voiceengine.config.VoiceConfig> configSupplier,
+        int tickRateHz
+    ) {
         this.plugin = plugin;
         this.collector = collector;
         this.clientSupplier = clientSupplier;
         this.serverIdSupplier = serverIdSupplier != null ? serverIdSupplier : () -> "default";
         this.speakerSupplier = speakerSupplier != null ? speakerSupplier : java.util.List::of;
+        this.configSupplier = configSupplier;
         this.tickRateHz = Math.max(1, Math.min(20, tickRateHz));
     }
 
@@ -52,7 +66,19 @@ public class TelemetryService implements VoiceEngineService {
         this.task = Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, () -> {
             VoiceBackendClient client = clientSupplier.get();
             if (client != null && client.isOpen()) {
-                SpatialTelemetryBatch batch = collector.collectBatch(Bukkit.getOnlinePlayers(), serverIdSupplier.get(), speakerSupplier.get());
+                com.voiceengine.config.VoiceConfig cfg = configSupplier != null ? configSupplier.get() : null;
+                boolean whisper = cfg == null || cfg.whisperOnSneak();
+                boolean submerged = cfg == null || cfg.underwaterAcoustics();
+                String spectatorMode = cfg != null ? cfg.spectatorMode() : "listen-only";
+
+                SpatialTelemetryBatch batch = collector.collectBatch(
+                    Bukkit.getOnlinePlayers(),
+                    serverIdSupplier.get(),
+                    speakerSupplier.get(),
+                    whisper,
+                    submerged,
+                    spectatorMode
+                );
                 client.sendTelemetry(batch);
             }
         }, periodTicks, periodTicks);

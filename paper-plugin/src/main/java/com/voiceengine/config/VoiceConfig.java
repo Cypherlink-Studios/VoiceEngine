@@ -17,7 +17,13 @@ public record VoiceConfig(
     String proxyMode,
     boolean audioEnabled,
     boolean audioPersistenceEnabled,
-    boolean audioParticlesEnabled
+    boolean audioParticlesEnabled,
+    boolean whisperOnSneak,
+    boolean underwaterAcoustics,
+    boolean speakingParticles,
+    String spectatorMode,
+    boolean speakersEnabled,
+    boolean speakersParticlesEnabled
 ) {
     public VoiceConfig(
         URI voiceServerUri,
@@ -28,7 +34,7 @@ public record VoiceConfig(
         boolean notifyOnJoin,
         String defaultLocale
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true);
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true, true, true, true, "listen-only", true, true);
     }
 
     public VoiceConfig(
@@ -42,7 +48,24 @@ public record VoiceConfig(
         String serverId,
         String proxyMode
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true);
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true, true, true, true, "listen-only", true, true);
+    }
+
+    public VoiceConfig(
+        URI voiceServerUri,
+        String webClientUrl,
+        String secretKey,
+        int tickRateHz,
+        Duration tokenTtl,
+        boolean notifyOnJoin,
+        String defaultLocale,
+        String serverId,
+        String proxyMode,
+        boolean audioEnabled,
+        boolean audioPersistenceEnabled,
+        boolean audioParticlesEnabled
+    ) {
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, true, true, true, "listen-only", true, true);
     }
 
     public boolean resolveProxyMode(boolean velocityForwardingDetected) {
@@ -94,6 +117,22 @@ public record VoiceConfig(
         boolean audioPersistenceEnabled = config == null || config.getBoolean("audio.persistence-enabled", true);
         boolean audioParticlesEnabled = config == null || config.getBoolean("audio.particles-enabled", true);
 
+        boolean whisperOnSneak = config == null || config.getBoolean("mechanics.whisper-on-sneak", true);
+        boolean underwaterAcoustics = config == null || config.getBoolean("mechanics.underwater-acoustics", true);
+        boolean speakingParticles = config == null || config.getBoolean("mechanics.speaking-particles", true);
+        String spectatorMode = config != null ? config.getString("mechanics.spectator-mode", "listen-only") : "listen-only";
+        if (spectatorMode == null || spectatorMode.isBlank()) {
+            spectatorMode = "listen-only";
+        } else {
+            spectatorMode = spectatorMode.trim().toLowerCase();
+            if (!spectatorMode.equals("all") && !spectatorMode.equals("listen-only") && !spectatorMode.equals("isolated")) {
+                spectatorMode = "listen-only";
+            }
+        }
+
+        boolean speakersEnabled = config == null || config.getBoolean("speakers.enabled", true);
+        boolean speakersParticlesEnabled = config == null || config.getBoolean("speakers.particles-enabled", true);
+
         return new VoiceConfig(
             serverUri,
             webClient,
@@ -106,7 +145,13 @@ public record VoiceConfig(
             pMode,
             audioEnabled,
             audioPersistenceEnabled,
-            audioParticlesEnabled
+            audioParticlesEnabled,
+            whisperOnSneak,
+            underwaterAcoustics,
+            speakingParticles,
+            spectatorMode,
+            speakersEnabled,
+            speakersParticlesEnabled
         );
     }
 }

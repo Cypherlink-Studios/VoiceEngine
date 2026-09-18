@@ -29,7 +29,9 @@ export function PlayerRoute() {
 
   const [localPlayer, setLocalPlayer] = useState<{ uuid: string; username: string } | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:mic_muted') === 'true'
+  );
   const [isDeafened, setIsDeafened] = useState(false);
   const [moderationNotice, setModerationNotice] = useState<ModerationNotice | null>(null);
   const [vadThreshold, setVadThreshold] = useState<number>(() => {
@@ -141,7 +143,7 @@ export function PlayerRoute() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const sendStreamRef = useRef<MediaStream | null>(null);
   const sendTrackRef = useRef<MediaStreamTrack | null>(null);
-  const isMutedRef = useRef(false);
+  const isMutedRef = useRef(localStorage.getItem('voiceengine:mic_muted') === 'true');
   const isDeafenedRef = useRef(false);
   const isSpeakingRef = useRef(false);
 
@@ -212,6 +214,10 @@ export function PlayerRoute() {
       micPipelineRef.current = micPipeline;
       setIsFallbackMode(micPipeline.isFallback());
 
+      if (isMutedRef.current) {
+        micPipeline.setMuted(true);
+      }
+
       // Pass processed WebRTC track from destination node
       const sendTrack = micPipeline.getProcessedTrack();
       sendTrack.enabled = false;
@@ -279,10 +285,11 @@ export function PlayerRoute() {
         onModerationNotice: (notice) => {
           setModerationNotice(notice);
           if (notice.action === 'mute') {
-            setIsMuted(notice.active);
-            isMutedRef.current = notice.active;
-            setIsSpeaking(isSpeakingRef.current && !notice.active && !isDeafenedRef.current);
-            updateAudioTransmission(isSpeakingRef.current, notice.active, isDeafenedRef.current);
+            const effectiveMute = notice.active || (localStorage.getItem('voiceengine:mic_muted') === 'true');
+            setIsMuted(effectiveMute);
+            isMutedRef.current = effectiveMute;
+            setIsSpeaking(isSpeakingRef.current && !effectiveMute && !isDeafenedRef.current);
+            updateAudioTransmission(isSpeakingRef.current, effectiveMute, isDeafenedRef.current);
             if (notice.active) {
               soundEffects.playMute();
             } else {
@@ -362,7 +369,8 @@ export function PlayerRoute() {
       micStreamRef.current = null;
     }
 
-    isMutedRef.current = false;
+    const savedMute = localStorage.getItem('voiceengine:mic_muted') === 'true';
+    isMutedRef.current = savedMute;
     isDeafenedRef.current = false;
     isSpeakingRef.current = false;
 
@@ -372,7 +380,7 @@ export function PlayerRoute() {
     setAnalyser(null);
     setIsConnected(false);
     setIsConnecting(false);
-    setIsMuted(false);
+    setIsMuted(savedMute);
     setIsDeafened(false);
     setIsLoopbackActive(false);
     setIsQrModalOpen(false);
@@ -393,6 +401,7 @@ export function PlayerRoute() {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
     isMutedRef.current = nextMuted;
+    localStorage.setItem('voiceengine:mic_muted', String(nextMuted));
 
     updateAudioTransmission(isSpeakingRef.current, nextMuted, isDeafenedRef.current);
 
@@ -426,10 +435,11 @@ export function PlayerRoute() {
       soundEffects.playDeafen();
       triggerHaptic([30, 40, 30]);
     } else {
-      setIsMuted(false);
-      isMutedRef.current = false;
-      setIsSpeaking(isSpeakingRef.current);
-      updateAudioTransmission(isSpeakingRef.current, false, false);
+      const savedMute = localStorage.getItem('voiceengine:mic_muted') === 'true';
+      setIsMuted(savedMute);
+      isMutedRef.current = savedMute;
+      setIsSpeaking(isSpeakingRef.current && !savedMute);
+      updateAudioTransmission(isSpeakingRef.current, savedMute, false);
       soundEffects.playUndeafen();
       triggerHaptic(40);
     }

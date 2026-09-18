@@ -37,13 +37,29 @@ export class SpatialEngine {
 
   private totalAudibleEvaluated = 0;
   private deadbandSuppressedCount = 0;
+  private spectatorMode: 'all' | 'listen-only' | 'isolated' = 'listen-only';
 
-  constructor(maxDistance = 30.0, sneakDistance = 8.0, deadbandDistance = 0.08, deadbandYaw = 2.0) {
+  constructor(
+    maxDistance = 30.0,
+    sneakDistance = 8.0,
+    deadbandDistance = 0.08,
+    deadbandYaw = 2.0,
+    spectatorMode: 'all' | 'listen-only' | 'isolated' = 'listen-only'
+  ) {
     this.maxDistance = maxDistance;
     this.sneakDistance = sneakDistance;
     this.maxDistanceSq = maxDistance * maxDistance;
     this.sneakDistanceSq = sneakDistance * sneakDistance;
+    this.spectatorMode = spectatorMode;
     this.updateDeadband(deadbandDistance, deadbandYaw);
+  }
+
+  public setSpectatorMode(mode: 'all' | 'listen-only' | 'isolated'): void {
+    this.spectatorMode = mode;
+  }
+
+  public getSpectatorMode(): 'all' | 'listen-only' | 'isolated' {
+    return this.spectatorMode;
   }
 
   public updateDistances(maxDistance: number, sneakDistance: number): void {
@@ -274,6 +290,19 @@ export class SpatialEngine {
     for (const [linkedUuid, dist] of broadcastSpeakers.entries()) {
       const linkedPlayer = this.players.get(linkedUuid);
       if (linkedPlayer) {
+        const speakerIsSpectator = Boolean(linkedPlayer.isSpectator);
+        const listenerIsSpectator = Boolean(listener.isSpectator);
+
+        if (this.spectatorMode === 'listen-only') {
+          if (speakerIsSpectator && !listenerIsSpectator) {
+            continue;
+          }
+        } else if (this.spectatorMode === 'isolated') {
+          if (speakerIsSpectator !== listenerIsSpectator) {
+            continue;
+          }
+        }
+
         audiblePeerUuids.add(linkedPlayer.uuid);
         if (applyDeadband && listenerDeadbandMap) {
           this.totalAudibleEvaluated++;
@@ -351,6 +380,20 @@ export class SpatialEngine {
       const speaker = this.players.get(peerUuid);
       if (!speaker) {
         return;
+      }
+
+      // Spectator isolation and routing rules
+      const speakerIsSpectator = Boolean(speaker.isSpectator);
+      const listenerIsSpectator = Boolean(listener.isSpectator);
+
+      if (this.spectatorMode === 'listen-only') {
+        if (speakerIsSpectator && !listenerIsSpectator) {
+          return;
+        }
+      } else if (this.spectatorMode === 'isolated') {
+        if (speakerIsSpectator !== listenerIsSpectator) {
+          return;
+        }
       }
 
       // Pre-filter with squared Euclidean distance (avoids Math.sqrt for non-audible players)

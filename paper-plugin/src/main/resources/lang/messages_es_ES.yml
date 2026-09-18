@@ -37,6 +37,8 @@ command:
     list_header: "<prefix_admin><gold>--- Bloques Altavoz Registrados (<count>) ---</gold>"
     list_item: "<gray>- <yellow><id></yellow>: (<x>, <y>, <z>) en <world> | Radio: <radius>m | Enlazado: <aqua><linked></aqua> | Redstone: <redstone> | Medios: <media></gray>"
     no_speakers: "<prefix_admin><gray>No hay bloques altavoces registrados.</gray>"
+    disabled: "<prefix_admin><red>Los bloques de altavoz están desactivados en la configuración del servidor.</red>"
+    particles_toggled: "<prefix_admin><green>Las partículas de altavoz se han establecido en: <yellow><state></yellow>.</green>"
   audio:
     play_started: "<prefix_admin><green>Iniciado audio espacial <yellow><id></yellow> en (<x>, <y>, <z>) radio <radius>m (bucle: <loop>).</green>"
     broadcast_started: "<prefix_admin><green>Iniciada transmisión global <yellow><id></yellow> (bucle: <loop>).</green>"
