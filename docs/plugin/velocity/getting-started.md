@@ -43,7 +43,7 @@ voice-server-url: "ws://127.0.0.1:3000/ws/plugin"
 # Public URL of the Web Client
 web-client-url: "https://voice.yournetwork.com"
 
-# Shared secret key matching PLUGIN_SECRET in backend .env
+# Shared secret key matching SECRET_KEY in backend .env
 secret-key: "your-secure-random-secret-key-here"
 
 # Token expiration time in minutes

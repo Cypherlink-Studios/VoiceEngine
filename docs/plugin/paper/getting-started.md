@@ -9,7 +9,7 @@ This guide walks you through installing, configuring, and verifying the **VoiceE
 Before installing the plugin, ensure your environment meets the following requirements:
 
 - **Server Software**: [Paper](https://papermc.io/), [Purpur](https://purpurmc.org/), or compatible forks running **Minecraft 1.20 through 1.21.x**.
-- **Java Runtime**: **Java 21** or higher.
+- **Java Runtime**: **Java 17** or higher (Java 21 recommended).
 - **VoiceEngine Backend**: A running instance of the VoiceEngine SFU backend (see [Deployment Guide](../../installation/DEPLOY.md)).
 - **Web Client**: A hosted VoiceEngine Web Client URL accessible by your players via HTTPS/HTTP.
 
@@ -41,7 +41,7 @@ server-root/
         └── lang/
             ├── messages_en_US.yml
             └── messages_es_ES.yml
-```
+   ```
 
 ### Step 3: Configure Network Secrets
 Open `plugins/VoiceEngine/config.yml` in a text editor:
@@ -53,7 +53,7 @@ voice-server-url: "ws://127.0.0.1:3000/ws/plugin"
 # Public URL players use to access the VoiceEngine web interface
 web-client-url: "https://voice.yournetwork.com"
 
-# Shared HMAC secret key matching PLUGIN_SECRET in the backend .env
+# Shared HMAC secret key matching SECRET_KEY in the backend .env
 secret-key: "your-secure-random-secret-key-here"
 
 # Server identifier for this world or subserver
@@ -64,7 +64,7 @@ proxy-mode: "auto"
 ```
 
 > [!WARNING]
-> The `secret-key` must **exactly match** the `PLUGIN_SECRET` configured in your VoiceEngine backend's `.env` file. If they differ, the backend will immediately reject the plugin's authentication handshake with error code `4401`.
+> The `secret-key` must **exactly match** the `SECRET_KEY` configured in your VoiceEngine backend's `.env` file. If they differ, the backend will immediately reject the plugin's authentication handshake with error code `4401`.
 
 ### Step 4: Reload or Restart
 Apply your configuration changes by executing the reload command in the server console or in-game:
