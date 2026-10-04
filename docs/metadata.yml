@@ -1,0 +1,57 @@
+id: voiceengine
+name: VoiceEngine
+description: Browser-based 3D proximity voice chat and media streaming engine for Minecraft Paper servers and Velocity networks without client-side mods.
+
+# Supported platforms
+platforms:
+  - paper
+  - purpur
+  - velocity
+
+# Minecraft compatibility
+minecraft:
+  minimum: "1.20.4"
+  supported:
+    - "1.20.4"
+    - "1.20.6"
+    - "1.21.x"
+  tested: "1.20.4"
+
+# Java runtime compatibility
+java:
+  minimum: 17
+  recommended: 21
+
+# Folia compatibility
+folia:
+  supported: false
+  status: unsupported
+  notes: Utiliza sincronización basada en el Bukkit tick scheduler y Cloud Paper v2 sin soporte para el scheduler regional de Folia.
+
+# Published versions (Version history)
+versions:
+  # CURRENT VERSION (LATEST) -> Always the first entry [0]
+  - version: "1.0.0"
+    releaseDate: "2026-10-04"
+    reference: "bcde65d"
+    downloadUrl: https://github.com/Cypherlink-Studios/VoiceEngine/releases
+    changelog: Lanzamiento inicial de VoiceEngine con audio espacial 3D WebRTC, supresión neuronal RNNoise, proxies Velocity con SQLite WAL, bloques parlantes en el mundo y emisores dinámicos.
+    minecraft:
+      - "1.20.4"
+      - "1.20.6"
+      - "1.21.x"
+
+# Plugin dependencies
+dependencies: []
+
+# External links
+links:
+  github: https://github.com/Cypherlink-Studios/VoiceEngine
+
+# Documentation engine metadata
+documentation:
+  defaultLocale: en
+  locales:
+    - en
+    - es
+  repoPath: docs
