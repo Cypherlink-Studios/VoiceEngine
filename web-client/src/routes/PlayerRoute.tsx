@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff, Users } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
 import { MicrophonePipeline } from '../audio/MicrophonePipeline.js';
 import { VoiceSignaling, ChannelMember, ModerationNotice } from '../net/VoiceSignaling.js';
 import { Radar, PeerRadarInfo } from '../components/Radar.js';
 import { ControlDock } from '../components/player/ControlDock.js';
-import { ChannelDrawer } from '../components/player/ChannelDrawer.js';
 import { SettingsModal, AudioConstraintsConfig } from '../components/player/SettingsModal.js';
 import { PlayerVolumePopover } from '../components/player/PlayerVolumePopover.js';
 import { QrCompanionModal } from '../components/player/QrCompanionModal.js';
@@ -807,12 +806,16 @@ export function PlayerRoute() {
         }}
       />
       <div
-        className="fixed top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] pointer-events-none rounded-full blur-[140px] opacity-20"
+        className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none rounded-full blur-[160px] opacity-15"
         style={{ backgroundColor: 'var(--brand-primary, #6366f1)' }}
+      />
+      <div
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[250px] pointer-events-none rounded-full blur-[160px] opacity-10"
+        style={{ backgroundColor: 'var(--brand-accent, #22c55e)' }}
       />
 
       {/* Top Navbar */}
-      <header className="relative z-20 w-full max-w-6xl px-6 py-4 flex items-center justify-between border-b border-white/10 backdrop-blur-md">
+      <header className="relative z-20 w-full max-w-5xl px-6 py-4 flex items-center justify-between border-b border-white/5 backdrop-blur-md">
         <div className="flex items-center gap-3">
           {config.branding.logoUrl ? (
             <img
@@ -926,12 +929,12 @@ export function PlayerRoute() {
 
         {!isConnected ? (
           /* Connect / Welcome Card */
-          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl flex flex-col items-center text-center">
+          <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl bg-slate-950/75 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.12)] flex flex-col items-center text-center">
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-white shadow-xl mb-4"
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-xl mb-4"
               style={{ backgroundColor: 'var(--brand-primary, #6366f1)' }}
             >
-              <Radio className="w-8 h-8 animate-pulse" />
+              <Radio className="w-7 h-7 animate-pulse" />
             </div>
 
             <h2 className="text-xl font-bold text-white mb-1">
@@ -979,38 +982,144 @@ export function PlayerRoute() {
           </div>
         ) : (
           /* Connected Live Voice HUD */
-          <div className="w-full flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 mb-24">
-            {/* Left: 3D Radar or Channel Display */}
-            <div className="flex flex-col items-center gap-4">
+          <div className="w-full flex flex-col items-center justify-center mb-28">
+            {/* Top Floating Segmented Channel Tabs */}
+            <nav className="flex items-center p-1 rounded-full bg-slate-950/70 backdrop-blur-xl border border-white/10 shadow-lg mb-6">
+              {/* Proximity 3D Tab */}
+              <button
+                onClick={() => handleSelectChannel('proximity')}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-2 cursor-pointer ${
+                  activeChannel === 'proximity'
+                    ? 'bg-white/15 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <span>{t('channels.proximityTitle')}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    activeChannel === 'proximity'
+                      ? 'bg-emerald-500/25 text-emerald-300'
+                      : 'bg-white/5 text-slate-400'
+                  }`}
+                >
+                  {peers.length}
+                </span>
+              </button>
+
+              {/* Fixed Global Channels */}
+              {config.fixedChannels.map((channel) => {
+                const isActive = activeChannel === channel.id;
+                return (
+                  <button
+                    key={channel.id}
+                    onClick={() => handleSelectChannel(channel.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-2 cursor-pointer ${
+                      isActive
+                        ? 'bg-white/15 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span>{channel.name}</span>
+                    {isActive && channelMembers.length > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-indigo-500/25 text-indigo-300">
+                        {channelMembers.length}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Central Stage: 3D Soundstage or Fixed Channel Room */}
+            {activeChannel === 'proximity' ? (
               <Radar
-                peers={activeChannel === 'proximity' ? peers : []}
+                peers={peers}
                 maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
                 localUsername={localPlayer?.username}
                 localUuid={localPlayer?.uuid}
                 onPeerClick={(peer) => setPopoverPeer(peer)}
               />
-            </div>
+            ) : (
+              /* Fixed Channel Stage */
+              <div className="w-full max-w-md p-6 rounded-3xl bg-slate-950/70 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.1)] flex flex-col items-center">
+                {/* Room Info Header */}
+                <div className="w-full flex items-center justify-between pb-3 border-b border-white/5 mb-4">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <span>{config.fixedChannels.find((c) => c.id === activeChannel)?.name || activeChannel}</span>
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {t('channels.activeBadge')}
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {config.fixedChannels.find((c) => c.id === activeChannel)?.description || t('channels.globalRooms')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-white/10 text-xs text-slate-300 font-mono">
+                    <Users className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{channelMembers.length}</span>
+                  </div>
+                </div>
 
-            {/* Right: Channels & Participants */}
-            <div className="w-full max-w-md flex flex-col items-center">
-              <ChannelDrawer
-                activeChannel={activeChannel}
-                fixedChannels={config.fixedChannels}
-                channelMembers={channelMembers}
-                proximityPeersCount={peers.length}
-                onSelectChannel={handleSelectChannel}
-                onMemberClick={(member) =>
-                  setPopoverPeer({
-                    uuid: member.uuid,
-                    username: member.username,
-                    distance: 0,
-                    relX: 0,
-                    relY: 0,
-                    relZ: 0,
-                  })
-                }
-              />
-            </div>
+                {/* Member Grid / Roster */}
+                {channelMembers.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500">
+                    {t('settings.players.emptyPlayers')}
+                  </div>
+                ) : (
+                  <div className="w-full grid grid-cols-2 gap-2.5">
+                    {channelMembers.map((member) => (
+                      <div
+                        key={member.uuid}
+                        onClick={() =>
+                          setPopoverPeer({
+                            uuid: member.uuid,
+                            username: member.username,
+                            distance: 0,
+                            relX: 0,
+                            relY: 0,
+                            relZ: 0,
+                          })
+                        }
+                        className="flex items-center gap-2.5 p-2 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/5 hover:border-white/15 transition-all cursor-pointer group"
+                        title={t('channels.adjustVolumeTooltip', { user: member.username })}
+                      >
+                        <div className="relative">
+                          <img
+                            src={`https://mc-heads.net/avatar/${member.uuid}/28`}
+                            alt={member.username}
+                            className={`w-7 h-7 rounded-xl object-cover border transition-all ${
+                              member.isSpeaking
+                                ? 'border-emerald-400 ring-2 ring-emerald-400/50 scale-105'
+                                : 'border-white/10'
+                            }`}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'https://mc-heads.net/avatar/MHF_Steve/28';
+                            }}
+                          />
+                          {member.isSpeaking && (
+                            <span className="absolute -inset-1 rounded-xl bg-emerald-400/30 animate-ping opacity-60" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium text-slate-200 truncate group-hover:text-white">
+                            {member.username}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {member.isSpeaking ? (
+                              <span className="text-emerald-400 font-mono">Hablando</span>
+                            ) : (
+                              <span>Conectado</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -1059,6 +1168,7 @@ export function PlayerRoute() {
           onOpenQrCompanion={() => setIsQrModalOpen(true)}
           onChangeMasterVolume={handleChangeMasterVolume}
           onChangeVadThreshold={handleChangeVadThreshold}
+          onToggleAiNoiseSuppression={handleToggleAiNoiseSuppression}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDisconnect={handleDisconnect}
         />

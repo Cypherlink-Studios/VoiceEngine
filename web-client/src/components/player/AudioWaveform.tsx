@@ -10,7 +10,7 @@ interface AudioWaveformProps {
 export function AudioWaveform({
   analyser,
   isSpeaking,
-  barCount = 18,
+  barCount = 4,
   className = '',
 }: AudioWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -31,47 +31,48 @@ export function AudioWaveform({
 
       const totalBars = barCount;
       const spacing = 3;
-      const barWidth = Math.max(2, (width - (totalBars - 1) * spacing) / totalBars);
+      const barWidth = 3;
+      const totalWidth = totalBars * barWidth + (totalBars - 1) * spacing;
+      const startX = (width - totalWidth) / 2;
 
       if (analyser && dataArray) {
         analyser.getByteFrequencyData(dataArray);
       }
 
-      // Read CSS variable for brand accent color, or fallback to neon green
-      const computedStyle = getComputedStyle(document.documentElement);
-      const accentColor = computedStyle.getPropertyValue('--brand-accent').trim() || '#22c55e';
-      const primaryColor = computedStyle.getPropertyValue('--brand-primary').trim() || '#6366f1';
-
       for (let i = 0; i < totalBars; i++) {
         let value = 0;
-        if (analyser && dataArray) {
-          // Sample linearly across frequency spectrum
+        if (analyser && dataArray && isSpeaking) {
+          // Sample voice frequencies (human vocal fundamentals & harmonics ~85Hz - 3kHz)
           const binIndex = Math.min(
             dataArray.length - 1,
-            Math.floor((i / totalBars) * Math.min(dataArray.length, 32))
+            Math.floor(((i + 1) / (totalBars + 1)) * Math.min(dataArray.length, 24))
           );
           value = dataArray[binIndex] / 255;
         } else if (isSpeaking) {
-          // Synthetic wave pulse if analyser is null
-          value = Math.sin(Date.now() / 150 + i * 0.5) * 0.4 + 0.5;
+          // Synthetic subtle wave if analyser is temporarily unavailable
+          value = Math.sin(Date.now() / 120 + i * 0.8) * 0.4 + 0.5;
         } else {
-          // Subtle idle noise
-          value = 0.08 + Math.sin(Date.now() / 400 + i * 0.3) * 0.04;
+          // Minimal resting baseline
+          value = 0.05;
         }
 
         const minHeight = 4;
-        const barHeight = Math.max(minHeight, value * height * 0.9);
-        const x = i * (barWidth + spacing);
+        const maxHeight = height * 0.85;
+        const barHeight = isSpeaking
+          ? Math.min(maxHeight, Math.max(minHeight, value * maxHeight * 1.2))
+          : minHeight;
+
+        const x = startX + i * (barWidth + spacing);
         const y = (height - barHeight) / 2;
 
-        // Gradient styling
+        // Gradient styling: soft emerald voice pulse when speaking, subtle translucent slate when idle
         const grad = ctx.createLinearGradient(0, y, 0, y + barHeight);
         if (isSpeaking) {
-          grad.addColorStop(0, accentColor);
-          grad.addColorStop(1, primaryColor);
+          grad.addColorStop(0, '#34d399');
+          grad.addColorStop(1, '#059669');
         } else {
-          grad.addColorStop(0, 'rgba(148, 163, 184, 0.4)');
-          grad.addColorStop(1, 'rgba(71, 85, 105, 0.2)');
+          grad.addColorStop(0, 'rgba(148, 163, 184, 0.45)');
+          grad.addColorStop(1, 'rgba(100, 116, 139, 0.3)');
         }
 
         ctx.fillStyle = grad;
@@ -92,12 +93,12 @@ export function AudioWaveform({
   }, [analyser, isSpeaking, barCount]);
 
   return (
-    <div className={`relative flex items-center justify-center ${className}`}>
+    <div className={`flex items-center justify-center px-1.5 ${className}`}>
       <canvas
         ref={canvasRef}
-        width={140}
-        height={36}
-        className="w-[140px] h-[36px]"
+        width={32}
+        height={24}
+        className="w-[32px] h-[24px]"
       />
     </div>
   );
