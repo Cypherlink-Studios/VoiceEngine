@@ -102,15 +102,15 @@ export function ControlDock({
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-72 p-4 rounded-2xl bg-slate-950/85 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.12)] flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-150">
           <div className="flex items-center justify-between pb-2 border-b border-white/5">
             <span className="text-xs font-semibold text-white tracking-wide">
-              {t('settings.title')}
+              {t('dock.quickAudio')}
             </span>
             {aiNoiseSuppression && (
               <span
                 className="flex items-center gap-1 text-[10px] font-mono text-purple-300 bg-purple-500/15 px-2 py-0.5 rounded-full border border-purple-500/30"
-                title={speechProbability > 0 ? `Voz: ${Math.round(speechProbability * 100)}%` : undefined}
+                title={speechProbability > 0 ? t('dock.aiVoiceProbability', { percent: Math.round(speechProbability * 100) }) : undefined}
               >
                 <Sparkles className="w-3 h-3 text-purple-400" />
-                <span>RNNoise {speechProbability > 0 ? `${Math.round(speechProbability * 100)}%` : 'IA'}</span>
+                <span>RNNoise {speechProbability > 0 ? `${Math.round(speechProbability * 100)}%` : t('dock.aiBadge')}</span>
               </span>
             )}
           </div>

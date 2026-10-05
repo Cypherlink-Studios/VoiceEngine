@@ -166,7 +166,7 @@ export function PlayerRoute() {
 
   const handleConnect = async () => {
     if (!tokenInput.trim()) {
-      setErrorMsg('Please enter or click your /voice connection link in Minecraft.');
+      setErrorMsg(t('auth.enterTokenError'));
       return;
     }
 
@@ -306,7 +306,10 @@ export function PlayerRoute() {
               soundEffects.playUndeafen();
             }
           } else if (notice.action === 'kick' || notice.action === 'ban') {
-            setErrorMsg(notice.reason || `You have been ${notice.action}ed from VoiceEngine.`);
+            setErrorMsg(
+              notice.reason ||
+                (notice.action === 'kick' ? t('moderation.actionKick') : t('moderation.actionBan'))
+            );
             handleDisconnect();
           }
         },
@@ -1108,9 +1111,9 @@ export function PlayerRoute() {
                           </div>
                           <div className="text-[10px] text-slate-400">
                             {member.isSpeaking ? (
-                              <span className="text-emerald-400 font-mono">Hablando</span>
+                              <span className="text-emerald-400 font-mono">{t('channels.speaking')}</span>
                             ) : (
-                              <span>Conectado</span>
+                              <span>{t('channels.connected')}</span>
                             )}
                           </div>
                         </div>

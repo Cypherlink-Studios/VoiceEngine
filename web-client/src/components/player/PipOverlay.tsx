@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mic, MicOff, Headphones, VolumeX, Activity, X } from 'lucide-react';
 import { Radar, PeerRadarInfo } from '../Radar.js';
+import { useTranslation } from '../../i18n/index.js';
 
 export interface PipOverlayProps {
   localPlayer: { uuid: string; username: string } | null;
@@ -29,6 +30,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
   onClose,
   onPeerClick,
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="relative w-full h-full bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-3 select-none overflow-hidden font-sans">
       {/* Ambient background glow */}
@@ -50,7 +52,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           )}
           <span className="text-xs font-semibold truncate text-slate-200">
-            {streamerMode ? 'Jugador' : localPlayer?.username || 'Voice'}
+            {streamerMode ? t('auth.playerFallback') : localPlayer?.username || 'Voice'}
           </span>
         </div>
 
@@ -72,7 +74,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-            title="Cerrar Overlay"
+            title={t('pip.closeOverlay')}
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -104,7 +106,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400 ring-2 ring-emerald-400/60'
                 : 'bg-white/10 text-white border border-white/10 hover:bg-white/15'
             }`}
-            title={isMuted ? 'Activar micrófono [M]' : 'Silenciar micrófono [M]'}
+            title={isMuted ? `${t('dock.micUnmute')} [M]` : `${t('dock.micMute')} [M]`}
           >
             {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
@@ -117,7 +119,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
                 : 'bg-white/10 text-white border border-white/10 hover:bg-white/15'
             }`}
-            title={isDeafened ? 'Activar audio [D]' : 'Ensordecer audio [D]'}
+            title={isDeafened ? `${t('dock.undeafen')} [D]` : `${t('dock.deafen')} [D]`}
           >
             {isDeafened ? <VolumeX className="w-4 h-4 text-amber-300" /> : <Headphones className="w-4 h-4" />}
           </button>

@@ -23,6 +23,7 @@ export const en = {
     connectingStatus: 'Connecting...',
     playerFallback: 'Player',
     genericError: 'Failed to connect voice stream. Please verify microphone permissions.',
+    enterTokenError: 'Please enter or click your /voice connection link in Minecraft.',
   },
   dock: {
     micMute: 'Mute microphone',
@@ -41,6 +42,9 @@ export const en = {
     vadThreshold: 'Voice Activity Gate',
     settings: 'Audio and Player Settings',
     disconnect: 'Disconnect voice session',
+    quickAudio: 'Quick Audio',
+    aiVoiceProbability: 'Voice: {percent}%',
+    aiBadge: 'AI',
   },
   settings: {
     title: 'Audio Settings',
@@ -141,6 +145,8 @@ export const en = {
     switchHint: 'Click to switch',
     globalRooms: 'Global Rooms (Stereo)',
     adjustVolumeTooltip: 'Click to adjust volume for {user}',
+    speaking: 'Speaking',
+    connected: 'Connected',
   },
   popovers: {
     distance: '{dist}m away',
@@ -157,6 +163,8 @@ export const en = {
     bannerTitle: 'Moderation Action',
     actionMute: 'Microphone Muted',
     actionDeafen: 'Audio Deafened',
+    actionKick: 'You have been kicked from VoiceEngine.',
+    actionBan: 'You have been banned from VoiceEngine.',
     defaultReason: 'Action applied by server moderation staff.',
     expiresIn: 'Expires in',
     expiresSeconds: '{secs}s',
@@ -174,6 +182,20 @@ export const en = {
     perkNoApps: 'No downloads or apps required: runs directly in your mobile browser.',
     perkWakeLock: 'Keeps the mobile screen awake automatically.',
     perkHaptics: 'Haptic vibration feedback when muting or switching channels.',
+  },
+  pip: {
+    closeOverlay: 'Close Overlay',
+  },
+  soundstage: {
+    forward: '▲ Forward',
+    you: 'You',
+    elevationAbove: 'Above by +{m}m',
+    elevationBelow: 'Below by -{m}m',
+    submerged: 'Submerged underwater',
+    broadcast: '2D Broadcast / Speaker Block',
+    adjustVolume: 'Click to adjust volume for {user}',
+    maxRange: '{range}m max',
+    audiblePeers: '{count} nearby',
   },
 } as const;
 

@@ -25,6 +25,7 @@ export const es: Translations = {
     connectingStatus: 'Conectando...',
     playerFallback: 'Jugador',
     genericError: 'Error al conectar el flujo de voz. Por favor verifica los permisos del micrófono.',
+    enterTokenError: 'Por favor ingresa o haz clic en tu enlace de conexión /voice en Minecraft.',
   },
   dock: {
     micMute: 'Silenciar micrófono',
@@ -43,6 +44,9 @@ export const es: Translations = {
     vadThreshold: 'Puerta de Activación de Voz',
     settings: 'Configuración de Audio y Jugadores',
     disconnect: 'Desconectar sesión de voz',
+    quickAudio: 'Audio Rápido',
+    aiVoiceProbability: 'Voz: {percent}%',
+    aiBadge: 'IA',
   },
   settings: {
     title: 'Configuración de Audio',
@@ -143,6 +147,8 @@ export const es: Translations = {
     switchHint: 'Clic para cambiar',
     globalRooms: 'Salas Globales (Estéreo)',
     adjustVolumeTooltip: 'Clic para ajustar volumen de {user}',
+    speaking: 'Hablando',
+    connected: 'Conectado',
   },
   popovers: {
     distance: 'A {dist}m de distancia',
@@ -159,6 +165,8 @@ export const es: Translations = {
     bannerTitle: 'Acción de Moderación',
     actionMute: 'Micrófono Silenciado',
     actionDeafen: 'Audio Ensordecido',
+    actionKick: 'Has sido expulsado de VoiceEngine.',
+    actionBan: 'Has sido baneado de VoiceEngine.',
     defaultReason: 'Sanción aplicada por el personal de moderación.',
     expiresIn: 'Expira en',
     expiresSeconds: '{secs}s',
@@ -176,5 +184,19 @@ export const es: Translations = {
     perkNoApps: 'Sin descargas ni apps: corre en el navegador móvil.',
     perkWakeLock: 'Mantiene la pantalla encendida automáticamente.',
     perkHaptics: 'Vibración háptica al mutear o cambiar de canal.',
+  },
+  pip: {
+    closeOverlay: 'Cerrar Overlay',
+  },
+  soundstage: {
+    forward: '▲ Frente',
+    you: 'Tú',
+    elevationAbove: 'Arriba por +{m}m',
+    elevationBelow: 'Abajo por -{m}m',
+    submerged: 'Sumergido bajo agua',
+    broadcast: 'Megáfono 2D / Speaker Block',
+    adjustVolume: 'Clic para regular volumen de {user}',
+    maxRange: '{range}m máx',
+    audiblePeers: '{count} cerca',
   },
 };

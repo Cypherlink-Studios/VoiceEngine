@@ -1,3 +1,5 @@
+import { useTranslation } from '../i18n/index.js';
+
 export interface PeerRadarInfo {
   uuid: string;
   username: string;
@@ -22,11 +24,13 @@ interface RadarProps {
 export function Radar({
   peers,
   maxRange = 30,
-  localUsername = 'Tú',
+  localUsername,
   localUuid,
   size = 320,
   onPeerClick,
 }: RadarProps) {
+  const { t } = useTranslation();
+  const effectiveUsername = localUsername || t('soundstage.you');
   const center = size / 2;
   const radius = size / 2 - (size < 300 ? 18 : 26);
 
@@ -83,20 +87,20 @@ export function Radar({
             fill="rgba(255, 255, 255, 0.35)"
             className="text-[9px] font-mono tracking-widest uppercase"
           >
-            ▲ Frente
+            {t('soundstage.forward')}
           </text>
         </svg>
 
-        {/* Local Player Center Pin (Tú) */}
+        {/* Local Player Center Pin */}
         <div
           className="absolute z-20 flex flex-col items-center transform -translate-x-1/2 -translate-y-1/2 group cursor-default"
           style={{ left: center, top: center }}
-          title={localUsername}
+          title={effectiveUsername}
         >
           {localUuid ? (
             <img
               src={`https://mc-heads.net/avatar/${localUuid}/28`}
-              alt={localUsername}
+              alt={effectiveUsername}
               className="w-8 h-8 rounded-xl border-2 border-indigo-400/80 shadow-lg object-cover"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
@@ -106,11 +110,11 @@ export function Radar({
             <div
               className="w-7 h-7 rounded-xl border-2 border-indigo-400/80 bg-indigo-500/30 flex items-center justify-center text-[10px] font-bold text-white shadow-lg"
             >
-              Tú
+              {effectiveUsername}
             </div>
           )}
           <span className="mt-1 px-1.5 py-0.2 rounded-full bg-slate-900/80 border border-white/5 text-[9px] font-medium text-slate-300">
-            {localUsername}
+            {effectiveUsername}
           </span>
         </div>
 
@@ -134,7 +138,7 @@ export function Radar({
               onClick={() => onPeerClick?.(peer)}
               className="absolute z-30 transform -translate-x-1/2 -translate-y-1/2 transition-all duration-150 ease-out group cursor-pointer hover:scale-110 active:scale-95"
               style={{ left: px, top: py }}
-              title={`Clic para regular volumen de ${peer.username}`}
+              title={t('soundstage.adjustVolume', { user: peer.username })}
             >
               <div className="relative flex flex-col items-center">
                 {/* Expanding Voice Pulse Ring when Speaking */}
@@ -164,7 +168,7 @@ export function Radar({
                   {isAbove && (
                     <span
                       className="absolute -top-1.5 -right-1.5 px-1 py-0.2 rounded-full text-[8px] font-bold text-amber-300 bg-slate-900/90 border border-amber-400/40 shadow"
-                      title={`Arriba por +${elevation}m`}
+                      title={t('soundstage.elevationAbove', { m: elevation })}
                     >
                       ▲+{elevation}
                     </span>
@@ -172,7 +176,7 @@ export function Radar({
                   {isBelow && (
                     <span
                       className="absolute -bottom-1.5 -right-1.5 px-1 py-0.2 rounded-full text-[8px] font-bold text-indigo-300 bg-slate-900/90 border border-indigo-400/40 shadow"
-                      title={`Abajo por ${elevation}m`}
+                      title={t('soundstage.elevationBelow', { m: Math.abs(elevation) })}
                     >
                       ▼{elevation}
                     </span>
@@ -182,7 +186,7 @@ export function Radar({
                   {peer.isSubmerged && (
                     <span
                       className="absolute -top-1 -left-1 w-2.5 h-2.5 bg-cyan-400 rounded-full border border-slate-900 shadow"
-                      title="Sumergido bajo agua"
+                      title={t('soundstage.submerged')}
                     />
                   )}
 
@@ -190,7 +194,7 @@ export function Radar({
                   {peer.isBroadcast && (
                     <span
                       className="absolute -top-1.5 -left-1.5 px-1 py-0.2 rounded text-[8px] font-bold text-violet-300 bg-violet-950/90 border border-violet-500/50 shadow"
-                      title="Megáfono 2D / Speaker Block"
+                      title={t('soundstage.broadcast')}
                     >
                       📢
                     </span>
@@ -210,11 +214,11 @@ export function Radar({
 
       {/* Soundstage Legend Footer */}
       <div className="mt-3 px-3 py-1 rounded-full bg-white/[0.04] border border-white/5 text-[11px] text-slate-400 font-mono flex items-center gap-2.5">
-        <span>{maxRange}m máx</span>
+        <span>{t('soundstage.maxRange', { range: maxRange })}</span>
         <span className="text-slate-600">•</span>
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>{peers.length} cerca</span>
+          <span>{t('soundstage.audiblePeers', { count: peers.length })}</span>
         </span>
       </div>
     </div>
