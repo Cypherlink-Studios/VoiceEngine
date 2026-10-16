@@ -11,6 +11,7 @@ export interface PipOverlayProps {
   pingMs: number | null;
   peers: PeerRadarInfo[];
   streamerMode: boolean;
+  radarEnabled?: boolean;
   onToggleMute: () => void;
   onToggleDeafen: () => void;
   onClose: () => void;
@@ -25,6 +26,7 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
   pingMs,
   peers,
   streamerMode,
+  radarEnabled = true,
   onToggleMute,
   onToggleDeafen,
   onClose,
@@ -81,16 +83,69 @@ export const PipOverlay: React.FC<PipOverlayProps> = ({
         </div>
       </div>
 
-      {/* Compact Spatial Soundstage */}
-      <div className="relative z-10 my-auto flex items-center justify-center scale-95">
-        <Radar
-          peers={peers}
-          maxRange={30}
-          localUsername={localPlayer?.username}
-          localUuid={localPlayer?.uuid}
-          size={210}
-          onPeerClick={onPeerClick}
-        />
+      {/* Compact Central Stage: Radar or Mini Roster */}
+      <div className="relative z-10 my-auto flex items-center justify-center w-full px-1">
+        {radarEnabled ? (
+          <div className="scale-95">
+            <Radar
+              peers={peers}
+              maxRange={30}
+              localUsername={localPlayer?.username}
+              localUuid={localPlayer?.uuid}
+              size={210}
+              onPeerClick={onPeerClick}
+            />
+          </div>
+        ) : (
+          <div className="w-full max-h-[220px] flex flex-col items-center justify-center overflow-y-auto py-1">
+            {peers.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-xs">
+                {t('roster.emptyTitle')}
+              </div>
+            ) : (
+              <div className="w-full flex flex-col gap-1.5">
+                {peers.map((peer) => {
+                  const isSpeaking = Boolean(peer.isSpeaking);
+                  return (
+                    <div
+                      key={peer.uuid}
+                      onClick={() => onPeerClick?.(peer)}
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                        isSpeaking
+                          ? 'border-emerald-500/50 bg-emerald-950/30'
+                          : 'border-white/5 bg-slate-900/60 hover:border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <img
+                          src={`https://mc-heads.net/avatar/${peer.uuid}/24`}
+                          alt={peer.username}
+                          className={`w-6 h-6 rounded-lg border object-cover ${
+                            isSpeaking ? 'border-emerald-400 ring-1 ring-emerald-400' : 'border-white/10'
+                          }`}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src =
+                              'https://mc-heads.net/avatar/MHF_Steve/24';
+                          }}
+                        />
+                        <span className="font-medium truncate text-slate-200">
+                          {peer.username}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                          isSpeaking ? 'text-emerald-300 bg-emerald-500/20' : 'text-slate-400'
+                        }`}
+                      >
+                        {isSpeaking ? t('roster.speaking') : t('roster.idle')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Floating Action Capsule */}

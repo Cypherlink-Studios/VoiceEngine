@@ -62,6 +62,21 @@ export class SpatialEngine {
     return this.spectatorMode;
   }
 
+  private serverRadarStatus = new Map<string, boolean>();
+
+  public setServerRadarEnabled(serverId: string, enabled: boolean): void {
+    this.serverRadarStatus.set(serverId || 'default', enabled);
+  }
+
+  public isRadarEnabledForServer(serverId: string | undefined): boolean {
+    return this.serverRadarStatus.get(serverId || 'default') ?? true;
+  }
+
+  public isRadarEnabledForPlayer(playerUuid: string): boolean {
+    const player = this.players.get(playerUuid);
+    return this.isRadarEnabledForServer(player?.serverId);
+  }
+
   public updateDistances(maxDistance: number, sneakDistance: number): void {
     this.maxDistance = maxDistance;
     this.sneakDistance = sneakDistance;

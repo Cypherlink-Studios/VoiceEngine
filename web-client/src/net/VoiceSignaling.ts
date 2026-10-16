@@ -28,6 +28,7 @@ export interface SignalingCallbacks {
   onChannelPeerSpeaking?: (channelId: string, peerUuid: string, speaking: boolean) => void;
   onPingUpdated?: (pingMs: number) => void;
   onModerationNotice?: (notice: ModerationNotice) => void;
+  onRadarStatusChanged?: (enabled: boolean) => void;
 }
 
 export class VoiceSignaling {
@@ -151,6 +152,13 @@ export class VoiceSignaling {
     switch (msg.type) {
       case 'time_sync_response': {
         this.mediaPipeline.handleTimeSyncResponse(msg);
+        break;
+      }
+
+      case 'radar_status': {
+        if (typeof msg.enabled === 'boolean') {
+          this.callbacks.onRadarStatusChanged?.(msg.enabled);
+        }
         break;
       }
 

@@ -12,6 +12,7 @@ import { SettingsModal, AudioConstraintsConfig } from '../components/player/Sett
 import { PlayerVolumePopover } from '../components/player/PlayerVolumePopover.js';
 import { QrCompanionModal } from '../components/player/QrCompanionModal.js';
 import { PipOverlay } from '../components/player/PipOverlay.js';
+import { ProximityRoster } from '../components/player/ProximityRoster.js';
 import { soundEffects } from '../audio/SoundEffects.js';
 import { useBrand } from '../components/layout/BrandProvider.js';
 import { useTranslation, LanguageSelector } from '../i18n/index.js';
@@ -53,6 +54,7 @@ export function PlayerRoute() {
   const [isFallbackMode, setIsFallbackMode] = useState<boolean>(false);
   const [masterVolume, setMasterVolume] = useState(1.0);
   const [peers, setPeers] = useState<PeerRadarInfo[]>([]);
+  const [radarEnabled, setRadarEnabled] = useState<boolean>(true);
 
   const [activeChannel, setActiveChannel] = useState<string>('proximity');
   const [channelMembers, setChannelMembers] = useState<ChannelMember[]>([]);
@@ -280,6 +282,9 @@ export function PlayerRoute() {
         },
         onPingUpdated: (rtt) => {
           setPingMs(rtt);
+        },
+        onRadarStatusChanged: (enabled) => {
+          setRadarEnabled(enabled);
         },
         onModerationNotice: (notice) => {
           setModerationNotice(notice);
@@ -1033,15 +1038,26 @@ export function PlayerRoute() {
               })}
             </nav>
 
-            {/* Central Stage: 3D Soundstage or Fixed Channel Room */}
+            {/* Central Stage: 3D Soundstage, Proximity Roster, or Fixed Channel Room */}
             {activeChannel === 'proximity' ? (
-              <Radar
-                peers={peers}
-                maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
-                localUsername={localPlayer?.username}
-                localUuid={localPlayer?.uuid}
-                onPeerClick={(peer) => setPopoverPeer(peer)}
-              />
+              radarEnabled ? (
+                <Radar
+                  peers={peers}
+                  maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
+                  localUsername={localPlayer?.username}
+                  localUuid={localPlayer?.uuid}
+                  onPeerClick={(peer) => setPopoverPeer(peer)}
+                />
+              ) : (
+                <ProximityRoster
+                  peers={peers}
+                  peerVolumes={peerVolumes}
+                  peerMuted={peerMuted}
+                  onSetPeerVolume={handleSetPeerVolume}
+                  onSetPeerMuted={handleSetPeerMuted}
+                  onPeerClick={(peer) => setPopoverPeer(peer)}
+                />
+              )
             ) : (
               /* Fixed Channel Stage */
               <div className="w-full max-w-md p-6 rounded-3xl bg-slate-950/70 backdrop-blur-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.1)] flex flex-col items-center">
@@ -1200,6 +1216,7 @@ export function PlayerRoute() {
             pingMs={pingMs}
             peers={activeChannel === 'proximity' ? peers : []}
             streamerMode={streamerMode}
+            radarEnabled={radarEnabled}
             onToggleMute={handleToggleMute}
             onToggleDeafen={handleToggleDeafen}
             onClose={() => {

@@ -127,6 +127,9 @@ export class PluginGateway {
               this.spatialEngine.setSpectatorMode(message.spectatorMode);
             }
             const batchServerId = message.serverId || meta?.serverId || 'default';
+            if (typeof message.radarEnabled === 'boolean') {
+              this.spatialEngine.setServerRadarEnabled(batchServerId, message.radarEnabled);
+            }
             const enrichedPlayers = message.players.map((p: any) => ({
               ...p,
               serverId: p.serverId || batchServerId,

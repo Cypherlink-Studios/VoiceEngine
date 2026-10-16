@@ -64,8 +64,28 @@ class SpatialTelemetryTest {
         String json = batch.toJson();
         assertTrue(json.contains("\"serverId\":\"survival-1\""));
 
+        assertTrue(batch.radarEnabled());
         SpatialTelemetryBatch deserialized = SpatialTelemetryBatch.fromJson(json);
         assertEquals("survival-1", deserialized.serverId());
         assertEquals("survival-1", deserialized.players().get(0).serverId());
+        assertTrue(deserialized.radarEnabled());
+    }
+
+    @Test
+    void testBatchWithRadarDisabled() {
+        UUID uuid = UUID.randomUUID();
+        PlayerSpatialState player = new PlayerSpatialState(
+            uuid, "Steve", "survival-pvp", "world", 10.0, 64.0, 20.0, 0.0f, 0.0f, false, false
+        );
+
+        long now = System.currentTimeMillis();
+        SpatialTelemetryBatch batch = new SpatialTelemetryBatch("survival-pvp", now, List.of(player), List.of(), "listen-only", false);
+
+        String json = batch.toJson();
+        assertTrue(json.contains("\"radarEnabled\":false"));
+
+        SpatialTelemetryBatch deserialized = SpatialTelemetryBatch.fromJson(json);
+        assertEquals("survival-pvp", deserialized.serverId());
+        assertFalse(deserialized.radarEnabled());
     }
 }

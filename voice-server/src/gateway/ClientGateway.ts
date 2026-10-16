@@ -209,6 +209,15 @@ export class ClientGateway {
                   })
                 );
               }
+
+              const radarEnabled = this.spatialEngine.isRadarEnabledForPlayer(session.playerUuid);
+              session.lastRadarStatus = radarEnabled;
+              ws.send(
+                JSON.stringify({
+                  type: 'radar_status',
+                  enabled: radarEnabled,
+                })
+              );
               break;
             }
 
@@ -411,7 +420,22 @@ export class ClientGateway {
       const now = Date.now();
 
       for (const listenerSession of this.playerSessions.values()) {
-        if (listenerSession.ws.readyState !== WebSocket.OPEN || !listenerSession.recvTransport) {
+        if (listenerSession.ws.readyState !== WebSocket.OPEN) {
+          continue;
+        }
+
+        const currentRadarStatus = this.spatialEngine.isRadarEnabledForPlayer(listenerSession.playerUuid);
+        if (listenerSession.lastRadarStatus !== currentRadarStatus) {
+          listenerSession.lastRadarStatus = currentRadarStatus;
+          listenerSession.ws.send(
+            JSON.stringify({
+              type: 'radar_status',
+              enabled: currentRadarStatus,
+            })
+          );
+        }
+
+        if (!listenerSession.recvTransport) {
           continue;
         }
 

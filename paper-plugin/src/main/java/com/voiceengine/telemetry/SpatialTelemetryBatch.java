@@ -12,24 +12,29 @@ public record SpatialTelemetryBatch(
     long timestamp,
     List<PlayerSpatialState> players,
     List<SpeakerBlockState> speakers,
-    String spectatorMode
+    String spectatorMode,
+    boolean radarEnabled
 ) {
     private static final Gson GSON = new GsonBuilder().create();
 
     public SpatialTelemetryBatch(long timestamp, List<PlayerSpatialState> players) {
-        this("telemetry_batch", "default", timestamp, players, List.of(), "listen-only");
+        this("telemetry_batch", "default", timestamp, players, List.of(), "listen-only", true);
     }
 
     public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players) {
-        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, List.of(), "listen-only");
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, List.of(), "listen-only", true);
     }
 
     public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players, List<SpeakerBlockState> speakers) {
-        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), "listen-only");
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), "listen-only", true);
     }
 
     public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players, List<SpeakerBlockState> speakers, String spectatorMode) {
-        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), spectatorMode != null ? spectatorMode : "listen-only");
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), spectatorMode != null ? spectatorMode : "listen-only", true);
+    }
+
+    public SpatialTelemetryBatch(String serverId, long timestamp, List<PlayerSpatialState> players, List<SpeakerBlockState> speakers, String spectatorMode, boolean radarEnabled) {
+        this("telemetry_batch", serverId != null ? serverId : "default", timestamp, players, speakers != null ? speakers : List.of(), spectatorMode != null ? spectatorMode : "listen-only", radarEnabled);
     }
 
     public String toJson() {

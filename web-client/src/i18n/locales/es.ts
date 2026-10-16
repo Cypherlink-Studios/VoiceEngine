@@ -199,4 +199,13 @@ export const es: Translations = {
     maxRange: '{range}m máx',
     audiblePeers: '{count} cerca',
   },
+  roster: {
+    proximityTitle: 'Chat de Proximidad',
+    proximitySubtitle: 'Escuchando a jugadores cercanos dentro del rango',
+    radarRestricted: 'Radar Deshabilitado por Servidor',
+    emptyTitle: 'No hay jugadores cerca',
+    emptyDesc: 'A medida que otros jugadores se acerquen en Minecraft, aparecerán aquí con sus controles de volumen.',
+    speaking: 'Hablando',
+    idle: 'En silencio',
+  },
 };

@@ -28,12 +28,24 @@ public class TelemetryCollector {
         boolean underwaterAcoustics,
         String spectatorMode
     ) {
+        return collectBatch(players, serverId, speakers, whisperOnSneak, underwaterAcoustics, spectatorMode, true);
+    }
+
+    public SpatialTelemetryBatch collectBatch(
+        Collection<? extends Player> players,
+        String serverId,
+        List<com.voiceengine.speaker.SpeakerBlockState> speakers,
+        boolean whisperOnSneak,
+        boolean underwaterAcoustics,
+        String spectatorMode,
+        boolean radarEnabled
+    ) {
         List<PlayerSpatialState> states = new ArrayList<>(players.size());
         for (Player player : players) {
             if (player != null && player.isOnline()) {
                 states.add(PlayerSpatialState.fromPlayer(player, serverId, whisperOnSneak, underwaterAcoustics));
             }
         }
-        return new SpatialTelemetryBatch(serverId, System.currentTimeMillis(), states, speakers, spectatorMode);
+        return new SpatialTelemetryBatch(serverId, System.currentTimeMillis(), states, speakers, spectatorMode, radarEnabled);
     }
 }

@@ -558,5 +558,119 @@ describe('ClientGateway', () => {
     expect(notifySpeechStatusSpy).not.toHaveBeenCalled();
     notifySpeechStatusSpy.mockRestore();
   });
+
+  it('dispatches initial radar_status frame upon client authentication and reflects server status', async () => {
+    // Register player on a server where radar is disabled
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-radar-disabled',
+      username: 'StealthPlayer',
+      serverId: 'pvp-hardcore',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+    spatialEngine.setServerRadarEnabled('pvp-hardcore', false);
+
+    tokenStore.registerToken({
+      token: 'RADAR_TEST_1',
+      playerUuid: 'uuid-radar-disabled',
+      playerName: 'StealthPlayer',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const receivedMessages: any[] = [];
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'RADAR_TEST_1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        receivedMessages.push(msg);
+        if (msg.type === 'radar_status') {
+          expect(msg.enabled).toBe(false);
+          ws.close();
+          resolve();
+        }
+      });
+    });
+
+    const radarStatusMsg = receivedMessages.find((m) => m.type === 'radar_status');
+    expect(radarStatusMsg).toBeDefined();
+    expect(radarStatusMsg.enabled).toBe(false);
+  });
+
+  it('dynamically pushes radar_status update when server radar policy changes', async () => {
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-dynamic-player',
+      username: 'DynamicPlayer',
+      serverId: 'lobby',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+    });
+    spatialEngine.setServerRadarEnabled('lobby', true);
+
+    tokenStore.registerToken({
+      token: 'RADAR_TEST_2',
+      playerUuid: 'uuid-dynamic-player',
+      playerName: 'DynamicPlayer',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const radarUpdates: boolean[] = [];
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'RADAR_TEST_2',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'radar_status') {
+          radarUpdates.push(msg.enabled);
+          if (radarUpdates.length === 1) {
+            // First update: should be true
+            expect(msg.enabled).toBe(true);
+
+            // Now dynamically disable radar for lobby
+            spatialEngine.setServerRadarEnabled('lobby', false);
+          } else if (radarUpdates.length === 2) {
+            // Second update: dynamically pushed as false
+            expect(msg.enabled).toBe(false);
+            ws.close();
+            resolve();
+          }
+        }
+      });
+    });
+
+    expect(radarUpdates).toEqual([true, false]);
+  });
 });
 

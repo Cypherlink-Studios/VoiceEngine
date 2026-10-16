@@ -142,7 +142,7 @@ The Paper plugin SHALL be packaged as a single universal binary compiled for Jav
 - **THEN** the plugin SHALL negotiate available capabilities, enabling native Brigadier completion if supported, asynchronous tab completions if supported, or falling back gracefully to standard Bukkit completions.
 
 ### Requirement: Configurable In-Game Mechanics and Feature Toggles
-The plugin SHALL allow administrators to independently enable or disable sneak whispering, underwater acoustics, player speaking particles, spectator voice policies, and speaker blocks via `config.yml`, applying updates dynamically upon `/voice reload`.
+The plugin SHALL allow administrators to independently enable or disable sneak whispering, underwater acoustics, player speaking particles, spectator voice policies, player radar display, and speaker blocks via `config.yml`, applying updates dynamically upon `/voice reload`.
 
 #### Scenario: Disabling sneak whisper attenuation
 - **WHEN** `mechanics.whisper-on-sneak` is set to `false` in configuration
@@ -159,6 +159,10 @@ The plugin SHALL allow administrators to independently enable or disable sneak w
 #### Scenario: Enforcing spectator voice mode
 - **WHEN** `mechanics.spectator-mode` is configured to `listen-only` or `isolated` and an online player enters spectator game mode or dies
 - **THEN** the plugin SHALL tag the player's spatial telemetry state as a spectator so the voice backend applies the configured spectator isolation policy.
+
+#### Scenario: Disabling player radar in spatial telemetry
+- **WHEN** `mechanics.radar-enabled` is configured to `false` in `config.yml`
+- **THEN** the plugin SHALL transmit `radarEnabled: false` in `SpatialTelemetryBatch` frames to the voice backend, signaling that radar visualization is restricted for that server.
 
 #### Scenario: Disabling speaker blocks system
 - **WHEN** `speakers.enabled` is set to `false` in configuration

@@ -70,6 +70,7 @@ public class TelemetryService implements VoiceEngineService {
                 boolean whisper = cfg == null || cfg.whisperOnSneak();
                 boolean submerged = cfg == null || cfg.underwaterAcoustics();
                 String spectatorMode = cfg != null ? cfg.spectatorMode() : "listen-only";
+                boolean radar = cfg == null || cfg.radarEnabled();
 
                 SpatialTelemetryBatch batch = collector.collectBatch(
                     Bukkit.getOnlinePlayers(),
@@ -77,7 +78,8 @@ public class TelemetryService implements VoiceEngineService {
                     speakerSupplier.get(),
                     whisper,
                     submerged,
-                    spectatorMode
+                    spectatorMode,
+                    radar
                 );
                 client.sendTelemetry(batch);
             }

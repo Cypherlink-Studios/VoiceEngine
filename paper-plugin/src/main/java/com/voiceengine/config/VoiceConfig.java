@@ -22,6 +22,7 @@ public record VoiceConfig(
     boolean underwaterAcoustics,
     boolean speakingParticles,
     String spectatorMode,
+    boolean radarEnabled,
     boolean speakersEnabled,
     boolean speakersParticlesEnabled,
     boolean updatesCheckOnStartup,
@@ -37,7 +38,7 @@ public record VoiceConfig(
         boolean notifyOnJoin,
         String defaultLocale
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true, true, true, true, "listen-only", true, true, true, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public VoiceConfig(
@@ -51,7 +52,7 @@ public record VoiceConfig(
         String serverId,
         String proxyMode
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true, true, true, true, "listen-only", true, true, true, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public VoiceConfig(
@@ -68,7 +69,7 @@ public record VoiceConfig(
         boolean audioPersistenceEnabled,
         boolean audioParticlesEnabled
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, true, true, true, "listen-only", true, true, true, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public VoiceConfig(
@@ -91,7 +92,7 @@ public record VoiceConfig(
         boolean speakersEnabled,
         boolean speakersParticlesEnabled
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, whisperOnSneak, underwaterAcoustics, speakingParticles, spectatorMode, speakersEnabled, speakersParticlesEnabled, true, true, "Cypherlink-Studios/VoiceEngine");
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, whisperOnSneak, underwaterAcoustics, speakingParticles, spectatorMode, true, speakersEnabled, speakersParticlesEnabled, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public boolean resolveProxyMode(boolean velocityForwardingDetected) {
@@ -156,6 +157,8 @@ public record VoiceConfig(
             }
         }
 
+        boolean radarEnabled = config == null || config.getBoolean("mechanics.radar-enabled", true);
+
         boolean speakersEnabled = config == null || config.getBoolean("speakers.enabled", true);
         boolean speakersParticlesEnabled = config == null || config.getBoolean("speakers.particles-enabled", true);
 
@@ -183,6 +186,7 @@ public record VoiceConfig(
             underwaterAcoustics,
             speakingParticles,
             spectatorMode,
+            radarEnabled,
             speakersEnabled,
             speakersParticlesEnabled,
             updatesCheckOnStartup,

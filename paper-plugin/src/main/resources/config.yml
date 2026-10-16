@@ -45,6 +45,9 @@ mechanics:
   # - all: Spectators hear and can be heard by living players normally
   spectator-mode: "listen-only"
 
+  # Allow players to view the visual proximity radar in the web client
+  radar-enabled: true
+
 # Speaker Blocks System (Jukeboxes / World Megaphones)
 speakers:
   # Master toggle for speaker blocks and /voice speaker commands

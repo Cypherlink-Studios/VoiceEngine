@@ -197,6 +197,15 @@ export const en = {
     maxRange: '{range}m max',
     audiblePeers: '{count} nearby',
   },
+  roster: {
+    proximityTitle: 'Proximity Chat',
+    proximitySubtitle: 'Listening to nearby players within range',
+    radarRestricted: 'Radar Disabled by Server',
+    emptyTitle: 'No players nearby',
+    emptyDesc: 'As players approach you in Minecraft, their cards and volume controls will appear here.',
+    speaking: 'Speaking',
+    idle: 'Idle',
+  },
 } as const;
 
 type StringifyValues<T> = {

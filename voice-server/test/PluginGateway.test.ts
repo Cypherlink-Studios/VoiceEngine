@@ -209,4 +209,52 @@ describe('PluginGateway', () => {
       }, 100);
     });
   });
+
+  it('updates spatialEngine server radar status when telemetry_batch contains radarEnabled', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123', serverId: 'survival-pvp' }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          // Default should be true
+          expect(spatialEngine.isRadarEnabledForServer('survival-pvp')).toBe(true);
+
+          // Send telemetry batch with radarEnabled: false
+          ws.send(
+            JSON.stringify({
+              type: 'telemetry_batch',
+              serverId: 'survival-pvp',
+              radarEnabled: false,
+              players: [
+                {
+                  uuid: 'player-pvp-1',
+                  username: 'PvPWarrior',
+                  world: 'world',
+                  x: 10,
+                  y: 64,
+                  z: 20,
+                  yaw: 0,
+                  pitch: 0,
+                  isSneaking: false,
+                  isSubmerged: false,
+                },
+              ],
+            })
+          );
+
+          setTimeout(() => {
+            expect(spatialEngine.isRadarEnabledForServer('survival-pvp')).toBe(false);
+            expect(spatialEngine.isRadarEnabledForPlayer('player-pvp-1')).toBe(false);
+            ws.close();
+            resolve();
+          }, 50);
+        }
+      });
+    });
+  });
 });

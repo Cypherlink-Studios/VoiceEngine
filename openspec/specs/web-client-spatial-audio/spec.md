@@ -111,6 +111,10 @@ The radar display SHALL render player Minecraft head skins retrieved by player U
 - **WHEN** a nearby player appears on the proximity radar
 - **THEN** the soundstage SHALL render their circular Minecraft avatar head, indicate relative elevation relative to the listener, display subtle concentric glass distance rings, and emit an expanding soft pulse ring around their avatar when they are actively speaking.
 
+#### Scenario: Server radar restriction policy and proximity roster
+- **WHEN** the backend voice server signals that player radar is disabled for the current server
+- **THEN** the web client SHALL suppress the circular radar soundstage and render a proximity presence roster displaying audible players, avatar heads, speaking pulse indicators, and individual volume sliders without directional compass cues or distance rings.
+
 ### Requirement: Dynamic Brand Theme Application
 The web client SHALL query `/api/config/public` upon loading and dynamically apply configured colors, logos, titles, and background assets.
 
@@ -187,6 +191,10 @@ The web client SHALL support launching an always-on-top floating native window u
 #### Scenario: Bi-directional state synchronization
 - **WHEN** a user toggles mute or deafen from inside the floating overlay window
 - **THEN** the primary tab SHALL immediately reflect the state change and apply the corresponding audio mutations and sound effects.
+
+#### Scenario: Picture-in-Picture display when radar is disabled
+- **WHEN** Document Picture-in-Picture is active and the current server has disabled the proximity radar
+- **THEN** the floating overlay window SHALL render a compact proximity roster displaying speaking avatars and voice indicators instead of the circular radar dish.
 
 ### Requirement: Mobile Companion Integration and Screen Wake Lock
 The web client SHALL provide mobile companion utilities including instant QR code session transfer, screen wake lock retention, and tactile haptic feedback.

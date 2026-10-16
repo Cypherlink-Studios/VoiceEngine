@@ -30,6 +30,7 @@ class VoiceConfigTest {
         assertTrue(config.audioEnabled());
         assertTrue(config.audioPersistenceEnabled());
         assertTrue(config.audioParticlesEnabled());
+        assertTrue(config.radarEnabled());
         assertTrue(config.updatesCheckOnStartup());
         assertTrue(config.updatesNotifyAdminsOnJoin());
         assertEquals("Cypherlink-Studios/VoiceEngine", config.updatesRepository());
@@ -47,6 +48,8 @@ class VoiceConfigTest {
             default-locale: "es_ES"
             server-id: "survival-1"
             proxy-mode: "true"
+            mechanics:
+              radar-enabled: false
             audio:
               enabled: false
               persistence-enabled: false
@@ -69,6 +72,7 @@ class VoiceConfigTest {
         assertEquals("survival-1", config.serverId());
         assertEquals("true", config.proxyMode());
         assertTrue(config.resolveProxyMode(false)); // explicitly "true"
+        assertFalse(config.radarEnabled());
         assertFalse(config.audioEnabled());
         assertFalse(config.audioPersistenceEnabled());
         assertFalse(config.audioParticlesEnabled());

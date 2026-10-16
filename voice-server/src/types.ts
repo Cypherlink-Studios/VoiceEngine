@@ -104,6 +104,7 @@ export interface ClientSession {
   isMuted?: boolean;
   isDeafened?: boolean;
   supportsBinarySpatial?: boolean;
+  lastRadarStatus?: boolean;
 }
 
 export interface ModerationActionPayload {
