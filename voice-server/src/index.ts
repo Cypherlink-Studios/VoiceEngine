@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 import { config, ensureMediaDirs } from './config.js';
 import { TokenStore } from './auth/TokenStore.js';
@@ -95,6 +96,37 @@ BinaryResolver.checkDependencies().then((deps) => {
   }
 }).catch((err) => {
   console.warn('[MediaCache] Could not verify media tools:', err);
+});
+
+// Helper to read package.json version
+function getPackageVersion(): string {
+  try {
+    const pkgPath = path.resolve(__dirname, '../package.json');
+    if (fs.existsSync(pkgPath)) {
+      const data = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      if (typeof data.version === 'string') {
+        return data.version;
+      }
+    }
+  } catch {}
+  return '1.0.0';
+}
+
+// Unauthenticated Healthcheck Endpoint for Updaters and Load Balancers
+app.get('/health', (_req, res) => {
+  if (isShuttingDown) {
+    res.status(503).json({
+      status: 'shutting_down',
+      uptime: Math.floor(process.uptime()),
+    });
+    return;
+  }
+  res.status(200).json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    version: getPackageVersion(),
+    workers: sfu ? sfu.getWorkers().length : 0,
+  });
 });
 
 // Prometheus Metrics Scraper Endpoint
@@ -298,5 +330,6 @@ export {
   clientGateway,
   pluginGateway,
   discordNotifier,
+  getPackageVersion,
 };
 

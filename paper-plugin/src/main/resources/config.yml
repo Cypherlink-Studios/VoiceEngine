@@ -61,4 +61,13 @@ audio:
   # Render visual note particles at active spatial emitter locations
   particles-enabled: true
 
+# Automated Updates & Release Checking
+updates:
+  # Check for updates automatically on server startup
+  check-on-startup: true
+  # Notify authorized administrators in chat upon joining if an update is available
+  notify-admins-on-join: true
+  # GitHub repository to check for releases
+  repository: "Cypherlink-Studios/VoiceEngine"
+
 

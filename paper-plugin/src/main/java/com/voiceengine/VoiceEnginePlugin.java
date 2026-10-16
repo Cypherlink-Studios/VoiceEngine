@@ -25,8 +25,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 import com.voiceengine.audio.AudioManager;
 import com.voiceengine.command.AudioCommands;
 import com.voiceengine.command.SpeakerCommands;
+import com.voiceengine.command.VoiceUpdateCommand;
 import com.voiceengine.speaker.SpeakerManager;
+import com.voiceengine.update.ReleaseCheckResult;
+import com.voiceengine.update.UpdateChecker;
+import com.voiceengine.update.UpdateDownloader;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
+import java.io.File;
 import java.util.UUID;
 
 public class VoiceEnginePlugin extends JavaPlugin implements Listener {
@@ -38,6 +44,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private VoiceBackendClient voiceBackendClient;
     private SpeakerManager speakerManager;
     private AudioManager audioManager;
+    private UpdateChecker updateChecker;
+    private UpdateDownloader updateDownloader;
 
     private TelemetryService telemetryService;
     private VisualFeedbackService visualFeedbackService;
@@ -104,11 +112,23 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.commandService = new CommandService(this, translationService);
         this.commandService.initialize();
 
+        File updateFolder = new File(getDataFolder().getParentFile(), "update");
+        this.updateChecker = new UpdateChecker();
+        this.updateDownloader = new UpdateDownloader();
+        VoiceUpdateCommand updateCommand = new VoiceUpdateCommand(
+            updateChecker,
+            updateDownloader,
+            () -> voiceConfig,
+            translationService,
+            getDescription().getVersion(),
+            updateFolder
+        );
+
         SpeakerCommands speakerCommands = new SpeakerCommands(speakerManager, translationService, audioManager);
         AudioCommands audioCommands = new AudioCommands(audioManager, translationService);
         if (isProxyMode()) {
             getLogger().info("[VoiceEngine] Proxy mode active (server: " + voiceConfig.serverId() + "). Local /voice commands delegated to Velocity.");
-            this.commandService.registerCommands(speakerCommands, audioCommands);
+            this.commandService.registerCommands(speakerCommands, audioCommands, updateCommand);
         } else {
             this.commandService.registerCommands(
                 new VoiceCommands(
@@ -129,12 +149,23 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                     }
                 ),
                 speakerCommands,
-                audioCommands
+                audioCommands,
+                updateCommand
             );
         }
 
         // 7. Register Bukkit Events
         getServer().getPluginManager().registerEvents(this, this);
+
+        // 8. Optional Startup Update Check
+        if (voiceConfig.updatesCheckOnStartup()) {
+            updateChecker.checkForUpdates(voiceConfig.updatesRepository(), getDescription().getVersion(), false)
+                .thenAccept(result -> {
+                    if (result.updateAvailable()) {
+                        getLogger().info("[VoiceEngine] A new version is available: " + result.latestVersion() + " (current: " + getDescription().getVersion() + "). Use /voice update apply to stage the update.");
+                    }
+                });
+        }
 
         getLogger().info("VoiceEngine plugin enabled successfully!");
     }
@@ -252,6 +283,19 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                 }
             }, 40L); // 2 seconds after join
         }
+
+        if (voiceConfig != null && voiceConfig.updatesNotifyAdminsOnJoin() && event.getPlayer().hasPermission("voiceengine.admin.update")) {
+            ReleaseCheckResult cached = updateChecker != null ? updateChecker.getCachedResult() : null;
+            if (cached != null && cached.updateAvailable()) {
+                Bukkit.getScheduler().runTaskLater(this, () -> {
+                    if (event.getPlayer().isOnline()) {
+                        translationService.send(event.getPlayer(), "command.update.join_notify",
+                            Placeholder.parsed("latest", cached.latestVersion() != null ? cached.latestVersion() : "latest")
+                        );
+                    }
+                }, 50L);
+            }
+        }
     }
 
     @EventHandler
@@ -287,5 +331,13 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
     public AudioManager getAudioManager() {
         return audioManager;
+    }
+
+    public UpdateChecker getUpdateChecker() {
+        return updateChecker;
+    }
+
+    public UpdateDownloader getUpdateDownloader() {
+        return updateDownloader;
     }
 }

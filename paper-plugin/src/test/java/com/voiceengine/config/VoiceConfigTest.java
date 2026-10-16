@@ -30,6 +30,9 @@ class VoiceConfigTest {
         assertTrue(config.audioEnabled());
         assertTrue(config.audioPersistenceEnabled());
         assertTrue(config.audioParticlesEnabled());
+        assertTrue(config.updatesCheckOnStartup());
+        assertTrue(config.updatesNotifyAdminsOnJoin());
+        assertEquals("Cypherlink-Studios/VoiceEngine", config.updatesRepository());
     }
 
     @Test
@@ -48,6 +51,10 @@ class VoiceConfigTest {
               enabled: false
               persistence-enabled: false
               particles-enabled: false
+            updates:
+              check-on-startup: false
+              notify-admins-on-join: false
+              repository: "MyOrg/MyFork"
             """;
         YamlConfiguration parsed = YamlConfiguration.loadConfiguration(new StringReader(yaml));
         VoiceConfig config = VoiceConfig.fromConfiguration(parsed);
@@ -65,6 +72,9 @@ class VoiceConfigTest {
         assertFalse(config.audioEnabled());
         assertFalse(config.audioPersistenceEnabled());
         assertFalse(config.audioParticlesEnabled());
+        assertFalse(config.updatesCheckOnStartup());
+        assertFalse(config.updatesNotifyAdminsOnJoin());
+        assertEquals("MyOrg/MyFork", config.updatesRepository());
     }
 
     @Test

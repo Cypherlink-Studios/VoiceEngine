@@ -323,3 +323,23 @@ You should receive a JSON response similar to:
   ```bash
   tail -f /var/log/nginx/voiceengine_error.log
   ```
+
+---
+
+## 8. Automated Updates & Maintenance
+
+VoiceEngine provides automated update mechanisms for both host services and Minecraft plugins:
+
+* **Host Services (Backend + Web Client)**: Use the automated updater script:
+  ```bash
+  sudo bash scripts/update.sh
+  ```
+  Supports flags `--version <tag>`, `--force`, `--check`, `--rollback`, and non-interactive `-y`.
+* **Paper Plugin**: In-game administrators can use:
+  ```text
+  /voice update check
+  /voice update apply
+  ```
+  Downloads updates asynchronously into `plugins/update/VoiceEngine-paper.jar` for safe activation on the next server restart.
+
+For full update options, backup policies, and CI/CD release packaging details, see [UPDATING.md](file:///c:/Users/antua/OneDrive/Documentos/Programming/MISC/VoiceEngine/docs/installation/UPDATING.md).

@@ -23,7 +23,10 @@ public record VoiceConfig(
     boolean speakingParticles,
     String spectatorMode,
     boolean speakersEnabled,
-    boolean speakersParticlesEnabled
+    boolean speakersParticlesEnabled,
+    boolean updatesCheckOnStartup,
+    boolean updatesNotifyAdminsOnJoin,
+    String updatesRepository
 ) {
     public VoiceConfig(
         URI voiceServerUri,
@@ -34,7 +37,7 @@ public record VoiceConfig(
         boolean notifyOnJoin,
         String defaultLocale
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true, true, true, true, "listen-only", true, true);
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, "default", "auto", true, true, true, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public VoiceConfig(
@@ -48,7 +51,7 @@ public record VoiceConfig(
         String serverId,
         String proxyMode
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true, true, true, true, "listen-only", true, true);
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, true, true, true, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public VoiceConfig(
@@ -65,7 +68,30 @@ public record VoiceConfig(
         boolean audioPersistenceEnabled,
         boolean audioParticlesEnabled
     ) {
-        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, true, true, true, "listen-only", true, true);
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, true, true, true, "listen-only", true, true, true, true, "Cypherlink-Studios/VoiceEngine");
+    }
+
+    public VoiceConfig(
+        URI voiceServerUri,
+        String webClientUrl,
+        String secretKey,
+        int tickRateHz,
+        Duration tokenTtl,
+        boolean notifyOnJoin,
+        String defaultLocale,
+        String serverId,
+        String proxyMode,
+        boolean audioEnabled,
+        boolean audioPersistenceEnabled,
+        boolean audioParticlesEnabled,
+        boolean whisperOnSneak,
+        boolean underwaterAcoustics,
+        boolean speakingParticles,
+        String spectatorMode,
+        boolean speakersEnabled,
+        boolean speakersParticlesEnabled
+    ) {
+        this(voiceServerUri, webClientUrl, secretKey, tickRateHz, tokenTtl, notifyOnJoin, defaultLocale, serverId, proxyMode, audioEnabled, audioPersistenceEnabled, audioParticlesEnabled, whisperOnSneak, underwaterAcoustics, speakingParticles, spectatorMode, speakersEnabled, speakersParticlesEnabled, true, true, "Cypherlink-Studios/VoiceEngine");
     }
 
     public boolean resolveProxyMode(boolean velocityForwardingDetected) {
@@ -133,6 +159,13 @@ public record VoiceConfig(
         boolean speakersEnabled = config == null || config.getBoolean("speakers.enabled", true);
         boolean speakersParticlesEnabled = config == null || config.getBoolean("speakers.particles-enabled", true);
 
+        boolean updatesCheckOnStartup = config == null || config.getBoolean("updates.check-on-startup", true);
+        boolean updatesNotifyAdminsOnJoin = config == null || config.getBoolean("updates.notify-admins-on-join", true);
+        String updatesRepo = config != null ? config.getString("updates.repository", "Cypherlink-Studios/VoiceEngine") : "Cypherlink-Studios/VoiceEngine";
+        if (updatesRepo == null || updatesRepo.isBlank()) {
+            updatesRepo = "Cypherlink-Studios/VoiceEngine";
+        }
+
         return new VoiceConfig(
             serverUri,
             webClient,
@@ -151,7 +184,10 @@ public record VoiceConfig(
             speakingParticles,
             spectatorMode,
             speakersEnabled,
-            speakersParticlesEnabled
+            speakersParticlesEnabled,
+            updatesCheckOnStartup,
+            updatesNotifyAdminsOnJoin,
+            updatesRepo
         );
     }
 }

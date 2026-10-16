@@ -23,3 +23,6 @@ permissions:
   voiceengine.admin.audio:
     description: Allows managing audio emitters and media playback
     default: op
+  voiceengine.admin.update:
+    description: Allows checking, viewing, and applying VoiceEngine plugin updates
+    default: op
