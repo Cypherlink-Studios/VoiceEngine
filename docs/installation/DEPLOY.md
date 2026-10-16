@@ -342,4 +342,4 @@ VoiceEngine provides automated update mechanisms for both host services and Mine
   ```
   Downloads updates asynchronously into `plugins/update/VoiceEngine-paper.jar` for safe activation on the next server restart.
 
-For full update options, backup policies, and CI/CD release packaging details, see [UPDATING.md](file:///c:/Users/antua/OneDrive/Documentos/Programming/MISC/VoiceEngine/docs/installation/UPDATING.md).
+For full update options, backup policies, and CI/CD release packaging details, see [UPDATING.md](UPDATING.md).
