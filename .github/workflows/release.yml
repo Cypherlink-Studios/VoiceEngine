@@ -55,12 +55,20 @@ jobs:
           ./gradlew assemble --no-daemon
           find build/libs -maxdepth 1 -name "VoiceEngine-paper-*.jar" ! -name "*-thin.jar" -exec cp {} ../VoiceEngine-paper.jar \;
 
-      # 4. Generate SHA-256 Checksums
+      # 4. Build Velocity Plugin
+      - name: Build Velocity Plugin
+        run: |
+          cd velocity-plugin
+          chmod +x gradlew
+          ./gradlew assemble --no-daemon
+          find build/libs -maxdepth 1 -name "VoiceEngine-velocity-*.jar" ! -name "*-thin.jar" -exec cp {} ../VoiceEngine-velocity.jar \;
+
+      # 5. Generate SHA-256 Checksums
       - name: Generate Checksums
         run: |
-          sha256sum voice-server.tar.gz web-client.tar.gz VoiceEngine-paper.jar > checksums.sha256
+          sha256sum voice-server.tar.gz web-client.tar.gz VoiceEngine-paper.jar VoiceEngine-velocity.jar > checksums.sha256
 
-      # 5. Publish / Attach Assets to GitHub Release
+      # 6. Publish / Attach Assets to GitHub Release
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
@@ -68,6 +76,7 @@ jobs:
             voice-server.tar.gz
             web-client.tar.gz
             VoiceEngine-paper.jar
+            VoiceEngine-velocity.jar
             checksums.sha256
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
