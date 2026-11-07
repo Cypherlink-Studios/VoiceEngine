@@ -105,6 +105,7 @@ export class PluginGateway {
               token: message.token,
               playerUuid: message.playerUuid,
               playerName: message.playerName,
+              serverId: message.serverId || meta?.serverId || 'default',
               expiresAt: message.expiresAt,
               isAdmin: Boolean(message.isAdmin),
               clientIp: message.clientIp,

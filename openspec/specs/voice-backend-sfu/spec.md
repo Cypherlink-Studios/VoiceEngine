@@ -90,6 +90,14 @@ The backend SHALL host an authenticated WebSocket control endpoint supporting co
 - **WHEN** a client transmits a speaking state update while the player session is marked as muted by server moderation
 - **THEN** the backend SHALL ignore the speaking signal, maintain internal session speaking state as false, and suppress dispatching speech_status notifications to Paper sockets or radio channel peers.
 
+#### Scenario: Session token registration with server identifier tracking
+- **WHEN** a backend plugin registers a connection token via `register_token`
+- **THEN** the backend SHALL store the originating `serverId` alongside the token record and assign it to the authenticated client session.
+
+#### Scenario: Initial radar status resolution using session server fallback
+- **WHEN** an authenticated web client completes `client_auth` and queries the player's proximity radar status before telemetry has indexed their coordinates in the spatial grid
+- **THEN** the backend SHALL evaluate the radar policy against the session's recorded `serverId` (falling back to the sole connected server if `'default'` is undefined) and transmit a `radar_status` frame matching the active server's policy.
+
 ### Requirement: Fixed Channel Stereo Audio Routing
 The backend SFU SHALL route audio for players inside the same fixed channel in stereo according to the channel's configured scope (global across the network or restricted to the current server), strictly isolated from the proximity 3D routing cycle.
 

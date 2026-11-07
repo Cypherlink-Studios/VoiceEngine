@@ -257,4 +257,53 @@ describe('PluginGateway', () => {
       });
     });
   });
+
+  it('stores serverId on register_token frame from payload or socket handshake meta', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}`);
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123', serverId: 'server-handshake-1' }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          ws.send(
+            JSON.stringify({
+              type: 'register_token',
+              token: 'META_SRV_1',
+              playerUuid: 'uuid-meta-1',
+              playerName: 'MetaPlayer',
+              expiresAt: Date.now() + 60000,
+            })
+          );
+
+          ws.send(
+            JSON.stringify({
+              type: 'register_token',
+              token: 'EXPLICIT_SRV_1',
+              playerUuid: 'uuid-explicit-1',
+              playerName: 'ExplicitPlayer',
+              serverId: 'custom-hardcore',
+              expiresAt: Date.now() + 60000,
+            })
+          );
+
+          setTimeout(() => {
+            const tokenMeta = tokenStore.validateAndRedeem('META_SRV_1');
+            expect(tokenMeta).not.toBeNull();
+            expect(tokenMeta?.serverId).toBe('server-handshake-1');
+
+            const tokenExplicit = tokenStore.validateAndRedeem('EXPLICIT_SRV_1');
+            expect(tokenExplicit).not.toBeNull();
+            expect(tokenExplicit?.serverId).toBe('custom-hardcore');
+
+            ws.close();
+            resolve();
+          }, 50);
+        }
+      });
+    });
+  });
 });

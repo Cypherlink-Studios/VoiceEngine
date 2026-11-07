@@ -31,6 +31,26 @@ folia:
 # Published versions (Version history)
 versions:
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
+  - version: "1.1.1"
+    releaseDate: "2026-11-07"
+    reference: "v1.1.1"
+    downloadUrl: https://github.com/Cypherlink-Studios/VoiceEngine/releases
+    changelog: Corrección de resolución de serverId en registro de tokens y fallback de servidor único para el interruptor de radar de proximidad.
+    minecraft:
+      - "1.20.4"
+      - "1.20.6"
+      - "1.21.x"
+
+  - version: "1.1.0"
+    releaseDate: "2026-10-16"
+    reference: "v1.1.0"
+    downloadUrl: https://github.com/Cypherlink-Studios/VoiceEngine/releases
+    changelog: Interruptor por servidor para radar de proximidad (radar-enabled) y visualización de roster de proximidad en web client.
+    minecraft:
+      - "1.20.4"
+      - "1.20.6"
+      - "1.21.x"
+
   - version: "1.0.0"
     releaseDate: "2026-10-04"
     reference: "bcde65d"

@@ -150,6 +150,7 @@ public class VoiceBackendClient extends WebSocketClient {
             json.addProperty("token", token.token());
             json.addProperty("playerUuid", token.playerUuid().toString());
             json.addProperty("playerName", token.playerName());
+            json.addProperty("serverId", serverId != null ? serverId : "default");
             json.addProperty("expiresAt", token.expiresAt().toEpochMilli());
             json.addProperty("isAdmin", token.isAdmin());
             if (clientIp != null) {

@@ -145,6 +145,7 @@ export class ClientGateway {
                 isMuted,
                 isDeafened,
                 supportsBinarySpatial: Boolean(msg.binarySpatial || msg.supportsBinary),
+                serverId: tokenRecord.serverId || 'default',
               };
 
               const existingSession = this.playerSessions.get(session.playerUuid);
@@ -210,7 +211,7 @@ export class ClientGateway {
                 );
               }
 
-              const radarEnabled = this.spatialEngine.isRadarEnabledForPlayer(session.playerUuid);
+              const radarEnabled = this.spatialEngine.isRadarEnabledForPlayer(session.playerUuid, session.serverId);
               session.lastRadarStatus = radarEnabled;
               ws.send(
                 JSON.stringify({
@@ -424,7 +425,10 @@ export class ClientGateway {
           continue;
         }
 
-        const currentRadarStatus = this.spatialEngine.isRadarEnabledForPlayer(listenerSession.playerUuid);
+        const currentRadarStatus = this.spatialEngine.isRadarEnabledForPlayer(
+          listenerSession.playerUuid,
+          listenerSession.serverId
+        );
         if (listenerSession.lastRadarStatus !== currentRadarStatus) {
           listenerSession.lastRadarStatus = currentRadarStatus;
           listenerSession.ws.send(

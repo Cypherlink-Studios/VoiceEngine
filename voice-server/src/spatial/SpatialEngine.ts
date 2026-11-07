@@ -69,12 +69,22 @@ export class SpatialEngine {
   }
 
   public isRadarEnabledForServer(serverId: string | undefined): boolean {
-    return this.serverRadarStatus.get(serverId || 'default') ?? true;
+    if (serverId && this.serverRadarStatus.has(serverId)) {
+      return this.serverRadarStatus.get(serverId)!;
+    }
+    if (this.serverRadarStatus.has('default')) {
+      return this.serverRadarStatus.get('default')!;
+    }
+    if (this.serverRadarStatus.size === 1) {
+      return this.serverRadarStatus.values().next().value ?? true;
+    }
+    return true;
   }
 
-  public isRadarEnabledForPlayer(playerUuid: string): boolean {
+  public isRadarEnabledForPlayer(playerUuid: string, sessionServerId?: string): boolean {
     const player = this.players.get(playerUuid);
-    return this.isRadarEnabledForServer(player?.serverId);
+    const resolvedServerId = player?.serverId || sessionServerId;
+    return this.isRadarEnabledForServer(resolvedServerId);
   }
 
   public updateDistances(maxDistance: number, sneakDistance: number): void {

@@ -59,6 +59,7 @@ export class TokenStore {
   public registerToken(record: Omit<SessionTokenRecord, 'redeemed'>): void {
     this.tokens.set(record.token.toUpperCase().trim(), {
       ...record,
+      serverId: record.serverId || 'default',
       token: record.token.toUpperCase().trim(),
       redeemed: false,
     });

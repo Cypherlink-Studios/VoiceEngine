@@ -247,4 +247,104 @@ describe('IntegrationHarness', () => {
 
     expect(radarEvents).toEqual([false, true, false]);
   });
+
+  it('correctly dispatches radar_status: false upon client_auth on custom serverId before spatial telemetry arrives', async () => {
+    const pluginWs = new WebSocket(`ws://localhost:${port}/ws/plugin`);
+    await new Promise<void>((resolve) => {
+      pluginWs.on('open', () => {
+        pluginWs.send(
+          JSON.stringify({
+            type: 'plugin_handshake',
+            secret: 'secret-harness',
+            role: 'paper',
+            serverId: 'survival-custom',
+          })
+        );
+      });
+      pluginWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          resolve();
+        }
+      });
+    });
+
+    pluginWs.send(
+      JSON.stringify({
+        type: 'telemetry_batch',
+        serverId: 'survival-custom',
+        radarEnabled: false,
+        players: [],
+      })
+    );
+
+    const playerUuid = '00000000-0000-0000-0000-000000000088';
+    pluginWs.send(
+      JSON.stringify({
+        type: 'register_token',
+        token: 'TOKEN_SURVIVAL_CUSTOM',
+        playerUuid,
+        playerName: 'SurvivalPlayer',
+        serverId: 'survival-custom',
+        expiresAt: Date.now() + 60000,
+      })
+    );
+
+    await new Promise((r) => setTimeout(r, 20));
+
+    const clientWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const receivedRadar: boolean[] = [];
+
+    await new Promise<void>((resolve) => {
+      clientWs.on('open', () => {
+        clientWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'TOKEN_SURVIVAL_CUSTOM',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      clientWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'radar_status') {
+          receivedRadar.push(msg.enabled);
+          if (receivedRadar.length === 1) {
+            expect(msg.enabled).toBe(false);
+
+            pluginWs.send(
+              JSON.stringify({
+                type: 'telemetry_batch',
+                serverId: 'survival-custom',
+                radarEnabled: false,
+                players: [
+                  {
+                    uuid: playerUuid,
+                    username: 'SurvivalPlayer',
+                    world: 'world',
+                    x: 100,
+                    y: 64,
+                    z: 200,
+                    yaw: 0,
+                    pitch: 0,
+                    isSneaking: false,
+                    isSubmerged: false,
+                  },
+                ],
+              })
+            );
+
+            setTimeout(() => {
+              clientWs.close();
+              pluginWs.close();
+              resolve();
+            }, 150);
+          }
+        }
+      });
+    });
+
+    expect(receivedRadar).toEqual([false]);
+  });
 });

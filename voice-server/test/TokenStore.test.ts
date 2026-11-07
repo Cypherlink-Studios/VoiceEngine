@@ -24,6 +24,7 @@ describe('TokenStore', () => {
       expect(record).not.toBeNull();
       expect(record?.playerName).toBe('Steve');
       expect(record?.playerUuid).toBe('00000000-0000-0000-0000-000000000001');
+      expect(record?.serverId).toBe('default');
     });
 
     it('permits repeated redemption of ADMIN1 development token', () => {
@@ -85,6 +86,21 @@ describe('TokenStore', () => {
       const redeemed = tokenStore.validateAndRedeem('DYN123');
       expect(redeemed).not.toBeNull();
       expect(redeemed?.playerName).toBe('DynamicPlayer');
+      expect(redeemed?.serverId).toBe('default');
+    });
+
+    it('stores and preserves custom serverId when provided', () => {
+      tokenStore.registerToken({
+        token: 'SURV12',
+        playerUuid: '11111111-2222-3333-4444-555555555555',
+        playerName: 'SurvivalPlayer',
+        serverId: 'survival-games',
+        expiresAt: Date.now() + 60000,
+      });
+
+      const redeemed = tokenStore.validateAndRedeem('SURV12');
+      expect(redeemed).not.toBeNull();
+      expect(redeemed?.serverId).toBe('survival-games');
     });
 
     it('enforces single-use for dynamically registered admin tokens', () => {

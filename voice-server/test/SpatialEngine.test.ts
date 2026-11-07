@@ -536,5 +536,38 @@ describe('SpatialEngine', () => {
       expect(steveAudibleUuids).toContain('ghost-2');
     });
   });
-});
 
+  describe('Radar Status Resolution', () => {
+    it('resolves radar status for custom server when player is indexed', () => {
+      engine.setServerRadarEnabled('survival-hardcore', false);
+      engine.updatePlayer({
+        uuid: 'p1',
+        username: 'P1',
+        serverId: 'survival-hardcore',
+        world: 'world',
+        x: 0,
+        y: 64,
+        z: 0,
+        yaw: 0,
+        pitch: 0,
+        isSneaking: false,
+        isSubmerged: false,
+      });
+
+      expect(engine.isRadarEnabledForPlayer('p1')).toBe(false);
+      expect(engine.isRadarEnabledForServer('survival-hardcore')).toBe(false);
+    });
+
+    it('falls back to sessionServerId when player is not yet in spatial grid', () => {
+      engine.setServerRadarEnabled('custom-lobby', false);
+      expect(engine.isRadarEnabledForPlayer('unindexed-player', 'custom-lobby')).toBe(false);
+    });
+
+    it('falls back to single registered server when serverId is undefined or default', () => {
+      engine.setServerRadarEnabled('sole-pvp-server', false);
+      expect(engine.isRadarEnabledForServer(undefined)).toBe(false);
+      expect(engine.isRadarEnabledForServer('default')).toBe(false);
+      expect(engine.isRadarEnabledForPlayer('unknown-uuid')).toBe(false);
+    });
+  });
+});

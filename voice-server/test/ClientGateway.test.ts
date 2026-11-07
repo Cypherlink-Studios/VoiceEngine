@@ -672,5 +672,45 @@ describe('ClientGateway', () => {
 
     expect(radarUpdates).toEqual([true, false]);
   });
-});
 
+  it('dispatches radar_status: false upon client_auth on custom server even when player is unindexed in spatial grid', async () => {
+    spatialEngine.setServerRadarEnabled('custom-hardcore-pvp', false);
+
+    tokenStore.registerToken({
+      token: 'RADAR_UNINDEXED_1',
+      playerUuid: 'uuid-unindexed-1',
+      playerName: 'GhostPlayer',
+      serverId: 'custom-hardcore-pvp',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ws = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const receivedMessages: any[] = [];
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'RADAR_UNINDEXED_1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        receivedMessages.push(msg);
+        if (msg.type === 'radar_status') {
+          expect(msg.enabled).toBe(false);
+          ws.close();
+          resolve();
+        }
+      });
+    });
+
+    const radarStatusMsg = receivedMessages.find((m) => m.type === 'radar_status');
+    expect(radarStatusMsg).toBeDefined();
+    expect(radarStatusMsg.enabled).toBe(false);
+  });
+});

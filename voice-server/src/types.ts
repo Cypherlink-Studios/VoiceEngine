@@ -26,6 +26,7 @@ export interface SessionTokenRecord {
   isAdmin?: boolean;
   clientIp?: string;
   isMuted?: boolean;
+  serverId?: string;
 }
 
 export interface RelativeSpatialAudio {
@@ -102,6 +103,7 @@ export interface ClientSession {
   clientIp?: string;
   deviceId?: string;
   isMuted?: boolean;
+  serverId?: string;
   isDeafened?: boolean;
   supportsBinarySpatial?: boolean;
   lastRadarStatus?: boolean;

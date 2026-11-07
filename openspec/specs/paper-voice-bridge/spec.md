@@ -16,6 +16,10 @@ The plugin SHALL provide a `/voice` command and automatic welcome notification t
 - **WHEN** a player attempts to redeem a connection token after its configured time-to-live has elapsed
 - **THEN** the system SHALL reject the authentication attempt and prompt the player to generate a new token via `/voice`.
 
+#### Scenario: Token registration incorporates originating server identifier
+- **WHEN** a player generates a session token via `/voice` or `/voice admin`
+- **THEN** the plugin SHALL dispatch a `register_token` frame over WebSocket to the voice server containing `token`, `playerUuid`, `playerName`, `expiresAt`, `isAdmin`, and the configured `serverId`.
+
 ### Requirement: Spatial Position and State Telemetry Streaming
 The plugin SHALL maintain a persistent authenticated WebSocket connection with the voice backend and stream player coordinates, orientation, sneaking state, submersion state, and the server identifier at a configurable interval between 10 Hz and 15 Hz.
 
