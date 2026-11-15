@@ -26,7 +26,7 @@ export class RoomManager {
   private readonly maxFailedAttempts = 5;
   private readonly windowMs = 60000; // 1 minute window
   private readonly lockoutMs = 60000; // 1 minute lockout
-  private readonly emptyGracePeriodMs = 30000; // 30 seconds
+  private readonly emptyGracePeriodMs: number; // grace period before destroying empty room
 
   // Configurable default max members (0 = unlimited)
   private defaultMaxMembers = 0;
