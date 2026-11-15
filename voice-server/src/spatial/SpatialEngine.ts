@@ -62,6 +62,22 @@ export class SpatialEngine {
     return this.spectatorMode;
   }
 
+  public setPlayerStaffVanish(uuid: string, isVanish: boolean): void {
+    const player = this.players.get(uuid);
+    if (player) {
+      player.isStaffVanish = isVanish;
+      if (isVanish) {
+        // Clear this player from other listeners' deadband cache
+        for (const [listenerUuid, listenerMap] of this.lastDispatched.entries()) {
+          const listener = this.players.get(listenerUuid);
+          if (!listener || !listener.isStaffVanish) {
+            listenerMap.delete(uuid);
+          }
+        }
+      }
+    }
+  }
+
   private serverRadarStatus = new Map<string, boolean>();
 
   public setServerRadarEnabled(serverId: string, enabled: boolean): void {
@@ -328,6 +344,13 @@ export class SpatialEngine {
           }
         }
 
+        // Staff Vanish routing: regular players never hear vanished staff
+        const speakerIsStaffVanish = Boolean(linkedPlayer.isStaffVanish);
+        const listenerIsStaff = Boolean(listener.isStaffVanish);
+        if (speakerIsStaffVanish && !listenerIsStaff) {
+          continue;
+        }
+
         audiblePeerUuids.add(linkedPlayer.uuid);
         if (applyDeadband && listenerDeadbandMap) {
           this.totalAudibleEvaluated++;
@@ -419,6 +442,14 @@ export class SpatialEngine {
         if (speakerIsSpectator !== listenerIsSpectator) {
           return;
         }
+      }
+
+      // Staff Vanish routing rules:
+      // Vanished staff are audible and visible ONLY to other staff. Regular players never receive staff audio or radar coordinates.
+      const speakerIsStaffVanish = Boolean(speaker.isStaffVanish);
+      const listenerIsStaff = Boolean(listener.isStaffVanish);
+      if (speakerIsStaffVanish && !listenerIsStaff) {
+        return;
       }
 
       // Pre-filter with squared Euclidean distance (avoids Math.sqrt for non-audible players)

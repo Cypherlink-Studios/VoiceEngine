@@ -7,6 +7,7 @@ export interface PeerAudioNode {
   isSubmerged: boolean;
   isChannel?: boolean;
   isBroadcast?: boolean;
+  isRoom?: boolean;
   isPaused?: boolean;
 }
 
@@ -118,6 +119,7 @@ export class SpatialAudioPipeline {
       isSubmerged?: boolean;
       isChannel?: boolean;
       isBroadcast?: boolean;
+      isRoom?: boolean;
     }
   ): void {
     const existing = this.peers.get(peerUuid);
@@ -184,8 +186,9 @@ export class SpatialAudioPipeline {
     gain.gain.setValueAtTime(isMuted ? 0 : userVol, this.audioContext.currentTime);
 
     const isBroadcast = Boolean(initialPos.isBroadcast);
-    if (initialPos.isChannel || isBroadcast) {
-      // Direct Stereo Routing for Fixed Channels or 2D Broadcast (no spatial filtering or panner)
+    const isRoom = Boolean(initialPos.isRoom);
+    if (initialPos.isChannel || isBroadcast || isRoom) {
+      // Direct Stereo Routing for Fixed Channels, Temporary Rooms, or 2D Broadcast (no spatial filtering or panner)
       source.connect(gain);
       gain.connect(this.masterGain);
 
@@ -196,6 +199,7 @@ export class SpatialAudioPipeline {
         isSubmerged: false,
         isChannel: Boolean(initialPos.isChannel),
         isBroadcast,
+        isRoom,
         isPaused: false,
       });
       return;

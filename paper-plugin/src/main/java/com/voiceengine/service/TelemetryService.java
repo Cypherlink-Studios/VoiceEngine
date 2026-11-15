@@ -7,6 +7,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Supplier;
 
 public class TelemetryService implements VoiceEngineService {
@@ -16,19 +18,20 @@ public class TelemetryService implements VoiceEngineService {
     private final Supplier<String> serverIdSupplier;
     private final Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier;
     private final Supplier<com.voiceengine.config.VoiceConfig> configSupplier;
+    private final Supplier<Set<UUID>> staffVanishSupplier;
     private int tickRateHz;
     private BukkitTask task;
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, int tickRateHz) {
-        this(plugin, collector, clientSupplier, () -> "default", java.util.List::of, null, tickRateHz);
+        this(plugin, collector, clientSupplier, () -> "default", java.util.List::of, null, null, tickRateHz);
     }
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, Supplier<String> serverIdSupplier, int tickRateHz) {
-        this(plugin, collector, clientSupplier, serverIdSupplier, java.util.List::of, null, tickRateHz);
+        this(plugin, collector, clientSupplier, serverIdSupplier, java.util.List::of, null, null, tickRateHz);
     }
 
     public TelemetryService(Plugin plugin, TelemetryCollector collector, Supplier<VoiceBackendClient> clientSupplier, Supplier<String> serverIdSupplier, Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier, int tickRateHz) {
-        this(plugin, collector, clientSupplier, serverIdSupplier, speakerSupplier, null, tickRateHz);
+        this(plugin, collector, clientSupplier, serverIdSupplier, speakerSupplier, null, null, tickRateHz);
     }
 
     public TelemetryService(
@@ -40,12 +43,26 @@ public class TelemetryService implements VoiceEngineService {
         Supplier<com.voiceengine.config.VoiceConfig> configSupplier,
         int tickRateHz
     ) {
+        this(plugin, collector, clientSupplier, serverIdSupplier, speakerSupplier, configSupplier, null, tickRateHz);
+    }
+
+    public TelemetryService(
+        Plugin plugin,
+        TelemetryCollector collector,
+        Supplier<VoiceBackendClient> clientSupplier,
+        Supplier<String> serverIdSupplier,
+        Supplier<java.util.List<com.voiceengine.speaker.SpeakerBlockState>> speakerSupplier,
+        Supplier<com.voiceengine.config.VoiceConfig> configSupplier,
+        Supplier<Set<UUID>> staffVanishSupplier,
+        int tickRateHz
+    ) {
         this.plugin = plugin;
         this.collector = collector;
         this.clientSupplier = clientSupplier;
         this.serverIdSupplier = serverIdSupplier != null ? serverIdSupplier : () -> "default";
         this.speakerSupplier = speakerSupplier != null ? speakerSupplier : java.util.List::of;
         this.configSupplier = configSupplier;
+        this.staffVanishSupplier = staffVanishSupplier != null ? staffVanishSupplier : Set::of;
         this.tickRateHz = Math.max(1, Math.min(20, tickRateHz));
     }
 
@@ -71,6 +88,7 @@ public class TelemetryService implements VoiceEngineService {
                 boolean submerged = cfg == null || cfg.underwaterAcoustics();
                 String spectatorMode = cfg != null ? cfg.spectatorMode() : "listen-only";
                 boolean radar = cfg == null || cfg.radarEnabled();
+                Set<UUID> vanished = staffVanishSupplier != null ? staffVanishSupplier.get() : Set.of();
 
                 SpatialTelemetryBatch batch = collector.collectBatch(
                     Bukkit.getOnlinePlayers(),
@@ -79,7 +97,8 @@ public class TelemetryService implements VoiceEngineService {
                     whisper,
                     submerged,
                     spectatorMode,
-                    radar
+                    radar,
+                    vanished
                 );
                 client.sendTelemetry(batch);
             }

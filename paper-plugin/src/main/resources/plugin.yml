@@ -26,3 +26,24 @@ permissions:
   voiceengine.admin.update:
     description: Allows checking, viewing, and applying VoiceEngine plugin updates
     default: op
+  voiceengine.room:
+    description: Allows using temporary room commands
+    default: true
+  voiceengine.room.create:
+    description: Allows creating temporary rooms
+    default: true
+  voiceengine.room.join:
+    description: Allows joining temporary rooms
+    default: true
+  voiceengine.room.leave:
+    description: Allows leaving temporary rooms
+    default: true
+  voiceengine.room.kick:
+    description: Allows kicking members from owned temporary rooms
+    default: true
+  voiceengine.admin.vanish:
+    description: Allows toggling acoustic staff vanish mode
+    default: op
+  voiceengine.admin.room.spy:
+    description: Allows administrative wiretapping of temporary rooms
+    default: op

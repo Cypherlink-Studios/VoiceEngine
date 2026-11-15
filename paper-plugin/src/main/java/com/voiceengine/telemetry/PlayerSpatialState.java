@@ -17,7 +17,8 @@ public record PlayerSpatialState(
     float pitch,
     boolean isSneaking,
     boolean isSubmerged,
-    boolean isSpectator
+    boolean isSpectator,
+    boolean isStaffVanish
 ) {
     public PlayerSpatialState(
         UUID uuid,
@@ -31,7 +32,7 @@ public record PlayerSpatialState(
         boolean isSneaking,
         boolean isSubmerged
     ) {
-        this(uuid, username, "default", world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false);
+        this(uuid, username, "default", world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false, false);
     }
 
     public PlayerSpatialState(
@@ -47,10 +48,27 @@ public record PlayerSpatialState(
         boolean isSneaking,
         boolean isSubmerged
     ) {
-        this(uuid, username, serverId, world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false);
+        this(uuid, username, serverId, world, x, y, z, yaw, pitch, isSneaking, isSubmerged, false, false);
     }
 
-    public static PlayerSpatialState fromPlayer(Player player, String serverId, boolean whisperOnSneak, boolean underwaterAcoustics) {
+    public PlayerSpatialState(
+        UUID uuid,
+        String username,
+        String serverId,
+        String world,
+        double x,
+        double y,
+        double z,
+        float yaw,
+        float pitch,
+        boolean isSneaking,
+        boolean isSubmerged,
+        boolean isSpectator
+    ) {
+        this(uuid, username, serverId, world, x, y, z, yaw, pitch, isSneaking, isSubmerged, isSpectator, false);
+    }
+
+    public static PlayerSpatialState fromPlayer(Player player, String serverId, boolean whisperOnSneak, boolean underwaterAcoustics, boolean isStaffVanish) {
         Location loc = player.getLocation();
         boolean sneaking = whisperOnSneak && player.isSneaking();
         boolean submerged = underwaterAcoustics && player.isInWater();
@@ -67,16 +85,21 @@ public record PlayerSpatialState(
             roundAngle(loc.getPitch()),
             sneaking,
             submerged,
-            spectator
+            spectator,
+            isStaffVanish
         );
     }
 
+    public static PlayerSpatialState fromPlayer(Player player, String serverId, boolean whisperOnSneak, boolean underwaterAcoustics) {
+        return fromPlayer(player, serverId, whisperOnSneak, underwaterAcoustics, false);
+    }
+
     public static PlayerSpatialState fromPlayer(Player player, String serverId) {
-        return fromPlayer(player, serverId, true, true);
+        return fromPlayer(player, serverId, true, true, false);
     }
 
     public static PlayerSpatialState fromPlayer(Player player) {
-        return fromPlayer(player, "default", true, true);
+        return fromPlayer(player, "default", true, true, false);
     }
 
     private static double round(double value) {

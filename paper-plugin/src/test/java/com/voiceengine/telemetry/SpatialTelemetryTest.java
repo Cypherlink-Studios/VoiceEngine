@@ -88,4 +88,28 @@ class SpatialTelemetryTest {
         assertEquals("survival-pvp", deserialized.serverId());
         assertFalse(deserialized.radarEnabled());
     }
+
+    @Test
+    void testBatchWithStaffVanish() {
+        UUID regularUuid = UUID.randomUUID();
+        UUID staffUuid = UUID.randomUUID();
+
+        PlayerSpatialState regular = new PlayerSpatialState(
+            regularUuid, "PlayerPete", "survival", "world", 10.0, 64.0, 20.0, 0.0f, 0.0f, false, false, false, false
+        );
+        PlayerSpatialState staff = new PlayerSpatialState(
+            staffUuid, "ModDan", "survival", "world", 12.0, 64.0, 20.0, 0.0f, 0.0f, false, false, false, true
+        );
+
+        long now = System.currentTimeMillis();
+        SpatialTelemetryBatch batch = new SpatialTelemetryBatch("survival", now, List.of(regular, staff));
+
+        String json = batch.toJson();
+        assertTrue(json.contains("\"isStaffVanish\":true"));
+
+        SpatialTelemetryBatch deserialized = SpatialTelemetryBatch.fromJson(json);
+        assertEquals(2, deserialized.players().size());
+        assertFalse(deserialized.players().get(0).isStaffVanish());
+        assertTrue(deserialized.players().get(1).isStaffVanish());
+    }
 }

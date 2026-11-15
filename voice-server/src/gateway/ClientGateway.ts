@@ -11,6 +11,7 @@ import { AudioEmitterManager } from '../media/AudioEmitterManager.js';
 import * as mediasoup from 'mediasoup';
 import { encodeSpatialBatch, BinaryPeerSpatial } from '../spatial/BinarySpatialCodec.js';
 import { config } from '../config.js';
+import { RoomManager } from '../rooms/RoomManager.js';
 
 export class ClientGateway {
   private wss: WebSocketServer;
@@ -20,6 +21,8 @@ export class ClientGateway {
   private pluginGateway: PluginGateway;
   private settingsManager?: SettingsManager;
   private audioEmitterManager?: AudioEmitterManager;
+  private roomManager: RoomManager;
+  private staffVanishUuids = new Set<string>();
 
   private sessions = new Map<string, ClientSession>(); // sessionId -> ClientSession
   private playerSessions = new Map<string, ClientSession>(); // playerUuid -> ClientSession
@@ -45,7 +48,8 @@ export class ClientGateway {
     sfu: MediasoupManager,
     pluginGateway: PluginGateway,
     settingsManager?: SettingsManager,
-    audioEmitterManager?: AudioEmitterManager
+    audioEmitterManager?: AudioEmitterManager,
+    roomManager?: RoomManager
   ) {
     this.wss = wss;
     this.tokenStore = tokenStore;
@@ -54,6 +58,7 @@ export class ClientGateway {
     this.pluginGateway = pluginGateway;
     this.settingsManager = settingsManager;
     this.audioEmitterManager = audioEmitterManager;
+    this.roomManager = roomManager || new RoomManager();
 
     if (this.audioEmitterManager) {
       this.audioEmitterManager.onEvent((event, emitter) => {
@@ -129,6 +134,10 @@ export class ClientGateway {
 
               const isMuted = Boolean(tokenRecord.isMuted) || this.isPlayerMuted(tokenRecord.playerUuid);
               const isDeafened = this.isPlayerDeafened(tokenRecord.playerUuid);
+              const isStaffVanish = this.staffVanishUuids.has(tokenRecord.playerUuid);
+              if (isStaffVanish) {
+                this.spatialEngine.setPlayerStaffVanish(tokenRecord.playerUuid, true);
+              }
 
               session = {
                 sessionId,
@@ -146,6 +155,8 @@ export class ClientGateway {
                 isDeafened,
                 supportsBinarySpatial: Boolean(msg.binarySpatial || msg.supportsBinary),
                 serverId: tokenRecord.serverId || 'default',
+                isAdmin: Boolean(tokenRecord.isAdmin),
+                isStaffVanish,
               };
 
               const existingSession = this.playerSessions.get(session.playerUuid);
@@ -165,6 +176,8 @@ export class ClientGateway {
                   sessionId,
                   playerUuid: session.playerUuid,
                   username: session.username,
+                  isAdmin: session.isAdmin,
+                  isStaffVanish: session.isStaffVanish,
                   routerRtpCapabilities: this.sfu.getRtpCapabilities(),
                   sendTransportOptions: {
                     id: sendTransport.id,
@@ -291,9 +304,17 @@ export class ClientGateway {
                 session.isSpeaking = false;
                 return;
               }
+              if (session.isRoomSpy) {
+                session.isSpeaking = false;
+                return;
+              }
               session.isSpeaking = !!msg.speaking;
               if (!session.activeChannel || session.activeChannel === 'proximity') {
-                this.pluginGateway.notifySpeechStatus(session.playerUuid, session.isSpeaking);
+                if (!session.isStaffVanish) {
+                  this.pluginGateway.notifySpeechStatus(session.playerUuid, session.isSpeaking);
+                }
+              } else if (session.activeChannel.startsWith('room_')) {
+                this.broadcastRoomSpeaking(session);
               } else {
                 this.broadcastChannelSpeaking(session);
               }
@@ -312,46 +333,7 @@ export class ClientGateway {
                 return;
               }
 
-              // Close all current consumers
-              for (const [peerUuid, consumer] of session.consumers.entries()) {
-                try {
-                  consumer.close();
-                } catch {}
-                session.ws.send(
-                  JSON.stringify({
-                    type: 'consumer_closed',
-                    peerUuid,
-                    consumerId: consumer.id,
-                  })
-                );
-              }
-              session.consumers.clear();
-
-              // Also clean up consumers in other sessions that were listening to this player
-              for (const otherSession of this.playerSessions.values()) {
-                if (otherSession.playerUuid === session.playerUuid) continue;
-                const consumer = otherSession.consumers.get(session.playerUuid);
-                if (consumer) {
-                  try {
-                    consumer.close();
-                  } catch {}
-                  otherSession.consumers.delete(session.playerUuid);
-                  if (otherSession.ws.readyState === WebSocket.OPEN) {
-                    otherSession.ws.send(
-                      JSON.stringify({
-                        type: 'consumer_closed',
-                        peerUuid: session.playerUuid,
-                        consumerId: consumer.id,
-                      })
-                    );
-                  }
-                }
-              }
-
-              session.activeChannel = targetChannel;
-              console.log(
-                `[ClientGateway] Player ${session.username} switched from "${prevChannel}" to "${targetChannel}"`
-              );
+              await this.switchChannel(session, targetChannel);
 
               session.ws.send(
                 JSON.stringify({
@@ -361,11 +343,152 @@ export class ClientGateway {
               );
 
               if (prevChannel !== 'proximity') {
-                this.broadcastChannelMembers(prevChannel);
+                if (prevChannel.startsWith('room_')) {
+                  this.roomManager.leaveRoom(session.playerUuid);
+                  this.broadcastRoomMembers(prevChannel);
+                } else {
+                  this.broadcastChannelMembers(prevChannel);
+                }
               }
               if (targetChannel !== 'proximity') {
-                this.broadcastChannelMembers(targetChannel);
+                if (targetChannel.startsWith('room_')) {
+                  this.broadcastRoomMembers(targetChannel);
+                } else {
+                  this.broadcastChannelMembers(targetChannel);
+                }
               }
+              break;
+            }
+
+            case 'room_create': {
+              if (!session) return;
+              const maxMembers = typeof msg.maxMembers === 'number' ? msg.maxMembers : this.roomManager.getDefaultMaxMembers();
+              const { room, pin } = this.roomManager.createRoom(session.playerUuid, session.username, maxMembers);
+              await this.switchChannel(session, room.id);
+              session.ws.send(
+                JSON.stringify({
+                  type: 'room_created',
+                  roomId: room.id,
+                  pin,
+                  ownerUuid: room.ownerUuid,
+                })
+              );
+              this.broadcastRoomMembers(room.id);
+              break;
+            }
+
+            case 'room_join': {
+              if (!session) return;
+              const pin = typeof msg.pin === 'string' ? msg.pin.trim() : '';
+              const result = this.roomManager.joinRoom(pin, session.playerUuid, session.username, session.clientIp);
+              if (!result.success || !result.room) {
+                session.ws.send(
+                  JSON.stringify({
+                    type: 'room_error',
+                    error: result.error,
+                    message: result.message,
+                    retryAfterSeconds: result.retryAfterSeconds,
+                  })
+                );
+                return;
+              }
+              await this.switchChannel(session, result.room.id);
+              session.ws.send(
+                JSON.stringify({
+                  type: 'room_joined',
+                  roomId: result.room.id,
+                  pin: result.room.pin,
+                  ownerUuid: result.room.ownerUuid,
+                })
+              );
+              this.broadcastRoomMembers(result.room.id);
+              break;
+            }
+
+            case 'room_leave': {
+              if (!session) return;
+              const prevRoomId = session.activeChannel;
+              if (session.isRoomSpy) {
+                session.isRoomSpy = false;
+              }
+              this.roomManager.leaveRoom(session.playerUuid);
+              await this.switchChannel(session, 'proximity');
+              session.ws.send(
+                JSON.stringify({
+                  type: 'room_left',
+                })
+              );
+              if (prevRoomId && prevRoomId.startsWith('room_')) {
+                this.broadcastRoomMembers(prevRoomId);
+              }
+              break;
+            }
+
+            case 'room_kick': {
+              if (!session) return;
+              const targetUuid = typeof msg.targetUuid === 'string' ? msg.targetUuid.trim() : '';
+              const kickRes = this.roomManager.kickMember(session.playerUuid, targetUuid);
+              if (!kickRes.success || !kickRes.room) {
+                session.ws.send(
+                  JSON.stringify({
+                    type: 'room_error',
+                    error: kickRes.error,
+                    message: kickRes.message,
+                  })
+                );
+                return;
+              }
+              const targetSession = this.playerSessions.get(targetUuid);
+              if (targetSession) {
+                await this.switchChannel(targetSession, 'proximity');
+                targetSession.ws.send(
+                  JSON.stringify({
+                    type: 'room_kicked',
+                    roomId: kickRes.room.id,
+                    reason: 'Kicked by room owner',
+                  })
+                );
+              }
+              this.broadcastRoomMembers(kickRes.room.id);
+              break;
+            }
+
+            case 'room_spy': {
+              if (!session || (!session.isAdmin && !this.isStaff(session.playerUuid))) {
+                ws.send(JSON.stringify({ type: 'room_error', error: 'not_authorized', message: 'Staff permission required' }));
+                return;
+              }
+              const targetPlayer = typeof msg.targetPlayer === 'string' ? msg.targetPlayer.trim() : '';
+              const spyRes = this.roomManager.spyRoom(session.playerUuid, session.username, targetPlayer);
+              if (!spyRes.success || !spyRes.room) {
+                session.ws.send(
+                  JSON.stringify({
+                    type: 'room_error',
+                    error: spyRes.error,
+                    message: spyRes.message,
+                  })
+                );
+                return;
+              }
+              session.isRoomSpy = true;
+              await this.switchChannel(session, spyRes.room.id);
+              session.ws.send(
+                JSON.stringify({
+                  type: 'room_spy_joined',
+                  roomId: spyRes.room.id,
+                  targetPlayer,
+                })
+              );
+              break;
+            }
+
+            case 'staff_vanish_toggle': {
+              if (!session || (!session.isAdmin && !this.isStaff(session.playerUuid))) {
+                ws.send(JSON.stringify({ type: 'error', message: 'Staff permission required' }));
+                return;
+              }
+              const enable = typeof msg.enabled === 'boolean' ? msg.enabled : !session.isStaffVanish;
+              this.setStaffVanish(session.playerUuid, enable);
               break;
             }
 
@@ -626,25 +749,41 @@ export class ClientGateway {
             listenerSession.ws.send(buffer);
           }
         } else {
-          // --- 2. Fixed Discord-Style Channel Audio Routing ---
-          const fixedChannels = this.settingsManager?.getSettings().fixedChannels || [];
-          const channelConfig = fixedChannels.find((c) => c.id === channel);
-          const isServerScoped = channelConfig?.scope === 'server';
-          const listenerPlayer = this.spatialEngine.getPlayer(listenerSession.playerUuid);
-          const listenerServerId = listenerPlayer?.serverId || 'default';
+          // --- 2. Fixed Channel or Temporary Room Audio Routing ---
+          const isTemporaryRoom = channel.startsWith('room_');
+          let channelPeers: ClientSession[] = [];
 
-          const channelPeers = Array.from(this.playerSessions.values()).filter((p) => {
-            if (p.playerUuid === listenerSession.playerUuid) return false;
-            if ((p.activeChannel || 'proximity') !== channel) return false;
-            if (isServerScoped) {
-              const speakerPlayer = this.spatialEngine.getPlayer(p.playerUuid);
-              const speakerServerId = speakerPlayer?.serverId || 'default';
-              if (speakerServerId !== listenerServerId) {
-                return false;
-              }
+          if (isTemporaryRoom) {
+            const room = this.roomManager.getRoomById(channel);
+            if (room) {
+              channelPeers = Array.from(this.playerSessions.values()).filter((p) => {
+                if (p.playerUuid === listenerSession.playerUuid) return false;
+                // Spies in the room never transmit audio to anyone
+                if (p.isRoomSpy) return false;
+                if ((p.activeChannel || 'proximity') !== channel) return false;
+                return true;
+              });
             }
-            return true;
-          });
+          } else {
+            const fixedChannels = this.settingsManager?.getSettings().fixedChannels || [];
+            const channelConfig = fixedChannels.find((c) => c.id === channel);
+            const isServerScoped = channelConfig?.scope === 'server';
+            const listenerPlayer = this.spatialEngine.getPlayer(listenerSession.playerUuid);
+            const listenerServerId = listenerPlayer?.serverId || 'default';
+
+            channelPeers = Array.from(this.playerSessions.values()).filter((p) => {
+              if (p.playerUuid === listenerSession.playerUuid) return false;
+              if ((p.activeChannel || 'proximity') !== channel) return false;
+              if (isServerScoped) {
+                const speakerPlayer = this.spatialEngine.getPlayer(p.playerUuid);
+                const speakerServerId = speakerPlayer?.serverId || 'default';
+                if (speakerServerId !== listenerServerId) {
+                  return false;
+                }
+              }
+              return true;
+            });
+          }
           const channelPeerUuids = new Set(channelPeers.map((p) => p.playerUuid));
 
           for (const speakerSession of channelPeers) {
@@ -677,6 +816,7 @@ export class ClientGateway {
                     rtpParameters: consumer.rtpParameters,
                     isChannel: true,
                     channelId: channel,
+                    isRoom: isTemporaryRoom,
                   })
                 );
               } catch (err) {
@@ -830,6 +970,11 @@ export class ClientGateway {
             !speakerSession.producer ||
             speakerSession.producer.closed
           ) {
+            continue;
+          }
+
+          // ZERO-LEAK: If speaker is in staff vanish mode, NEVER create a consumer for a non-staff listener!
+          if (speakerSession.isStaffVanish && !listenerSession.isStaffVanish && !listenerSession.isAdmin) {
             continue;
           }
 
@@ -1004,8 +1149,162 @@ export class ClientGateway {
     }
 
     if (channel && channel !== 'proximity') {
-      this.broadcastChannelMembers(channel);
+      if (channel.startsWith('room_')) {
+        this.roomManager.leaveRoom(session.playerUuid);
+        this.broadcastRoomMembers(channel);
+      } else {
+        this.broadcastChannelMembers(channel);
+      }
     }
+  }
+
+  public async switchChannel(session: ClientSession, targetChannel: string): Promise<void> {
+    const prevChannel = session.activeChannel || 'proximity';
+    if (prevChannel === targetChannel) {
+      return;
+    }
+
+    // Close all current consumers
+    for (const [peerUuid, consumer] of session.consumers.entries()) {
+      try {
+        consumer.close();
+      } catch {}
+      session.ws.send(
+        JSON.stringify({
+          type: 'consumer_closed',
+          peerUuid,
+          consumerId: consumer.id,
+        })
+      );
+    }
+    session.consumers.clear();
+
+    // Also clean up consumers in other sessions that were listening to this player
+    for (const otherSession of this.playerSessions.values()) {
+      if (otherSession.playerUuid === session.playerUuid) continue;
+      const consumer = otherSession.consumers.get(session.playerUuid);
+      if (consumer) {
+        try {
+          consumer.close();
+        } catch {}
+        otherSession.consumers.delete(session.playerUuid);
+        if (otherSession.ws.readyState === WebSocket.OPEN) {
+          otherSession.ws.send(
+            JSON.stringify({
+              type: 'consumer_closed',
+              peerUuid: session.playerUuid,
+              consumerId: consumer.id,
+            })
+          );
+        }
+      }
+    }
+
+    session.activeChannel = targetChannel;
+    console.log(
+      `[ClientGateway] Player ${session.username} switched from "${prevChannel}" to "${targetChannel}"`
+    );
+  }
+
+  public broadcastRoomMembers(roomId: string): void {
+    const room = this.roomManager.getRoomById(roomId);
+    if (!room) return;
+    const members = this.roomManager.getPublicMembers(room);
+
+    for (const session of this.playerSessions.values()) {
+      if (session.activeChannel === roomId && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(
+          JSON.stringify({
+            type: 'room_members',
+            roomId,
+            pin: room.pin,
+            ownerUuid: room.ownerUuid,
+            members,
+          })
+        );
+      }
+    }
+  }
+
+  private broadcastRoomSpeaking(speakerSession: ClientSession): void {
+    const roomId = speakerSession.activeChannel;
+    if (!roomId) return;
+    const room = this.roomManager.getRoomById(roomId);
+    if (!room) return;
+    const member = room.members.get(speakerSession.playerUuid);
+    if (member) {
+      member.isSpeaking = speakerSession.isSpeaking;
+    }
+
+    for (const session of this.playerSessions.values()) {
+      if (session.activeChannel === roomId && session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(
+          JSON.stringify({
+            type: 'room_speaking',
+            roomId,
+            peerUuid: speakerSession.playerUuid,
+            isSpeaking: speakerSession.isSpeaking,
+          })
+        );
+      }
+    }
+  }
+
+  public isStaff(playerUuid: string): boolean {
+    const session = this.playerSessions.get(playerUuid);
+    return Boolean(session?.isAdmin || session?.isStaffVanish || this.staffVanishUuids.has(playerUuid));
+  }
+
+  public setStaffVanish(playerUuid: string, enabled: boolean): void {
+    if (enabled) {
+      this.staffVanishUuids.add(playerUuid);
+    } else {
+      this.staffVanishUuids.delete(playerUuid);
+    }
+
+    const session = this.playerSessions.get(playerUuid);
+    if (session) {
+      session.isStaffVanish = enabled;
+      if (session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(
+          JSON.stringify({
+            type: 'staff_vanish_status',
+            enabled,
+          })
+        );
+      }
+    }
+
+    this.spatialEngine.setPlayerStaffVanish(playerUuid, enabled);
+
+    // If staff vanished, immediately destroy consumers that regular non-staff players have for this staff!
+    if (enabled) {
+      for (const otherSession of this.playerSessions.values()) {
+        if (otherSession.playerUuid === playerUuid) continue;
+        if (!otherSession.isStaffVanish && !otherSession.isAdmin) {
+          const consumer = otherSession.consumers.get(playerUuid);
+          if (consumer) {
+            try {
+              consumer.close();
+            } catch {}
+            otherSession.consumers.delete(playerUuid);
+            if (otherSession.ws.readyState === WebSocket.OPEN) {
+              otherSession.ws.send(
+                JSON.stringify({
+                  type: 'consumer_closed',
+                  peerUuid: playerUuid,
+                  consumerId: consumer.id,
+                })
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  public getRoomManager(): RoomManager {
+    return this.roomManager;
   }
 
   public disconnectSession(sessionId: string): boolean {

@@ -29,6 +29,7 @@ public class VoiceBackendClient extends WebSocketClient {
     private final java.util.function.BiConsumer<UUID, Boolean> onSpeakingStateChange;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private volatile java.util.function.Consumer<JsonObject> audioResponseConsumer;
+    private volatile java.util.function.Consumer<JsonObject> roomResponseConsumer;
 
     private volatile boolean intentionalClose = false;
     private int reconnectAttempts = 0;
@@ -112,6 +113,10 @@ public class VoiceBackendClient extends WebSocketClient {
                 if (audioResponseConsumer != null) {
                     audioResponseConsumer.accept(json);
                 }
+            } else if ("room_command_response".equals(type) || "room_players_response".equals(type)) {
+                if (roomResponseConsumer != null) {
+                    roomResponseConsumer.accept(json);
+                }
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[VoiceEngine] Failed to parse message from voice server: " + message, e);
@@ -173,12 +178,36 @@ public class VoiceBackendClient extends WebSocketClient {
         this.audioResponseConsumer = consumer;
     }
 
+    public void setRoomResponseConsumer(java.util.function.Consumer<JsonObject> consumer) {
+        this.roomResponseConsumer = consumer;
+    }
+
     public void sendAudioCommand(JsonObject command) {
         if (isOpen() && command != null) {
             JsonObject json = command.deepCopy();
             if (!json.has("type")) {
                 json.addProperty("type", "audio_command");
             }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendRoomCommand(JsonObject command) {
+        if (isOpen() && command != null) {
+            JsonObject json = command.deepCopy();
+            if (!json.has("type")) {
+                json.addProperty("type", "room_command");
+            }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void sendStaffVanishSync(UUID playerUuid, boolean enabled) {
+        if (isOpen() && playerUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "staff_vanish_sync");
+            json.addProperty("playerUuid", playerUuid.toString());
+            json.addProperty("enabled", enabled);
             send(GSON.toJson(json));
         }
     }

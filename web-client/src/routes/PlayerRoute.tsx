@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff, Users } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff, Users, Lock } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
 import { MicrophonePipeline } from '../audio/MicrophonePipeline.js';
 import { VoiceSignaling, ChannelMember, ModerationNotice } from '../net/VoiceSignaling.js';
 import { Radar, PeerRadarInfo } from '../components/Radar.js';
 import { ControlDock } from '../components/player/ControlDock.js';
+import { ChannelDrawer, ActiveRoomState, RoomErrorState } from '../components/player/ChannelDrawer.js';
 import { SettingsModal, AudioConstraintsConfig } from '../components/player/SettingsModal.js';
 import { PlayerVolumePopover } from '../components/player/PlayerVolumePopover.js';
 import { QrCompanionModal } from '../components/player/QrCompanionModal.js';
@@ -58,6 +59,11 @@ export function PlayerRoute() {
 
   const [activeChannel, setActiveChannel] = useState<string>('proximity');
   const [channelMembers, setChannelMembers] = useState<ChannelMember[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isStaffVanish, setIsStaffVanish] = useState(false);
+  const [activeRoom, setActiveRoom] = useState<ActiveRoomState | null>(null);
+  const [roomError, setRoomError] = useState<RoomErrorState | null>(null);
+  const [showRoomDrawer, setShowRoomDrawer] = useState(false);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
   // UX & Diagnostics State
@@ -253,6 +259,8 @@ export function PlayerRoute() {
       const signaling = new VoiceSignaling(wsUrl, tokenInput.trim().toUpperCase(), pipeline, {
         onAuthenticated: (player) => {
           setLocalPlayer(player);
+          setIsAdmin(Boolean(player.isAdmin));
+          setIsStaffVanish(Boolean(player.isStaffVanish));
           setIsConnected(true);
           setIsConnecting(false);
           soundEffects.playConnect();
@@ -266,6 +274,9 @@ export function PlayerRoute() {
         },
         onChannelChanged: (channelId) => {
           setActiveChannel(channelId);
+          if (!channelId.startsWith('room_')) {
+            setActiveRoom(null);
+          }
         },
         onChannelMembersUpdated: (channelId, members) => {
           if (activeChannel === channelId || channelId !== 'proximity') {
@@ -285,6 +296,68 @@ export function PlayerRoute() {
         },
         onRadarStatusChanged: (enabled) => {
           setRadarEnabled(enabled);
+        },
+        onRoomCreated: (room) => {
+          setActiveChannel(room.roomId);
+          setActiveRoom({
+            roomId: room.roomId,
+            pin: room.pin,
+            ownerUuid: room.ownerUuid,
+            members: [],
+          });
+          setRoomError(null);
+          setShowRoomDrawer(false);
+          soundEffects.playChannelSwitch();
+        },
+        onRoomJoined: (room) => {
+          setActiveChannel(room.roomId);
+          setActiveRoom({
+            roomId: room.roomId,
+            pin: room.pin,
+            ownerUuid: room.ownerUuid,
+            members: [],
+          });
+          setRoomError(null);
+          setShowRoomDrawer(false);
+          soundEffects.playChannelSwitch();
+        },
+        onRoomLeft: () => {
+          setActiveChannel('proximity');
+          setActiveRoom(null);
+          setRoomError(null);
+          soundEffects.playChannelSwitch();
+        },
+        onRoomKicked: (info) => {
+          setActiveChannel('proximity');
+          setActiveRoom(null);
+          setRoomError({
+            error: 'kicked',
+            message: info.reason || 'Kicked from room',
+          });
+          soundEffects.playChannelSwitch();
+        },
+        onRoomMembersUpdated: (roomId, members, pin, ownerUuid) => {
+          setActiveRoom((prev) => ({
+            roomId,
+            pin: pin || prev?.pin || '',
+            ownerUuid: ownerUuid || prev?.ownerUuid || '',
+            members,
+          }));
+        },
+        onRoomSpeaking: (roomId, peerUuid, speaking) => {
+          setActiveRoom((prev) => {
+            if (!prev || prev.roomId !== roomId) return prev;
+            return {
+              ...prev,
+              members: prev.members.map((m) => (m.uuid === peerUuid ? { ...m, isSpeaking: speaking } : m)),
+            };
+          });
+        },
+        onRoomError: (err) => {
+          setRoomError(err);
+        },
+        onStaffVanishStatusChanged: (enabled) => {
+          setIsStaffVanish(enabled);
         },
         onModerationNotice: (notice) => {
           setModerationNotice(notice);
@@ -393,6 +466,11 @@ export function PlayerRoute() {
     setIsQrModalOpen(false);
     setIsSpeaking(false);
     setLocalPlayer(null);
+    setIsAdmin(false);
+    setIsStaffVanish(false);
+    setActiveRoom(null);
+    setRoomError(null);
+    setShowRoomDrawer(false);
     setPeers([]);
     setChannelMembers([]);
     setActiveChannel('proximity');
@@ -1014,21 +1092,46 @@ export function PlayerRoute() {
                 </span>
               </button>
 
+              {/* Temporary Private Room Tab */}
+              <button
+                onClick={() => setShowRoomDrawer((prev) => !prev)}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                  activeChannel.startsWith('room_') || showRoomDrawer
+                    ? 'bg-amber-500/25 text-amber-300 shadow-sm border border-amber-500/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Lock className="w-3 h-3 text-amber-400" />
+                <span>
+                  {activeChannel.startsWith('room_') && activeRoom?.pin
+                    ? t('rooms.activeRoomTitle', { pin: activeRoom.pin })
+                    : t('rooms.title')}
+                </span>
+                {activeChannel.startsWith('room_') && activeRoom && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/30 text-amber-300">
+                    {activeRoom.members.length}
+                  </span>
+                )}
+              </button>
+
               {/* Fixed Global Channels */}
               {config.fixedChannels.map((channel) => {
                 const isActive = activeChannel === channel.id;
                 return (
                   <button
                     key={channel.id}
-                    onClick={() => handleSelectChannel(channel.id)}
+                    onClick={() => {
+                      setShowRoomDrawer(false);
+                      handleSelectChannel(channel.id);
+                    }}
                     className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-2 cursor-pointer ${
-                      isActive
+                      isActive && !showRoomDrawer
                         ? 'bg-white/15 text-white shadow-sm'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
                     <span>{channel.name}</span>
-                    {isActive && channelMembers.length > 0 && (
+                    {isActive && channelMembers.length > 0 && !showRoomDrawer && (
                       <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-indigo-500/25 text-indigo-300">
                         {channelMembers.length}
                       </span>
@@ -1038,14 +1141,46 @@ export function PlayerRoute() {
               })}
             </nav>
 
-            {/* Central Stage: 3D Soundstage, Proximity Roster, or Fixed Channel Room */}
-            {activeChannel === 'proximity' ? (
+            {/* Central Stage: 3D Soundstage, Proximity Roster, Temporary Room, or Fixed Channel Room */}
+            {activeChannel.startsWith('room_') || showRoomDrawer ? (
+              <ChannelDrawer
+                activeChannel={activeChannel}
+                fixedChannels={config.fixedChannels}
+                channelMembers={channelMembers}
+                proximityPeersCount={peers.length}
+                activeRoom={activeRoom}
+                roomError={roomError}
+                localPlayerUuid={localPlayer?.uuid}
+                onSelectChannel={(channelId) => {
+                  setShowRoomDrawer(false);
+                  handleSelectChannel(channelId);
+                }}
+                onMemberClick={(member) =>
+                  setPopoverPeer({
+                    uuid: member.uuid,
+                    username: member.username,
+                    distance: 0,
+                    relX: 0,
+                    relY: 0,
+                    relZ: 0,
+                  })
+                }
+                onCreateRoom={() => signalingRef.current?.createRoom()}
+                onJoinRoom={(pin) => {
+                  setRoomError(null);
+                  signalingRef.current?.joinRoom(pin);
+                }}
+                onLeaveRoom={() => signalingRef.current?.leaveRoom()}
+                onKickMember={(uuid) => signalingRef.current?.kickRoomMember(uuid)}
+              />
+            ) : activeChannel === 'proximity' ? (
               radarEnabled ? (
                 <Radar
                   peers={peers}
                   maxRange={config.voice ? config.voice.maxVoiceDistance : 30}
                   localUsername={localPlayer?.username}
                   localUuid={localPlayer?.uuid}
+                  isViewerStaff={isAdmin || isStaffVanish}
                   onPeerClick={(peer) => setPopoverPeer(peer)}
                 />
               ) : (
@@ -1181,6 +1316,8 @@ export function PlayerRoute() {
           isModerationMuted={Boolean(moderationNotice?.action === 'mute' && moderationNotice.active)}
           aiNoiseSuppression={aiNoiseSuppression}
           speechProbability={speechProbability}
+          isStaff={isAdmin}
+          isStaffVanish={isStaffVanish}
           onToggleMute={handleToggleMute}
           onToggleDeafen={handleToggleDeafen}
           onTogglePip={handleTogglePip}
@@ -1188,6 +1325,7 @@ export function PlayerRoute() {
           onChangeMasterVolume={handleChangeMasterVolume}
           onChangeVadThreshold={handleChangeVadThreshold}
           onToggleAiNoiseSuppression={handleToggleAiNoiseSuppression}
+          onToggleStaffVanish={() => signalingRef.current?.toggleStaffVanish(!isStaffVanish)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onDisconnect={handleDisconnect}
         />

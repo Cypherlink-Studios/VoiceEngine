@@ -142,6 +142,22 @@ export class PluginGateway {
                 }))
               : undefined;
             this.spatialEngine.updateBatch(enrichedPlayers, enrichedSpeakers);
+          } else if (message.type === 'staff_vanish_sync') {
+            if (this.clientGateway && message.playerUuid) {
+              const enabled = Boolean(message.enabled);
+              this.clientGateway.setStaffVanish(message.playerUuid, enabled);
+              ws.send(
+                JSON.stringify({
+                  type: 'staff_vanish_sync_ack',
+                  playerUuid: message.playerUuid,
+                  enabled,
+                })
+              );
+            }
+          } else if (message.type === 'room_command') {
+            await this.handleRoomCommand(ws, message);
+          } else if (message.type === 'query_room_players') {
+            this.handleQueryRoomPlayers(ws, message);
           } else if (message.type === 'audio_command') {
             await this.handleAudioCommand(ws, message);
           }
@@ -380,6 +396,226 @@ export class PluginGateway {
         })
       );
     }
+  }
+
+  private async handleRoomCommand(ws: WebSocket, msg: any): Promise<void> {
+    if (!this.clientGateway) {
+      ws.send(
+        JSON.stringify({
+          type: 'room_command_response',
+          requestId: msg.requestId,
+          success: false,
+          action: msg.action,
+          error: 'gateway_not_ready',
+          message: 'ClientGateway not ready',
+        })
+      );
+      return;
+    }
+
+    const roomManager = this.clientGateway.getRoomManager();
+    const action = msg.action;
+
+    switch (action) {
+      case 'create': {
+        const { room, pin } = roomManager.createRoom(
+          msg.playerUuid,
+          msg.username,
+          typeof msg.maxMembers === 'number' ? msg.maxMembers : roomManager.getDefaultMaxMembers()
+        );
+        const session = (this.clientGateway as any).playerSessions?.get(msg.playerUuid);
+        if (session) {
+          await this.clientGateway.switchChannel(session, room.id);
+        }
+        this.clientGateway.broadcastRoomMembers(room.id);
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: true,
+            action: 'create',
+            pin,
+            roomId: room.id,
+          })
+        );
+        break;
+      }
+
+      case 'join': {
+        const res = roomManager.joinRoom(msg.pin, msg.playerUuid, msg.username);
+        if (!res.success || !res.room) {
+          ws.send(
+            JSON.stringify({
+              type: 'room_command_response',
+              requestId: msg.requestId,
+              success: false,
+              action: 'join',
+              error: res.error,
+              message: res.message,
+              retryAfterSeconds: res.retryAfterSeconds,
+            })
+          );
+          return;
+        }
+        const session = (this.clientGateway as any).playerSessions?.get(msg.playerUuid);
+        if (session) {
+          await this.clientGateway.switchChannel(session, res.room.id);
+        }
+        this.clientGateway.broadcastRoomMembers(res.room.id);
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: true,
+            action: 'join',
+            pin: res.room.pin,
+            roomId: res.room.id,
+          })
+        );
+        break;
+      }
+
+      case 'leave': {
+        const prevRoom = roomManager.getRoomByPlayerUuid(msg.playerUuid);
+        const prevRoomId = prevRoom?.id;
+        roomManager.leaveRoom(msg.playerUuid);
+        const session = (this.clientGateway as any).playerSessions?.get(msg.playerUuid);
+        if (session) {
+          session.isRoomSpy = false;
+          await this.clientGateway.switchChannel(session, 'proximity');
+        }
+        if (prevRoomId) {
+          this.clientGateway.broadcastRoomMembers(prevRoomId);
+        }
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: true,
+            action: 'leave',
+          })
+        );
+        break;
+      }
+
+      case 'kick': {
+        let targetUuid = msg.targetUuid;
+        if (!targetUuid && msg.targetUsername) {
+          const room = roomManager.getRoomByPlayerUuid(msg.ownerUuid);
+          if (room) {
+            for (const m of room.members.values()) {
+              if (m.username.toLowerCase() === msg.targetUsername.toLowerCase()) {
+                targetUuid = m.playerUuid;
+                break;
+              }
+            }
+          }
+        }
+        const kickRes = roomManager.kickMember(msg.ownerUuid, targetUuid);
+        if (!kickRes.success || !kickRes.room) {
+          ws.send(
+            JSON.stringify({
+              type: 'room_command_response',
+              requestId: msg.requestId,
+              success: false,
+              action: 'kick',
+              error: kickRes.error,
+              message: kickRes.message,
+            })
+          );
+          return;
+        }
+        const targetSession = (this.clientGateway as any).playerSessions?.get(targetUuid);
+        if (targetSession) {
+          await this.clientGateway.switchChannel(targetSession, 'proximity');
+          targetSession.ws.send(
+            JSON.stringify({
+              type: 'room_kicked',
+              roomId: kickRes.room.id,
+              reason: 'Kicked by room owner',
+            })
+          );
+        }
+        this.clientGateway.broadcastRoomMembers(kickRes.room.id);
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: true,
+            action: 'kick',
+            kickedPlayer: kickRes.kickedMember?.username,
+            roomId: kickRes.room.id,
+          })
+        );
+        break;
+      }
+
+      case 'spy': {
+        const spyRes = roomManager.spyRoom(msg.staffUuid, msg.staffUsername, msg.targetPlayer);
+        if (!spyRes.success || !spyRes.room) {
+          ws.send(
+            JSON.stringify({
+              type: 'room_command_response',
+              requestId: msg.requestId,
+              success: false,
+              action: 'spy',
+              error: spyRes.error,
+              message: spyRes.message,
+            })
+          );
+          return;
+        }
+        const staffSession = (this.clientGateway as any).playerSessions?.get(msg.staffUuid);
+        if (staffSession) {
+          staffSession.isRoomSpy = true;
+          await this.clientGateway.switchChannel(staffSession, spyRes.room.id);
+        }
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: true,
+            action: 'spy',
+            targetPlayer: msg.targetPlayer,
+            roomId: spyRes.room.id,
+          })
+        );
+        break;
+      }
+
+      default:
+        ws.send(
+          JSON.stringify({
+            type: 'room_command_response',
+            requestId: msg.requestId,
+            success: false,
+            error: 'unknown_action',
+          })
+        );
+    }
+  }
+
+  private handleQueryRoomPlayers(ws: WebSocket, msg: any): void {
+    if (!this.clientGateway) {
+      ws.send(JSON.stringify({ type: 'room_players_response', requestId: msg.requestId, players: [] }));
+      return;
+    }
+    const roomManager = this.clientGateway.getRoomManager();
+    const players: string[] = [];
+    for (const room of (roomManager as any).roomsById.values()) {
+      for (const m of (room.members as Map<string, any>).values()) {
+        if (!m.isSpy) {
+          players.push(m.username);
+        }
+      }
+    }
+    ws.send(
+      JSON.stringify({
+        type: 'room_players_response',
+        requestId: msg.requestId,
+        players,
+      })
+    );
   }
 
   public shutdown(): void {

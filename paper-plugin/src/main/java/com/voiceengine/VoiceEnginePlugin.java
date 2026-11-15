@@ -24,8 +24,10 @@ import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 import com.voiceengine.audio.AudioManager;
 import com.voiceengine.command.AudioCommands;
+import com.voiceengine.command.RoomCommands;
 import com.voiceengine.command.SpeakerCommands;
 import com.voiceengine.command.VoiceUpdateCommand;
+import com.voiceengine.listener.VanishHookListener;
 import com.voiceengine.speaker.SpeakerManager;
 import com.voiceengine.update.ReleaseCheckResult;
 import com.voiceengine.update.UpdateChecker;
@@ -33,7 +35,10 @@ import com.voiceengine.update.UpdateDownloader;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private VoiceConfig voiceConfig;
@@ -51,6 +56,9 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private VisualFeedbackService visualFeedbackService;
     private CommandService commandService;
     private VoiceEngineAPI api;
+    private RoomCommands roomCommands;
+    private VanishHookListener vanishHookListener;
+    private final Set<UUID> vanishedPlayers = ConcurrentHashMap.newKeySet();
 
     @Override
     public void onEnable() {
@@ -78,6 +86,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.speakerManager.load();
         this.audioManager.load();
 
+        this.roomCommands = new RoomCommands(() -> voiceBackendClient, translationService);
+
         // 3. Connect to Voice Server Backend
         initVoiceBackendClient();
 
@@ -94,6 +104,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             () -> voiceConfig.serverId(),
             () -> speakerManager.getActiveSpeakerStates(voiceConfig.serverId()),
             () -> voiceConfig,
+            () -> Collections.unmodifiableSet(vanishedPlayers),
             voiceConfig.tickRateHz()
         );
         this.telemetryService.start();
@@ -146,15 +157,25 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                         if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
                             voiceBackendClient.registerToken(token, clientIp);
                         }
-                    }
+                    },
+                    this::toggleStaffVanish
                 ),
+                roomCommands,
                 speakerCommands,
                 audioCommands,
                 updateCommand
             );
         }
 
-        // 7. Register Bukkit Events
+        // 7. Register Bukkit Events & Hooks
+        this.vanishHookListener = new VanishHookListener(
+            this,
+            () -> voiceConfig != null && voiceConfig.vanishAutoHook(),
+            this::setStaffVanish,
+            this::handlePlayerQuitVanish
+        );
+        this.vanishHookListener.registerHooks();
+        getServer().getPluginManager().registerEvents(this.vanishHookListener, this);
         getServer().getPluginManager().registerEvents(this, this);
 
         // 8. Optional Startup Update Check
@@ -260,7 +281,13 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                     getLogger().info("[VoiceEngine Audio] " + json.get("message").getAsString());
                 }
             });
+            if (this.roomCommands != null) {
+                this.voiceBackendClient.setRoomResponseConsumer(this.roomCommands::handleBackendResponse);
+            }
             this.voiceBackendClient.connect();
+            for (UUID vanishedUuid : vanishedPlayers) {
+                this.voiceBackendClient.sendStaffVanishSync(vanishedUuid, true);
+            }
         } catch (Exception e) {
             getLogger().warning("Failed to initialize VoiceBackendClient: " + e.getMessage());
         }
@@ -300,9 +327,60 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        handlePlayerQuitVanish(event.getPlayer().getUniqueId());
         if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
             voiceBackendClient.sendPlayerQuit(event.getPlayer().getUniqueId());
         }
+    }
+
+    public void setStaffVanish(Player player, boolean vanished) {
+        if (player == null) return;
+        UUID uuid = player.getUniqueId();
+        if (vanished) {
+            vanishedPlayers.add(uuid);
+            speechFeedbackHandler.setVanished(uuid, true);
+            if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                voiceBackendClient.sendStaffVanishSync(uuid, true);
+            }
+        } else {
+            vanishedPlayers.remove(uuid);
+            speechFeedbackHandler.setVanished(uuid, false);
+            if (voiceBackendClient != null && voiceBackendClient.isOpen()) {
+                voiceBackendClient.sendStaffVanishSync(uuid, false);
+            }
+        }
+    }
+
+    public void toggleStaffVanish(Player player) {
+        if (player == null) return;
+        boolean newState = !vanishedPlayers.contains(player.getUniqueId());
+        setStaffVanish(player, newState);
+        if (newState) {
+            translationService.send(player, "command.vanish.enabled");
+        } else {
+            translationService.send(player, "command.vanish.disabled");
+        }
+    }
+
+    public void handlePlayerQuitVanish(UUID playerUuid) {
+        if (playerUuid != null) {
+            vanishedPlayers.remove(playerUuid);
+            if (speechFeedbackHandler != null) {
+                speechFeedbackHandler.setVanished(playerUuid, false);
+            }
+        }
+    }
+
+    public boolean isVanished(UUID uuid) {
+        return uuid != null && vanishedPlayers.contains(uuid);
+    }
+
+    public Set<UUID> getVanishedPlayers() {
+        return Collections.unmodifiableSet(vanishedPlayers);
+    }
+
+    public RoomCommands getRoomCommands() {
+        return roomCommands;
     }
 
     public SpeakerManager getSpeakerManager() {

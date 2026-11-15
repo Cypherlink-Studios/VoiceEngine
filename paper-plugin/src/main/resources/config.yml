@@ -73,4 +73,15 @@ updates:
   # GitHub repository to check for releases
   repository: "Cypherlink-Studios/VoiceEngine"
 
+# Temporary Private Rooms Settings
+rooms:
+  # Maximum members per temporary room (0 or negative for unlimited)
+  max-members: 0
+
+# Staff Vanish / Stealth Mode Settings
+vanish:
+  # Automatically hook into vanish plugins (EssentialsX, SuperVanish, PremiumVanish) or player visibility events
+  auto-hook: true
+
+
 

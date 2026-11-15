@@ -22,6 +22,20 @@ command:
     uri: "<gray>URI del Servidor: <aqua><uri></aqua></gray>"
     active_tokens: "<gray>Tokens de Sesión Activos: <gold><count></gold></gray>"
     no_permission: "<prefix><red>No tienes permiso para inspeccionar el estado de VoiceEngine.</red>"
+  vanish:
+    enabled: "<prefix_admin><green>Modo staff vanish acústico <yellow>ACTIVADO</yellow>. Eres completamente inaudible e invisible en el voicechat.</green>"
+    disabled: "<prefix_admin><red>Modo staff vanish acústico <yellow>DESACTIVADO</yellow>. Vuelves a ser audible en el voicechat.</red>"
+    no_permission: "<prefix_admin><red>No tienes permiso para usar el modo staff vanish.</red>"
+  room:
+    created: "<prefix><green>¡Sala privada temporal creada! Código: <yellow><b><pin></b></yellow> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Click para copiar PIN</yellow>'><u><aqua>[Copiar PIN]</aqua></u></hover></click></green>"
+    joined: "<prefix><green>Te has unido a la sala temporal <yellow><pin></yellow>. El chat de proximidad está desactivado en esta sala.</green>"
+    left: "<prefix><gray>Has salido de la sala temporal. Vuelves al chat de voz por proximidad.</gray>"
+    kicked: "<prefix><red>Has sido expulsado de la sala temporal.</red>"
+    kick_success: "<prefix><green>Has expulsado a <yellow><player></yellow> de la sala temporal.</green>"
+    spy_joined: "<prefix_admin><gold>Escuchando silenciosamente la sala de <yellow><player></yellow> (modo wiretap).</gold>"
+    error: "<prefix><red>Acción de sala fallida: <error></red>"
+    not_in_room: "<prefix><red>No estás en ninguna sala temporal.</red>"
+    no_permission: "<prefix><red>No tienes permiso para gestionar salas.</red>"
   update:
     header: "<prefix_admin><gold>--- Estado de Actualización de VoiceEngine ---</gold>"
     checking: "<prefix_admin><gray>Buscando actualizaciones de VoiceEngine en GitHub...</gray>"

@@ -22,6 +22,20 @@ command:
     uri: "<gray>Server URI: <aqua><uri></aqua></gray>"
     active_tokens: "<gray>Active Session Tokens: <gold><count></gold></gray>"
     no_permission: "<prefix><red>You do not have permission to inspect VoiceEngine status.</red>"
+  vanish:
+    enabled: "<prefix_admin><green>Acoustic staff vanish mode <yellow>ENABLED</yellow>. You are completely silent and invisible in voice chat.</green>"
+    disabled: "<prefix_admin><red>Acoustic staff vanish mode <yellow>DISABLED</yellow>. You are now audible in voice chat.</red>"
+    no_permission: "<prefix_admin><red>You do not have permission to use staff vanish.</red>"
+  room:
+    created: "<prefix><green>Temporary private room created! Code: <yellow><b><pin></b></yellow> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Click to copy PIN</yellow>'><u><aqua>[Copy PIN]</aqua></u></hover></click></green>"
+    joined: "<prefix><green>Joined temporary room <yellow><pin></yellow>. Proximity chat is disabled while in this room.</green>"
+    left: "<prefix><gray>Left temporary room. You are back in proximity voice chat.</gray>"
+    kicked: "<prefix><red>You were kicked from the temporary room.</red>"
+    kick_success: "<prefix><green>Kicked <yellow><player></yellow> from the temporary room.</green>"
+    spy_joined: "<prefix_admin><gold>Now wiretapping room of <yellow><player></yellow> (silent listening mode).</gold>"
+    error: "<prefix><red>Room action failed: <error></red>"
+    not_in_room: "<prefix><red>You are not currently in a temporary room.</red>"
+    no_permission: "<prefix><red>You do not have permission to manage rooms.</red>"
   update:
     header: "<prefix_admin><gold>--- VoiceEngine Update Status ---</gold>"
     checking: "<prefix_admin><gray>Checking for VoiceEngine updates from GitHub...</gray>"

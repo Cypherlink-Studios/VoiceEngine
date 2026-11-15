@@ -23,6 +23,7 @@ public class VoiceCommands {
     private final Consumer<SessionToken> tokenConsumer;
     private final java.util.function.BiConsumer<SessionToken, String> ipTokenConsumer;
     private final Runnable reloadAction;
+    private final Consumer<Player> vanishToggleConsumer;
 
     public VoiceCommands(
         TokenManager tokenManager,
@@ -32,7 +33,7 @@ public class VoiceCommands {
         Consumer<SessionToken> tokenConsumer,
         Runnable reloadAction
     ) {
-        this(tokenManager, configSupplier, clientSupplier, translationService, tokenConsumer, reloadAction, null);
+        this(tokenManager, configSupplier, clientSupplier, translationService, tokenConsumer, reloadAction, null, null);
     }
 
     public VoiceCommands(
@@ -44,6 +45,19 @@ public class VoiceCommands {
         Runnable reloadAction,
         java.util.function.BiConsumer<SessionToken, String> ipTokenConsumer
     ) {
+        this(tokenManager, configSupplier, clientSupplier, translationService, tokenConsumer, reloadAction, ipTokenConsumer, null);
+    }
+
+    public VoiceCommands(
+        TokenManager tokenManager,
+        Supplier<VoiceConfig> configSupplier,
+        Supplier<VoiceBackendClient> clientSupplier,
+        TranslationService translationService,
+        Consumer<SessionToken> tokenConsumer,
+        Runnable reloadAction,
+        java.util.function.BiConsumer<SessionToken, String> ipTokenConsumer,
+        Consumer<Player> vanishToggleConsumer
+    ) {
         this.tokenManager = tokenManager;
         this.configSupplier = configSupplier;
         this.clientSupplier = clientSupplier;
@@ -51,6 +65,7 @@ public class VoiceCommands {
         this.tokenConsumer = tokenConsumer;
         this.reloadAction = reloadAction;
         this.ipTokenConsumer = ipTokenConsumer;
+        this.vanishToggleConsumer = vanishToggleConsumer;
     }
 
     @Command("voice|ve|voiceengine|audio")
@@ -115,9 +130,9 @@ public class VoiceCommands {
         }
 
         VoiceConfig config = configSupplier.get();
-        String adminUrl = config.webClientUrl() + "/admin?token=" + sessionToken.token();
+        String connectionUrl = config.webClientUrl() + "/admin?token=" + sessionToken.token();
         translationService.send(player, "command.admin.prompt",
-            Placeholder.parsed("url", adminUrl),
+            Placeholder.parsed("url", connectionUrl),
             Placeholder.parsed("token", sessionToken.token()),
             Placeholder.parsed("time", config.tokenTtl().toMinutes() + "m")
         );
@@ -125,7 +140,7 @@ public class VoiceCommands {
 
     @Command("voice|ve|voiceengine|audio reload")
     @Permission("voiceengine.admin.reload")
-    @CommandDescription("Reload VoiceEngine configuration and language bundles")
+    @CommandDescription("Reload VoiceEngine configuration and translations")
     public void onVoiceReload(CommandSender sender) {
         if (reloadAction != null) {
             reloadAction.run();
@@ -156,5 +171,25 @@ public class VoiceCommands {
         translationService.send(sender, "command.status.active_tokens",
             Placeholder.parsed("count", String.valueOf(tokenManager.getActiveTokenCount()))
         );
+    }
+
+    @Command("voice|ve|voiceengine|audio vanish")
+    @Permission("voiceengine.admin.vanish")
+    @CommandDescription("Toggle acoustic staff vanish mode (zero-leak)")
+    public void onVoiceVanish(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            translationService.send(sender, "command.connect.only_players");
+            return;
+        }
+        if (vanishToggleConsumer != null) {
+            vanishToggleConsumer.accept(player);
+        }
+    }
+
+    @Command("voice|ve|voiceengine|audio staff")
+    @Permission("voiceengine.admin.vanish")
+    @CommandDescription("Toggle acoustic staff vanish mode (zero-leak)")
+    public void onVoiceStaff(CommandSender sender) {
+        onVoiceVanish(sender);
     }
 }

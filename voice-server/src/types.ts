@@ -14,6 +14,7 @@ export interface PlayerSpatialState {
   isSneaking: boolean;
   isSubmerged: boolean;
   isSpectator?: boolean;
+  isStaffVanish?: boolean;
   lastUpdated?: number;
 }
 
@@ -88,6 +89,24 @@ export interface ServerSettings {
   fixedChannels: FixedChannelConfig[];
 }
 
+export interface TemporaryRoomMember {
+  playerUuid: string;
+  username: string;
+  joinedAt: number;
+  isSpeaking?: boolean;
+  isSpy?: boolean;
+}
+
+export interface TemporaryRoom {
+  id: string; // e.g. "room_123456"
+  pin: string; // "123456"
+  ownerUuid: string;
+  createdAt: number;
+  maxMembers: number; // 0 = unlimited
+  members: Map<string, TemporaryRoomMember>; // playerUuid -> member
+  emptyTimeout?: NodeJS.Timeout;
+}
+
 export interface ClientSession {
   sessionId: string;
   playerUuid: string;
@@ -99,7 +118,7 @@ export interface ClientSession {
   // map of peerUuid -> consumer
   consumers: Map<string, mediasoup.types.Consumer>;
   isSpeaking: boolean;
-  activeChannel?: string; // 'proximity' or fixed channel id
+  activeChannel?: string; // 'proximity', fixed channel id, or temporary room id
   clientIp?: string;
   deviceId?: string;
   isMuted?: boolean;
@@ -107,6 +126,9 @@ export interface ClientSession {
   isDeafened?: boolean;
   supportsBinarySpatial?: boolean;
   lastRadarStatus?: boolean;
+  isStaffVanish?: boolean;
+  isRoomSpy?: boolean;
+  isAdmin?: boolean;
 }
 
 export interface ModerationActionPayload {

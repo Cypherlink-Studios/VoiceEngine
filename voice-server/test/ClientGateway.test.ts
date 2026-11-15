@@ -713,4 +713,183 @@ describe('ClientGateway', () => {
     expect(radarStatusMsg).toBeDefined();
     expect(radarStatusMsg.enabled).toBe(false);
   });
+
+  it('handles room_create, room_join, room_kick and room_leave lifecycle', async () => {
+    tokenStore.registerToken({
+      token: 'ROOM_OWNER_1',
+      playerUuid: 'uuid-room-owner',
+      playerName: 'OwnerAlice',
+      expiresAt: Date.now() + 60000,
+    });
+    tokenStore.registerToken({
+      token: 'ROOM_MEMBER_1',
+      playerUuid: 'uuid-room-member',
+      playerName: 'MemberBob',
+      expiresAt: Date.now() + 60000,
+    });
+
+    const ownerWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const memberWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+
+    let createdPin = '';
+    let createdRoomId = '';
+
+    await new Promise<void>((resolve) => {
+      ownerWs.on('open', () => {
+        ownerWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'ROOM_OWNER_1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      ownerWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          ownerWs.send(JSON.stringify({ type: 'room_create' }));
+        } else if (msg.type === 'room_created') {
+          createdPin = msg.pin;
+          createdRoomId = msg.roomId;
+          expect(createdPin).toMatch(/^\d{6}$/);
+
+          // Now authenticate member and join room
+          memberWs.send(
+            JSON.stringify({
+              type: 'client_auth',
+              token: 'ROOM_MEMBER_1',
+              rtpCapabilities: sfu.getRtpCapabilities(),
+            })
+          );
+        }
+      });
+
+      memberWs.on('open', () => {});
+      memberWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          memberWs.send(JSON.stringify({ type: 'room_join', pin: createdPin }));
+        } else if (msg.type === 'room_joined') {
+          expect(msg.roomId).toBe(createdRoomId);
+
+          // Owner kicks member
+          ownerWs.send(JSON.stringify({ type: 'room_kick', targetUuid: 'uuid-room-member' }));
+        } else if (msg.type === 'room_kicked') {
+          expect(msg.roomId).toBe(createdRoomId);
+
+          // Owner leaves room
+          ownerWs.send(JSON.stringify({ type: 'room_leave' }));
+        }
+      });
+
+      ownerWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'room_left') {
+          ownerWs.close();
+          memberWs.close();
+          resolve();
+        }
+      });
+    });
+
+    expect(createdPin).toMatch(/^\d{6}$/);
+  });
+
+  it('handles staff_vanish_toggle and preserves stealth without creating consumers for regular players', async () => {
+    tokenStore.registerToken({
+      token: 'STAFF_TOKEN_1',
+      playerUuid: 'uuid-staff-vanish',
+      playerName: 'ModDan',
+      isAdmin: true,
+      expiresAt: Date.now() + 60000,
+    });
+    tokenStore.registerToken({
+      token: 'REGULAR_TOKEN_1',
+      playerUuid: 'uuid-regular-player',
+      playerName: 'PlayerPete',
+      isAdmin: false,
+      expiresAt: Date.now() + 60000,
+    });
+
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-staff-vanish',
+      username: 'ModDan',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: false,
+    });
+    spatialEngine.updatePlayer({
+      uuid: 'uuid-regular-player',
+      username: 'PlayerPete',
+      world: 'world',
+      x: 3,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: false,
+    });
+
+    const staffWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const regularWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const regularReceivedConsumers: string[] = [];
+
+    await new Promise<void>((resolve) => {
+      staffWs.on('open', () => {
+        staffWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'STAFF_TOKEN_1',
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+
+      staffWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'auth_success') {
+          // Toggle vanish mode
+          staffWs.send(JSON.stringify({ type: 'staff_vanish_toggle', enabled: true }));
+        } else if (msg.type === 'staff_vanish_status') {
+          expect(msg.enabled).toBe(true);
+
+          // Now authenticate regular player
+          regularWs.send(
+            JSON.stringify({
+              type: 'client_auth',
+              token: 'REGULAR_TOKEN_1',
+              rtpCapabilities: sfu.getRtpCapabilities(),
+            })
+          );
+        }
+      });
+
+      regularWs.on('open', () => {});
+      regularWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'new_consumer') {
+          regularReceivedConsumers.push(msg.peerUuid);
+        }
+      });
+
+      // Wait 300ms to allow proximity loops to tick
+      setTimeout(() => {
+        staffWs.close();
+        regularWs.close();
+        resolve();
+      }, 350);
+    });
+
+    // Zero-leak check: regular player never received a consumer for the vanished staff member
+    expect(regularReceivedConsumers).not.toContain('uuid-staff-vanish');
+  });
 });

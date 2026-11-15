@@ -5,6 +5,8 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 
 public class TelemetryCollector {
 
@@ -28,7 +30,7 @@ public class TelemetryCollector {
         boolean underwaterAcoustics,
         String spectatorMode
     ) {
-        return collectBatch(players, serverId, speakers, whisperOnSneak, underwaterAcoustics, spectatorMode, true);
+        return collectBatch(players, serverId, speakers, whisperOnSneak, underwaterAcoustics, spectatorMode, true, Set.of());
     }
 
     public SpatialTelemetryBatch collectBatch(
@@ -40,10 +42,24 @@ public class TelemetryCollector {
         String spectatorMode,
         boolean radarEnabled
     ) {
+        return collectBatch(players, serverId, speakers, whisperOnSneak, underwaterAcoustics, spectatorMode, radarEnabled, Set.of());
+    }
+
+    public SpatialTelemetryBatch collectBatch(
+        Collection<? extends Player> players,
+        String serverId,
+        List<com.voiceengine.speaker.SpeakerBlockState> speakers,
+        boolean whisperOnSneak,
+        boolean underwaterAcoustics,
+        String spectatorMode,
+        boolean radarEnabled,
+        Set<UUID> staffVanishUuids
+    ) {
         List<PlayerSpatialState> states = new ArrayList<>(players.size());
         for (Player player : players) {
             if (player != null && player.isOnline()) {
-                states.add(PlayerSpatialState.fromPlayer(player, serverId, whisperOnSneak, underwaterAcoustics));
+                boolean isVanish = staffVanishUuids != null && staffVanishUuids.contains(player.getUniqueId());
+                states.add(PlayerSpatialState.fromPlayer(player, serverId, whisperOnSneak, underwaterAcoustics, isVanish));
             }
         }
         return new SpatialTelemetryBatch(serverId, System.currentTimeMillis(), states, speakers, spectatorMode, radarEnabled);

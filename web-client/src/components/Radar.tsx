@@ -10,6 +10,7 @@ export interface PeerRadarInfo {
   isSpeaking?: boolean;
   isSubmerged?: boolean;
   isBroadcast?: boolean;
+  isStaffVanish?: boolean;
 }
 
 interface RadarProps {
@@ -17,6 +18,7 @@ interface RadarProps {
   maxRange?: number;
   localUsername?: string;
   localUuid?: string;
+  isViewerStaff?: boolean;
   size?: number;
   onPeerClick?: (peer: PeerRadarInfo) => void;
 }
@@ -26,6 +28,7 @@ export function Radar({
   maxRange = 30,
   localUsername,
   localUuid,
+  isViewerStaff,
   size = 320,
   onPeerClick,
 }: RadarProps) {
@@ -33,6 +36,7 @@ export function Radar({
   const effectiveUsername = localUsername || t('soundstage.you');
   const center = size / 2;
   const radius = size / 2 - (size < 300 ? 18 : 26);
+  const visiblePeers = peers.filter((p) => !p.isStaffVanish || isViewerStaff);
 
   return (
     <div className="relative flex flex-col items-center select-none">
@@ -119,7 +123,7 @@ export function Radar({
         </div>
 
         {/* Audible Nearby Peers */}
-        {peers.map((peer) => {
+        {visiblePeers.map((peer) => {
           const normX = Math.max(-1, Math.min(1, peer.relX / maxRange));
           const normZ = Math.max(-1, Math.min(1, peer.relZ / maxRange));
 
@@ -199,6 +203,16 @@ export function Radar({
                       📢
                     </span>
                   )}
+
+                  {/* Staff Vanish indicator badge (for staff viewer) */}
+                  {peer.isStaffVanish && (
+                    <span
+                      className="absolute -bottom-1.5 -left-1.5 px-1 py-0.2 rounded text-[8px] font-bold text-amber-300 bg-amber-950/90 border border-amber-500/50 shadow"
+                      title={t('vanish.badge')}
+                    >
+                      🛡️
+                    </span>
+                  )}
                 </div>
 
                 {/* Subtle Peer Name & Distance Tag */}
@@ -218,7 +232,7 @@ export function Radar({
         <span className="text-slate-600">•</span>
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span>{t('soundstage.audiblePeers', { count: peers.length })}</span>
+          <span>{t('soundstage.audiblePeers', { count: visiblePeers.length })}</span>
         </span>
       </div>
     </div>

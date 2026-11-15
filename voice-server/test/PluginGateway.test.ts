@@ -4,6 +4,7 @@ import { createServer, Server } from 'http';
 import { PluginGateway } from '../src/gateway/PluginGateway.js';
 import { TokenStore } from '../src/auth/TokenStore.js';
 import { SpatialEngine } from '../src/spatial/SpatialEngine.js';
+import { RoomManager } from '../src/rooms/RoomManager.js';
 
 describe('PluginGateway', () => {
   let server: Server;
@@ -305,5 +306,114 @@ describe('PluginGateway', () => {
         }
       });
     });
+  });
+
+  it('handles staff_vanish_sync and responds with ack', async () => {
+    let vanishAckReceived = false;
+    const mockClientGateway = {
+      setStaffVanish: (uuid: string, enabled: boolean) => {
+        expect(uuid).toBe('staff-uuid-1');
+        expect(enabled).toBe(true);
+      },
+      getRoomManager: () => new RoomManager(),
+      broadcastRoomMembers: () => {},
+    };
+    gateway.setClientGateway(mockClientGateway as any);
+
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123' }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          ws.send(
+            JSON.stringify({
+              type: 'staff_vanish_sync',
+              playerUuid: 'staff-uuid-1',
+              enabled: true,
+            })
+          );
+        } else if (msg.type === 'staff_vanish_sync_ack') {
+          expect(msg.playerUuid).toBe('staff-uuid-1');
+          expect(msg.enabled).toBe(true);
+          vanishAckReceived = true;
+          ws.close();
+          resolve();
+        }
+      });
+    });
+
+    expect(vanishAckReceived).toBe(true);
+  });
+
+  it('handles room_command (create, join, query) from connected Paper server', async () => {
+    const roomManager = new RoomManager();
+    const mockClientGateway = {
+      getRoomManager: () => roomManager,
+      switchChannel: async () => {},
+      broadcastRoomMembers: () => {},
+    };
+    gateway.setClientGateway(mockClientGateway as any);
+
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    let createdPin = '';
+
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123' }));
+      });
+
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          // Request room creation
+          ws.send(
+            JSON.stringify({
+              type: 'room_command',
+              requestId: 'req-1',
+              action: 'create',
+              playerUuid: 'owner-uuid-1',
+              username: 'OwnerAlice',
+            })
+          );
+        } else if (msg.type === 'room_command_response' && msg.action === 'create') {
+          expect(msg.success).toBe(true);
+          expect(msg.pin).toMatch(/^\d{6}$/);
+          createdPin = msg.pin;
+
+          // Request join for MemberBob
+          ws.send(
+            JSON.stringify({
+              type: 'room_command',
+              requestId: 'req-2',
+              action: 'join',
+              playerUuid: 'member-uuid-2',
+              username: 'MemberBob',
+              pin: createdPin,
+            })
+          );
+        } else if (msg.type === 'room_command_response' && msg.action === 'join') {
+          expect(msg.success).toBe(true);
+
+          // Query room players
+          ws.send(
+            JSON.stringify({
+              type: 'query_room_players',
+              requestId: 'req-3',
+            })
+          );
+        } else if (msg.type === 'room_players_response') {
+          expect(msg.players).toContain('OwnerAlice');
+          expect(msg.players).toContain('MemberBob');
+          ws.close();
+          resolve();
+        }
+      });
+    });
+
+    expect(createdPin).toMatch(/^\d{6}$/);
   });
 });

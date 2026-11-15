@@ -11,6 +11,13 @@ export interface ChannelMember {
   isSpeaking: boolean;
 }
 
+export interface RoomMember {
+  uuid: string;
+  username: string;
+  isSpeaking: boolean;
+  isOwner?: boolean;
+}
+
 export interface ModerationNotice {
   action: 'mute' | 'deafen' | 'kick' | 'ban' | 'unmute' | 'undeafen';
   active: boolean;
@@ -19,7 +26,7 @@ export interface ModerationNotice {
 }
 
 export interface SignalingCallbacks {
-  onAuthenticated: (player: { uuid: string; username: string }) => void;
+  onAuthenticated: (player: { uuid: string; username: string; isAdmin?: boolean; isStaffVanish?: boolean }) => void;
   onError: (errorMsg: string) => void;
   onPeersUpdated: (peers: PeerRadarInfo[]) => void;
   onDisconnected: () => void;
@@ -29,6 +36,14 @@ export interface SignalingCallbacks {
   onPingUpdated?: (pingMs: number) => void;
   onModerationNotice?: (notice: ModerationNotice) => void;
   onRadarStatusChanged?: (enabled: boolean) => void;
+  onRoomCreated?: (room: { roomId: string; pin: string; ownerUuid: string }) => void;
+  onRoomJoined?: (room: { roomId: string; pin: string; ownerUuid: string }) => void;
+  onRoomLeft?: () => void;
+  onRoomKicked?: (info: { roomId: string; reason?: string }) => void;
+  onRoomMembersUpdated?: (roomId: string, members: RoomMember[], pin?: string, ownerUuid?: string) => void;
+  onRoomSpeaking?: (roomId: string, peerUuid: string, speaking: boolean) => void;
+  onRoomError?: (error: { error: string; message: string; retryAfterSeconds?: number }) => void;
+  onStaffVanishStatusChanged?: (enabled: boolean) => void;
 }
 
 export class VoiceSignaling {
@@ -262,6 +277,8 @@ export class VoiceSignaling {
         this.callbacks.onAuthenticated({
           uuid: msg.playerUuid,
           username: msg.username,
+          isAdmin: Boolean(msg.isAdmin),
+          isStaffVanish: Boolean(msg.isStaffVanish),
         });
         break;
       }
@@ -295,6 +312,8 @@ export class VoiceSignaling {
           trackMuted: consumer.track.muted,
         });
 
+        const isRoom = Boolean(msg.isRoom) || (typeof msg.channelId === 'string' && msg.channelId.startsWith('room_'));
+
         // Add to Web Audio spatial or stereo graph
         this.pipeline.addPeerStream(msg.peerUuid, consumer.track, {
           relX: msg.relX,
@@ -303,9 +322,10 @@ export class VoiceSignaling {
           isSubmerged: msg.isSubmerged,
           isChannel: Boolean(msg.isChannel),
           isBroadcast: Boolean(msg.isBroadcast),
+          isRoom,
         });
 
-        if (!msg.isChannel) {
+        if (!msg.isChannel && !isRoom) {
           if (msg.peerUsername) {
             this.knownUsernames.set(msg.peerUuid, msg.peerUsername);
           }
@@ -336,6 +356,66 @@ export class VoiceSignaling {
 
       case 'channel_peer_speaking': {
         this.callbacks.onChannelPeerSpeaking?.(msg.channelId, msg.peerUuid, Boolean(msg.speaking));
+        break;
+      }
+
+      case 'room_created': {
+        this.callbacks.onRoomCreated?.({
+          roomId: msg.roomId,
+          pin: msg.pin,
+          ownerUuid: msg.ownerUuid,
+        });
+        break;
+      }
+
+      case 'room_joined': {
+        this.callbacks.onRoomJoined?.({
+          roomId: msg.roomId,
+          pin: msg.pin,
+          ownerUuid: msg.ownerUuid,
+        });
+        break;
+      }
+
+      case 'room_left': {
+        this.callbacks.onRoomLeft?.();
+        break;
+      }
+
+      case 'room_kicked': {
+        this.callbacks.onRoomKicked?.({
+          roomId: msg.roomId,
+          reason: msg.reason,
+        });
+        break;
+      }
+
+      case 'room_members': {
+        this.callbacks.onRoomMembersUpdated?.(
+          msg.roomId,
+          msg.members || [],
+          msg.pin,
+          msg.ownerUuid
+        );
+        break;
+      }
+
+      case 'room_speaking': {
+        this.callbacks.onRoomSpeaking?.(msg.roomId, msg.peerUuid, Boolean(msg.speaking));
+        break;
+      }
+
+      case 'room_error': {
+        this.callbacks.onRoomError?.({
+          error: msg.error,
+          message: msg.message,
+          retryAfterSeconds: msg.retryAfterSeconds,
+        });
+        break;
+      }
+
+      case 'staff_vanish_status': {
+        this.callbacks.onStaffVanishStatusChanged?.(Boolean(msg.enabled));
         break;
       }
 
@@ -461,6 +541,51 @@ export class VoiceSignaling {
     this.send({
       type: 'join_channel',
       channelId,
+    });
+  }
+
+  public createRoom(maxMembers?: number): void {
+    this.peersInfo.clear();
+    this.dispatchPeersUpdatedThrottled();
+    this.send({
+      type: 'room_create',
+      maxMembers,
+    });
+  }
+
+  public joinRoom(pin: string): void {
+    this.peersInfo.clear();
+    this.dispatchPeersUpdatedThrottled();
+    this.send({
+      type: 'room_join',
+      pin,
+    });
+  }
+
+  public leaveRoom(): void {
+    this.send({
+      type: 'room_leave',
+    });
+  }
+
+  public kickRoomMember(targetUuid: string): void {
+    this.send({
+      type: 'room_kick',
+      targetUuid,
+    });
+  }
+
+  public spyRoom(targetPlayer: string): void {
+    this.send({
+      type: 'room_spy',
+      targetPlayer,
+    });
+  }
+
+  public toggleStaffVanish(enabled?: boolean): void {
+    this.send({
+      type: 'staff_vanish_toggle',
+      enabled,
     });
   }
 

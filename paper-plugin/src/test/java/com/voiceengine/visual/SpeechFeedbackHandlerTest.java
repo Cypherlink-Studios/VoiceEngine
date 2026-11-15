@@ -36,13 +36,32 @@ class SpeechFeedbackHandlerTest {
     }
 
     @Test
+    void testStaffVanishStateTracking() {
+        assertFalse(handler.isVanished(player1));
+        assertFalse(handler.isVanished(player2));
+
+        handler.setVanished(player1, true);
+        assertTrue(handler.isVanished(player1));
+        assertFalse(handler.isVanished(player2));
+
+        handler.setSpeaking(player1, true);
+        assertTrue(handler.isSpeaking(player1));
+        assertTrue(handler.isVanished(player1));
+
+        handler.setVanished(player1, false);
+        assertFalse(handler.isVanished(player1));
+    }
+
+    @Test
     void testClear() {
         handler.setSpeaking(player1, true);
         handler.setSpeaking(player2, true);
+        handler.setVanished(player1, true);
 
         handler.clear();
 
         assertFalse(handler.isSpeaking(player1));
         assertFalse(handler.isSpeaking(player2));
+        assertFalse(handler.isVanished(player1));
     }
 }

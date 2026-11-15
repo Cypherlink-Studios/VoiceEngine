@@ -249,4 +249,26 @@ class VoiceCommandsTest {
         String text = serializer.serialize(msgCaptor.getValue());
         assertTrue(text.contains("Only players"));
     }
+
+    @Test
+    void testVoiceVanishToggle() {
+        Player player = mock(Player.class);
+        AtomicReference<Player> toggled = new AtomicReference<>();
+        VoiceCommands commands = new VoiceCommands(
+            tokenManager,
+            () -> voiceConfig,
+            () -> null,
+            translationService,
+            null,
+            () -> {},
+            null,
+            toggled::set
+        );
+
+        commands.onVoiceVanish(player);
+        assertEquals(player, toggled.get());
+
+        commands.onVoiceStaff(player);
+        assertEquals(player, toggled.get());
+    }
 }

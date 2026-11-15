@@ -5,13 +5,13 @@ import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.entity.Player;
 
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class SpeechFeedbackHandler {
     private final Set<UUID> speakingPlayers = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> vanishedPlayers = ConcurrentHashMap.newKeySet();
     private volatile boolean particlesEnabled = true;
 
     public void setParticlesEnabled(boolean enabled) {
@@ -34,12 +34,27 @@ public class SpeechFeedbackHandler {
         return speakingPlayers.contains(playerUuid);
     }
 
+    public void setVanished(UUID playerUuid, boolean vanished) {
+        if (vanished) {
+            vanishedPlayers.add(playerUuid);
+        } else {
+            vanishedPlayers.remove(playerUuid);
+        }
+    }
+
+    public boolean isVanished(UUID playerUuid) {
+        return vanishedPlayers.contains(playerUuid);
+    }
+
     public void renderVisualIndicators() {
         if (!particlesEnabled || speakingPlayers.isEmpty()) {
             return;
         }
 
         for (UUID uuid : speakingPlayers) {
+            if (vanishedPlayers.contains(uuid)) {
+                continue; // Stealth: Never render speech particles for vanished staff members
+            }
             Player player = Bukkit.getPlayer(uuid);
             if (player != null && player.isOnline()) {
                 if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR || player.isDead()) {
@@ -60,5 +75,6 @@ public class SpeechFeedbackHandler {
 
     public void clear() {
         speakingPlayers.clear();
+        vanishedPlayers.clear();
     }
 }

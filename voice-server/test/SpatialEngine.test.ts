@@ -570,4 +570,116 @@ describe('SpatialEngine', () => {
       expect(engine.isRadarEnabledForPlayer('unknown-uuid')).toBe(false);
     });
   });
+
+  describe('Staff Vanish Proximity Routing', () => {
+    const regularSteve: PlayerSpatialState = {
+      uuid: 'regular-steve',
+      username: 'Steve',
+      world: 'world',
+      x: 0,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: false,
+    };
+
+    const regularAlex: PlayerSpatialState = {
+      uuid: 'regular-alex',
+      username: 'Alex',
+      world: 'world',
+      x: 10,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: false,
+    };
+
+    const staffMod1: PlayerSpatialState = {
+      uuid: 'staff-dan',
+      username: 'ModDan',
+      world: 'world',
+      x: 2,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: true,
+    };
+
+    const staffMod2: PlayerSpatialState = {
+      uuid: 'staff-sarah',
+      username: 'ModSarah',
+      world: 'world',
+      x: 4,
+      y: 64,
+      z: 0,
+      yaw: 0,
+      pitch: 0,
+      isSneaking: false,
+      isSubmerged: false,
+      isStaffVanish: true,
+    };
+
+    it('regular player hears regular peer but never hears or sees vanished staff', () => {
+      engine.updateBatch([regularSteve, regularAlex, staffMod1]);
+
+      const steveAudible = engine.getAudiblePeersFor('regular-steve');
+      const peerUuids = steveAudible.map((p) => p.peerUuid);
+
+      expect(peerUuids).toContain('regular-alex');
+      expect(peerUuids).not.toContain('staff-dan');
+    });
+
+    it('vanished staff hears nearby regular players (wiretap / eavesdrop)', () => {
+      engine.updateBatch([regularSteve, regularAlex, staffMod1]);
+
+      const staffAudible = engine.getAudiblePeersFor('staff-dan');
+      const peerUuids = staffAudible.map((p) => p.peerUuid);
+
+      expect(peerUuids).toContain('regular-steve');
+      expect(peerUuids).toContain('regular-alex');
+    });
+
+    it('vanished staff members can mutually hear and see each other in 3D proximity', () => {
+      engine.updateBatch([regularSteve, staffMod1, staffMod2]);
+
+      const danAudible = engine.getAudiblePeersFor('staff-dan');
+      const sarahAudible = engine.getAudiblePeersFor('staff-sarah');
+
+      expect(danAudible.map((p) => p.peerUuid)).toContain('staff-sarah');
+      expect(sarahAudible.map((p) => p.peerUuid)).toContain('staff-dan');
+    });
+
+    it('suppresses megaphone broadcast from vanished staff towards regular players but delivers to other staff', () => {
+      engine.updateBatch(
+        [regularSteve, staffMod1, staffMod2],
+        [
+          {
+            id: 'speaker-staff',
+            world: 'world',
+            x: 0,
+            y: 64,
+            z: 0,
+            radius: 25,
+            linkedPlayerUuid: 'staff-dan',
+            powered: true,
+          },
+        ]
+      );
+
+      const steveAudible = engine.getAudiblePeersFor('regular-steve');
+      expect(steveAudible.map((p) => p.peerUuid)).not.toContain('staff-dan');
+
+      const sarahAudible = engine.getAudiblePeersFor('staff-sarah');
+      expect(sarahAudible.map((p) => p.peerUuid)).toContain('staff-dan');
+    });
+  });
 });

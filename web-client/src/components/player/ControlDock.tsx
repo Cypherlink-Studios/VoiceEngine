@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Power,
   Activity,
+  Shield,
 } from 'lucide-react';
 import { AudioWaveform } from './AudioWaveform.js';
 import { useTranslation } from '../../i18n/index.js';
@@ -29,6 +30,8 @@ interface ControlDockProps {
   isModerationMuted?: boolean;
   aiNoiseSuppression?: boolean;
   speechProbability?: number;
+  isStaff?: boolean;
+  isStaffVanish?: boolean;
   onToggleMute: () => void;
   onToggleDeafen: () => void;
   onTogglePip: () => void;
@@ -36,6 +39,7 @@ interface ControlDockProps {
   onChangeMasterVolume: (vol: number) => void;
   onChangeVadThreshold: (threshold: number) => void;
   onToggleAiNoiseSuppression?: (enabled: boolean) => void;
+  onToggleStaffVanish?: () => void;
   onOpenSettings: () => void;
   onDisconnect: () => void;
 }
@@ -53,6 +57,8 @@ export function ControlDock({
   isModerationMuted,
   aiNoiseSuppression = true,
   speechProbability = 0,
+  isStaff,
+  isStaffVanish,
   onToggleMute,
   onToggleDeafen,
   onTogglePip,
@@ -60,6 +66,7 @@ export function ControlDock({
   onChangeMasterVolume,
   onChangeVadThreshold,
   onToggleAiNoiseSuppression,
+  onToggleStaffVanish,
   onOpenSettings,
   onDisconnect,
 }: ControlDockProps) {
@@ -234,6 +241,24 @@ export function ControlDock({
             <span>{t('dock.settings')}</span>
           </button>
 
+          {/* Staff Vanish Toggle */}
+          {(isStaff || isStaffVanish) && (
+            <button
+              onClick={() => {
+                onToggleStaffVanish?.();
+                setIsActionsPopoverOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-xl text-left flex items-center gap-2.5 transition-colors cursor-pointer ${
+                isStaffVanish
+                  ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30'
+                  : 'text-slate-200 hover:bg-white/10'
+              }`}
+            >
+              <Shield className={`w-4 h-4 ${isStaffVanish ? 'text-amber-400' : 'text-slate-400'}`} />
+              <span>{isStaffVanish ? t('vanish.toggleOff') : t('vanish.toggleOn')}</span>
+            </button>
+          )}
+
           <div className="h-px bg-white/5 my-0.5" />
 
           {/* Disconnect */}
@@ -247,6 +272,19 @@ export function ControlDock({
             <Power className="w-4 h-4 text-rose-400" />
             <span>{t('dock.disconnect')}</span>
           </button>
+        </div>
+      )}
+
+      {/* Staff Vanish Status Pill */}
+      {isStaffVanish && (
+        <div className="flex justify-center mb-2">
+          <div
+            className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold tracking-wider uppercase backdrop-blur-xl shadow-[0_0_20px_rgba(245,158,11,0.25)] flex items-center gap-1.5 animate-pulse"
+            title={t('vanish.badgeTooltip')}
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('vanish.badge')}</span>
+          </div>
         </div>
       )}
 
