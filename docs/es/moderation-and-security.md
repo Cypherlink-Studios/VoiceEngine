@@ -61,3 +61,13 @@ A diferencia de otros sistemas que esperan un ciclo de refresco o expiración de
 ```
 
 El usuario sancionado no necesita recargar la página: su micrófono se apaga en el acto y el cliente web muestra un indicador de sanción activa con el motivo y el tiempo restante.
+
+---
+
+## Modo Streamer Zero-Leak
+
+Los jugadores que emiten en directo pueden activar el Modo Streamer persistente con `/voice streamer` (Paper, guardado en `player-preferences.yml`) o `/voice-velocity streamer` (Velocity, guardado en SQLite `player_preferences`), o desde los ajustes del cliente web:
+
+- **Mensajes Sin Fugas en Chat**: `/voice`, `/voice admin` y `/voice room create|join` omiten códigos en texto plano, URLs con `?token=` y PINs de sala, mostrando enlaces limpios junto a botones `copy_to_clipboard` (`[Copiar Código]`, `[Copiar Enlace]`, `[Copiar PIN]`).
+- **Protección Pre-Autenticación en el Navegador**: Al abrir `/?token=` o `/admin?token=`, el cliente elimina el parámetro inmediatamente de la barra de direcciones mediante `window.history.replaceState` y enmascara los campos de entrada (`type="password"`).
+- **Sincronización Bidireccional**: Activar o desactivar el Modo Streamer desde Minecraft o desde el cliente web actualiza ambos extremos en tiempo real por WebSocket (`streamer_mode_sync` / `streamer_mode_update`).

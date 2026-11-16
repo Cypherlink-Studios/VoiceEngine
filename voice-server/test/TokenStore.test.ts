@@ -122,6 +122,22 @@ describe('TokenStore', () => {
       expect(second).toBeNull();
     });
 
+    it('stores and preserves streamerMode and streamerModeExplicit flags', () => {
+      tokenStore.registerToken({
+        token: 'STRM01',
+        playerUuid: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        playerName: 'StreamerUser',
+        expiresAt: Date.now() + 60000,
+        streamerMode: true,
+        streamerModeExplicit: true,
+      });
+
+      const redeemed = tokenStore.validateAndRedeem('STRM01');
+      expect(redeemed).not.toBeNull();
+      expect(redeemed?.streamerMode).toBe(true);
+      expect(redeemed?.streamerModeExplicit).toBe(true);
+    });
+
     it('cleans up expired tokens properly', () => {
       tokenStore.registerToken({
         token: 'EXP123',

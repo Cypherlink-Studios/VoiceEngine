@@ -124,6 +124,7 @@ describe('API Routes & Admin Auth', () => {
       playerName: 'AdminAlex',
       expiresAt: Date.now() + 60000,
       isAdmin: true,
+      streamerMode: true,
     });
 
     const authRes = await fetch(`${baseUrl}/api/admin/auth`, {
@@ -136,6 +137,7 @@ describe('API Routes & Admin Auth', () => {
     const authData = await authRes.json();
     expect(authData.success).toBe(true);
     expect(authData.username).toBe('AdminAlex');
+    expect(authData.streamerMode).toBe(true);
     expect(authData.sessionToken).toBeDefined();
 
     const sessionToken = authData.sessionToken;

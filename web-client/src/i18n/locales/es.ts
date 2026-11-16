@@ -26,6 +26,8 @@ export const es: Translations = {
     playerFallback: 'Jugador',
     genericError: 'Error al conectar el flujo de voz. Por favor verifica los permisos del micrófono.',
     enterTokenError: 'Por favor ingresa o haz clic en tu enlace de conexión /voice en Minecraft.',
+    showCode: 'Mostrar código',
+    hideCode: 'Ocultar código',
   },
   dock: {
     micMute: 'Silenciar micrófono',
@@ -167,6 +169,8 @@ export const es: Translations = {
     activeRoomDesc: 'Chat de proximidad desactivado. Audio estéreo entre miembros.',
     pinCopied: '¡PIN copiado al portapapeles!',
     copyPin: 'Copiar PIN',
+    showPin: 'Mostrar PIN',
+    hidePin: 'Ocultar PIN',
     rateLimitError: 'Demasiados intentos fallidos. Espere {seconds}s.',
     invalidPinError: 'PIN inválido o sala llena.',
     noRoomsOpen: 'No estás en una sala. Crea una o ingresa con un PIN de 6 dígitos.',

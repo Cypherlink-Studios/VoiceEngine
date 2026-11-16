@@ -892,4 +892,90 @@ describe('ClientGateway', () => {
     // Zero-leak check: regular player never received a consumer for the vanished staff member
     expect(regularReceivedConsumers).not.toContain('uuid-staff-vanish');
   });
+
+  it('resolves initial Streamer Mode and relays bidirectional updates between plugin and web client', async () => {
+    pluginGateway.setClientGateway(clientGateway);
+    const pluginWs = new WebSocket(`ws://localhost:${port}/ws/plugin`);
+    const pluginEvents: any[] = [];
+
+    await new Promise<void>((resolve) => {
+      pluginWs.on('open', () => {
+        pluginWs.send(
+          JSON.stringify({
+            type: 'plugin_handshake',
+            secret: 'secret-123',
+            role: 'paper',
+            serverId: 'lobby',
+          })
+        );
+      });
+      pluginWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          pluginWs.send(
+            JSON.stringify({
+              type: 'register_token',
+              token: 'STRM_FIRST',
+              playerUuid: 'uuid-streamer-1',
+              playerName: 'StreamerOne',
+              serverId: 'lobby',
+              expiresAt: Date.now() + 60000,
+              streamerMode: false,
+              streamerModeExplicit: false,
+            })
+          );
+          setTimeout(resolve, 40);
+        } else {
+          pluginEvents.push(msg);
+        }
+      });
+    });
+
+    const clientWs = new WebSocket(`ws://localhost:${port}/ws/client`);
+    const clientEvents: any[] = [];
+
+    await new Promise<void>((resolve) => {
+      clientWs.on('open', () => {
+        clientWs.send(
+          JSON.stringify({
+            type: 'client_auth',
+            token: 'STRM_FIRST',
+            clientStreamerMode: true,
+            rtpCapabilities: sfu.getRtpCapabilities(),
+          })
+        );
+      });
+      clientWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        clientEvents.push(msg);
+        if (msg.type === 'auth_success') {
+          // 1. Adopted clientStreamerMode: true when server had no explicit preference
+          expect(msg.streamerMode).toBe(true);
+
+          // 2. Web client toggles streamer mode OFF -> plugin should receive streamer_mode_sync
+          clientWs.send(JSON.stringify({ type: 'streamer_mode_update', enabled: false }));
+
+          // 3. Plugin toggles streamer mode ON -> client should receive streamer_mode_changed
+          setTimeout(() => {
+            pluginWs.send(
+              JSON.stringify({
+                type: 'streamer_mode_sync',
+                playerUuid: 'uuid-streamer-1',
+                enabled: true,
+              })
+            );
+          }, 50);
+        } else if (msg.type === 'streamer_mode_changed') {
+          expect(msg.enabled).toBe(true);
+          clientWs.close();
+          pluginWs.close();
+          resolve();
+        }
+      });
+    });
+
+    const syncs = pluginEvents.filter((e) => e.type === 'streamer_mode_sync');
+    expect(syncs.some((s) => s.playerUuid === 'uuid-streamer-1' && s.enabled === true)).toBe(true);
+    expect(syncs.some((s) => s.playerUuid === 'uuid-streamer-1' && s.enabled === false)).toBe(true);
+  });
 });

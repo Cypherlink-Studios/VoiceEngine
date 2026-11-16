@@ -121,4 +121,21 @@ class ModerationDatabaseTest {
         List<PunishmentRecord> all = database.getAllActivePunishments();
         assertTrue(all.size() >= 2);
     }
+
+    @Test
+    void testPlayerStreamerModePreferences() {
+        UUID playerUuid = UUID.randomUUID();
+
+        assertFalse(database.hasExplicitPreference(playerUuid));
+        assertFalse(database.getStreamerMode(playerUuid));
+
+        boolean toggled = database.toggleStreamerMode(playerUuid);
+        assertTrue(toggled);
+        assertTrue(database.hasExplicitPreference(playerUuid));
+        assertTrue(database.getStreamerMode(playerUuid));
+
+        database.setStreamerMode(playerUuid, false);
+        assertTrue(database.hasExplicitPreference(playerUuid));
+        assertFalse(database.getStreamerMode(playerUuid));
+    }
 }

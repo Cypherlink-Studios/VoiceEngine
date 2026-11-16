@@ -24,6 +24,8 @@ export const en = {
     playerFallback: 'Player',
     genericError: 'Failed to connect voice stream. Please verify microphone permissions.',
     enterTokenError: 'Please enter or click your /voice connection link in Minecraft.',
+    showCode: 'Show code',
+    hideCode: 'Hide code',
   },
   dock: {
     micMute: 'Mute microphone',
@@ -165,6 +167,8 @@ export const en = {
     activeRoomDesc: 'Proximity chat disabled. Stereo audio between room members.',
     pinCopied: 'PIN copied to clipboard!',
     copyPin: 'Copy PIN',
+    showPin: 'Reveal PIN',
+    hidePin: 'Hide PIN',
     rateLimitError: 'Too many failed attempts. Please wait {seconds}s.',
     invalidPinError: 'Invalid 6-digit PIN or room full.',
     noRoomsOpen: 'No temporary room active. Create or join one using a 6-digit PIN.',

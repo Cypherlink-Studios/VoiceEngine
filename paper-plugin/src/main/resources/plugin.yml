@@ -8,6 +8,9 @@ permissions:
   voiceengine.use:
     description: Allows connecting to VoiceEngine
     default: true
+  voiceengine.streamer:
+    description: Allows toggling Zero-Leak Streamer Mode
+    default: true
   voiceengine.admin:
     description: Allows accessing the VoiceEngine admin portal
     default: op

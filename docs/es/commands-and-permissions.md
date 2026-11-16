@@ -19,7 +19,8 @@ Cualquiera de los siguientes alias raíz puede ser utilizado indistintamente:
 
 | Comando | Permiso | Por Defecto | Descripción |
 | :--- | :--- | :--- | :--- |
-| `/voice` | `voiceengine.use` | Todos (`true`) | Genera un token de sesión de 6 caracteres y muestra el enlace clicable para abrir el cliente web. |
+| `/voice` | `voiceengine.use` | Todos (`true`) | Genera un token de sesión de 6 caracteres y muestra el enlace clicable (o botones de portapapeles sin fugas si el Modo Streamer está activo). |
+| `/voice streamer [on\|off\|status]` | `voiceengine.streamer` | Todos (`true`) | Activa, desactiva o consulta el Modo Streamer Zero-Leak persistente (`player-preferences.yml`), ocultando códigos, URLs y PINs en el chat y sincronizándose bidireccionalmente con el cliente web. |
 | `/voice admin` | `voiceengine.admin` | OP | Genera un token con privilegios de administrador y abre el panel web. |
 | `/voice reload` | `voiceengine.admin.reload` | OP | Recarga `config.yml`, idiomas, emisores de audio y bloques parlantes sin reiniciar el servidor. |
 | `/voice status` | `voiceengine.admin.status` | OP | Muestra el estado de la conexión WebSocket con el backend, reintentos y tokens activos. |
@@ -62,6 +63,14 @@ Requieren el permiso `voiceengine.admin.audio` (por defecto OP):
 
 ### Alias de Proxy
 `/voice-velocity`, `/ve-velocity`, `/voiceengine-velocity`, `/audio-velocity`.
+
+### Comandos de Jugador en Proxy
+
+| Comando | Permiso | Por Defecto | Descripción |
+| :--- | :--- | :--- | :--- |
+| `/voice-velocity` | `voiceengine.use` | Todos (`true`) | Genera un token de sesión en red (o acciones de portapapeles sin fugas en Modo Streamer). |
+| `/voice-velocity streamer [on\|off\|status]` | `voiceengine.streamer` | Todos (`true`) | Alterna o consulta el Modo Streamer Zero-Leak persistente en el proxy Velocity (SQLite `player_preferences`, sincronizado con el cliente web). |
+| `/voice-velocity admin` | `voiceengine.admin` | OP | Genera un token administrativo para el portal web. |
 
 ### Comandos de Moderación
 

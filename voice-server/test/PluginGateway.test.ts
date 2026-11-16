@@ -69,6 +69,8 @@ describe('PluginGateway', () => {
               playerUuid: 'uuid-1',
               playerName: 'PlayerOne',
               expiresAt: Date.now() + 60000,
+              streamerMode: true,
+              streamerModeExplicit: true,
             })
           );
 
@@ -102,6 +104,8 @@ describe('PluginGateway', () => {
             const redeemed = tokenStore.validateAndRedeem('TEST99');
             expect(redeemed).not.toBeNull();
             expect(redeemed?.playerName).toBe('PlayerOne');
+            expect(redeemed?.streamerMode).toBe(true);
+            expect(redeemed?.streamerModeExplicit).toBe(true);
 
             // Verify telemetry was updated
             const player = spatialEngine.getPlayer('uuid-1');
@@ -415,5 +419,42 @@ describe('PluginGateway', () => {
     });
 
     expect(createdPin).toMatch(/^\d{6}$/);
+  });
+
+  it('handles streamer_mode_sync and responds with streamer_mode_sync_ack', async () => {
+    let syncedUuid = '';
+    let syncedState = false;
+    gateway.setClientGateway({
+      setStreamerMode: (uuid: string, enabled: boolean) => {
+        syncedUuid = uuid;
+        syncedState = enabled;
+      },
+    } as any);
+
+    const ws = new WebSocket(`ws://localhost:${port}`);
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => {
+        ws.send(JSON.stringify({ type: 'plugin_handshake', secret: 'secret-123' }));
+      });
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'handshake_ack') {
+          ws.send(
+            JSON.stringify({
+              type: 'streamer_mode_sync',
+              playerUuid: 'uuid-strm-ack',
+              enabled: true,
+            })
+          );
+        } else if (msg.type === 'streamer_mode_sync_ack') {
+          expect(msg.playerUuid).toBe('uuid-strm-ack');
+          expect(msg.enabled).toBe(true);
+          expect(syncedUuid).toBe('uuid-strm-ack');
+          expect(syncedState).toBe(true);
+          ws.close();
+          resolve();
+        }
+      });
+    });
   });
 });

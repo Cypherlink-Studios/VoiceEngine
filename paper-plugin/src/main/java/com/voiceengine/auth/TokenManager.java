@@ -42,6 +42,16 @@ public class TokenManager {
     }
 
     public SessionToken generateToken(UUID playerUuid, String playerName, boolean isAdmin) {
+        return generateToken(playerUuid, playerName, isAdmin, false, false);
+    }
+
+    public SessionToken generateToken(
+        UUID playerUuid,
+        String playerName,
+        boolean isAdmin,
+        boolean streamerMode,
+        boolean streamerModeExplicit
+    ) {
         // Clean up any existing tokens for this player
         tokens.entrySet().removeIf(entry -> entry.getValue().playerUuid().equals(playerUuid));
 
@@ -49,7 +59,17 @@ public class TokenManager {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(ttl);
 
-        SessionToken sessionToken = new SessionToken(code, playerUuid, playerName, now, expiresAt, false, isAdmin);
+        SessionToken sessionToken = new SessionToken(
+            code,
+            playerUuid,
+            playerName,
+            now,
+            expiresAt,
+            false,
+            isAdmin,
+            streamerMode,
+            streamerModeExplicit
+        );
         tokens.put(code, sessionToken);
         return sessionToken;
     }

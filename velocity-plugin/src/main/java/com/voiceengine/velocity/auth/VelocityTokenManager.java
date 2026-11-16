@@ -37,16 +37,41 @@ public class VelocityTokenManager {
     }
 
     public VelocitySessionToken generateToken(UUID playerUuid, String playerName, boolean isAdmin) {
+        return generateToken(playerUuid, playerName, isAdmin, false, false);
+    }
+
+    public VelocitySessionToken generateToken(
+        UUID playerUuid,
+        String playerName,
+        boolean isAdmin,
+        boolean streamerMode,
+        boolean streamerModeExplicit
+    ) {
         cleanupExpired();
 
         VelocitySessionToken existing = playerTokens.get(playerUuid);
-        if (existing != null && !existing.isExpired()) {
+        if (existing != null
+            && !existing.isExpired()
+            && existing.isAdmin() == isAdmin
+            && existing.streamerMode() == streamerMode
+            && existing.streamerModeExplicit() == streamerModeExplicit) {
             return existing;
+        }
+        if (existing != null) {
+            tokenIndex.remove(existing.token());
         }
 
         String tokenStr = generateUniqueString();
         Instant expiresAt = Instant.now().plus(tokenTtl);
-        VelocitySessionToken token = new VelocitySessionToken(tokenStr, playerUuid, playerName, expiresAt, isAdmin);
+        VelocitySessionToken token = new VelocitySessionToken(
+            tokenStr,
+            playerUuid,
+            playerName,
+            expiresAt,
+            isAdmin,
+            streamerMode,
+            streamerModeExplicit
+        );
 
         playerTokens.put(playerUuid, token);
         tokenIndex.put(tokenStr, token);

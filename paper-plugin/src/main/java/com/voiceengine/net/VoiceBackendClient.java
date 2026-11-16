@@ -30,6 +30,7 @@ public class VoiceBackendClient extends WebSocketClient {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private volatile java.util.function.Consumer<JsonObject> audioResponseConsumer;
     private volatile java.util.function.Consumer<JsonObject> roomResponseConsumer;
+    private volatile java.util.function.BiConsumer<UUID, Boolean> streamerModeSyncConsumer;
 
     private volatile boolean intentionalClose = false;
     private int reconnectAttempts = 0;
@@ -117,6 +118,12 @@ public class VoiceBackendClient extends WebSocketClient {
                 if (roomResponseConsumer != null) {
                     roomResponseConsumer.accept(json);
                 }
+            } else if ("streamer_mode_sync".equals(type)) {
+                if (streamerModeSyncConsumer != null && json.has("playerUuid") && json.has("enabled")) {
+                    UUID uuid = UUID.fromString(json.get("playerUuid").getAsString());
+                    boolean enabled = json.get("enabled").getAsBoolean();
+                    streamerModeSyncConsumer.accept(uuid, enabled);
+                }
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "[VoiceEngine] Failed to parse message from voice server: " + message, e);
@@ -158,9 +165,25 @@ public class VoiceBackendClient extends WebSocketClient {
             json.addProperty("serverId", serverId != null ? serverId : "default");
             json.addProperty("expiresAt", token.expiresAt().toEpochMilli());
             json.addProperty("isAdmin", token.isAdmin());
+            json.addProperty("streamerMode", token.streamerMode());
+            json.addProperty("streamerModeExplicit", token.streamerModeExplicit());
             if (clientIp != null) {
                 json.addProperty("clientIp", clientIp);
             }
+            send(GSON.toJson(json));
+        }
+    }
+
+    public void setStreamerModeSyncConsumer(java.util.function.BiConsumer<UUID, Boolean> consumer) {
+        this.streamerModeSyncConsumer = consumer;
+    }
+
+    public void sendStreamerModeSync(UUID playerUuid, boolean enabled) {
+        if (isOpen() && playerUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "streamer_mode_sync");
+            json.addProperty("playerUuid", playerUuid.toString());
+            json.addProperty("enabled", enabled);
             send(GSON.toJson(json));
         }
     }

@@ -2,6 +2,7 @@ package com.voiceengine.command;
 
 import com.voiceengine.auth.SessionToken;
 import com.voiceengine.auth.TokenManager;
+import com.voiceengine.config.PlayerPreferencesManager;
 import com.voiceengine.config.VoiceConfig;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
@@ -12,10 +13,12 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import java.io.StringReader;
 import java.net.URI;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.UUID;
@@ -42,10 +45,18 @@ class VoiceCommandsTest {
             command:
               connect:
                 prompt: "<prefix>Connect at <url> with code <token>"
+                prompt_streamer: "<prefix>[Streamer] <click:open_url:'<url>'>[Open Web]</click> <click:copy_to_clipboard:'<token>'>[Copy Code]</click> <click:copy_to_clipboard:'<token_url>'>[Copy Link]</click>"
                 only_players: "<prefix>Only players"
                 backend_offline: "<prefix>Backend offline"
+              streamer:
+                enabled: "<prefix>Streamer ON"
+                disabled: "<prefix>Streamer OFF"
+                status_on: "<prefix>Status ON"
+                status_off: "<prefix>Status OFF"
+                invalid_action: "<prefix>Invalid"
               admin:
                 prompt: "<prefix_admin>Admin at <url> with code <token>"
+                prompt_streamer: "<prefix_admin>[Streamer] <click:open_url:'<url>'>[Open Panel]</click> <click:copy_to_clipboard:'<token>'>[Copy Code]</click> <click:copy_to_clipboard:'<token_url>'>[Copy Link]</click>"
                 backend_offline: "<prefix_admin>Backend offline"
               reload:
                 success: "<prefix>Reload successful"
@@ -270,5 +281,60 @@ class VoiceCommandsTest {
 
         commands.onVoiceStaff(player);
         assertEquals(player, toggled.get());
+    }
+
+    @Test
+    void testStreamerModeToggleAndZeroLeakPrompts(@TempDir Path tempDir) {
+        Player player = mock(Player.class);
+        UUID uuid = UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(uuid);
+        when(player.getName()).thenReturn("StreamerSteve");
+        when(player.locale()).thenReturn(Locale.US);
+
+        VoiceBackendClient client = mock(VoiceBackendClient.class);
+        when(client.isOpen()).thenReturn(true);
+
+        PlayerPreferencesManager prefs = new PlayerPreferencesManager(tempDir.toFile());
+        AtomicReference<SessionToken> sentToken = new AtomicReference<>();
+
+        VoiceCommands commands = new VoiceCommands(
+            tokenManager,
+            () -> voiceConfig,
+            () -> client,
+            translationService,
+            sentToken::set,
+            () -> {},
+            null,
+            null,
+            prefs
+        );
+
+        commands.onVoiceStreamerToggle(player);
+        assertTrue(prefs.isStreamerMode(uuid));
+        verify(client).sendStreamerModeSync(uuid, true);
+
+        commands.onVoiceConnect(player);
+        assertNotNull(sentToken.get());
+        assertTrue(sentToken.get().streamerMode());
+        assertTrue(sentToken.get().streamerModeExplicit());
+
+        commands.onVoiceAdmin(player);
+        assertNotNull(sentToken.get());
+        assertTrue(sentToken.get().isAdmin());
+        assertTrue(sentToken.get().streamerMode());
+
+        ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
+        verify(player, times(3)).sendMessage(msgCaptor.capture());
+        String connectText = serializer.serialize(msgCaptor.getAllValues().get(1));
+        String adminText = serializer.serialize(msgCaptor.getAllValues().get(2));
+
+        assertTrue(connectText.contains("[Open Web]"));
+        assertFalse(connectText.contains("?token="));
+        assertTrue(adminText.contains("[Open Panel]"));
+        assertFalse(adminText.contains(sentToken.get().token()));
+
+        commands.onVoiceStreamerAction(player, "off");
+        assertFalse(prefs.isStreamerMode(uuid));
+        verify(client).sendStreamerModeSync(uuid, false);
     }
 }

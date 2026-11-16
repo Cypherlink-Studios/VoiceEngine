@@ -61,6 +61,8 @@ export class TokenStore {
       ...record,
       serverId: record.serverId || 'default',
       token: record.token.toUpperCase().trim(),
+      streamerMode: Boolean(record.streamerMode),
+      streamerModeExplicit: Boolean(record.streamerModeExplicit),
       redeemed: false,
     });
   }

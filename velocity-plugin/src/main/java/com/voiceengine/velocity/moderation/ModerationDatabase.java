@@ -58,6 +58,13 @@ public class ModerationDatabase {
             """);
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_active_uuid ON punishments (player_uuid, punishment_type, revoked);");
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_active_ip ON punishments (client_ip, punishment_type, revoked);");
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS player_preferences (
+                    player_uuid TEXT PRIMARY KEY,
+                    streamer_mode INTEGER NOT NULL DEFAULT 0,
+                    updated_at INTEGER NOT NULL
+                );
+            """);
         }
         LOGGER.info("[VoiceEngine] Moderation SQLite database initialized successfully.");
     }
@@ -248,6 +255,61 @@ public class ModerationDatabase {
             id, playerUuid, playerName, clientIp, deviceId, type,
             reason, staffUuid, staffName, createdAt, expiresAt, revoked
         );
+    }
+
+    public synchronized boolean getStreamerMode(UUID playerUuid) {
+        if (playerUuid == null) return false;
+        String sql = "SELECT streamer_mode FROM player_preferences WHERE player_uuid = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("streamer_mode") == 1;
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "Error reading streamer_mode preference: " + e.getMessage(), e);
+        }
+        return false;
+    }
+
+    public synchronized boolean hasExplicitPreference(UUID playerUuid) {
+        if (playerUuid == null) return false;
+        String sql = "SELECT 1 FROM player_preferences WHERE player_uuid = ?";
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "Error checking explicit preference: " + e.getMessage(), e);
+        }
+        return false;
+    }
+
+    public synchronized void setStreamerMode(UUID playerUuid, boolean enabled) {
+        if (playerUuid == null) return;
+        String sql = """
+            INSERT INTO player_preferences (player_uuid, streamer_mode, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(player_uuid) DO UPDATE SET
+                streamer_mode = excluded.streamer_mode,
+                updated_at = excluded.updated_at
+        """;
+        try (PreparedStatement ps = getConnection().prepareStatement(sql)) {
+            ps.setString(1, playerUuid.toString());
+            ps.setInt(2, enabled ? 1 : 0);
+            ps.setLong(3, System.currentTimeMillis());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOGGER.log(Level.WARNING, "Error saving streamer_mode preference: " + e.getMessage(), e);
+        }
+    }
+
+    public synchronized boolean toggleStreamerMode(UUID playerUuid) {
+        boolean next = !getStreamerMode(playerUuid);
+        setStreamerMode(playerUuid, next);
+        return next;
     }
 
     public synchronized void close() {

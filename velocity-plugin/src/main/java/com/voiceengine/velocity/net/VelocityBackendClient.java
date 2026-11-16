@@ -2,6 +2,7 @@ package com.voiceengine.velocity.net;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.voiceengine.velocity.auth.VelocitySessionToken;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
@@ -61,7 +62,21 @@ public class VelocityBackendClient extends WebSocketClient {
 
     @Override
     public void onMessage(String message) {
-        // Voice server can send back ACKs or proxy directives if needed
+        try {
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
+            String type = json.has("type") ? json.get("type").getAsString() : "";
+            if ("streamer_mode_sync".equals(type)) {
+                if (streamerModeSyncConsumer != null && json.has("playerUuid") && json.has("enabled")) {
+                    UUID uuid = UUID.fromString(json.get("playerUuid").getAsString());
+                    boolean enabled = json.get("enabled").getAsBoolean();
+                    streamerModeSyncConsumer.accept(uuid, enabled);
+                }
+            }
+        } catch (Exception e) {
+            if (logger != null) {
+                logger.warn("Failed to parse message from VoiceEngine server: {}", e.getMessage());
+            }
+        }
     }
 
     @Override
@@ -83,9 +98,24 @@ public class VelocityBackendClient extends WebSocketClient {
     }
 
     private Runnable onConnected;
+    private volatile java.util.function.BiConsumer<UUID, Boolean> streamerModeSyncConsumer;
 
     public void setOnConnected(Runnable onConnected) {
         this.onConnected = onConnected;
+    }
+
+    public void setStreamerModeSyncConsumer(java.util.function.BiConsumer<UUID, Boolean> streamerModeSyncConsumer) {
+        this.streamerModeSyncConsumer = streamerModeSyncConsumer;
+    }
+
+    public void sendStreamerModeSync(UUID playerUuid, boolean enabled) {
+        if (isOpen() && playerUuid != null) {
+            JsonObject json = new JsonObject();
+            json.addProperty("type", "streamer_mode_sync");
+            json.addProperty("playerUuid", playerUuid.toString());
+            json.addProperty("enabled", enabled);
+            send(GSON.toJson(json));
+        }
     }
 
     public void registerToken(VelocitySessionToken token) {
@@ -101,6 +131,8 @@ public class VelocityBackendClient extends WebSocketClient {
             json.addProperty("playerName", token.playerName());
             json.addProperty("expiresAt", token.expiresAt().toEpochMilli());
             json.addProperty("isAdmin", token.isAdmin());
+            json.addProperty("streamerMode", token.streamerMode());
+            json.addProperty("streamerModeExplicit", token.streamerModeExplicit());
             if (clientIp != null) {
                 json.addProperty("clientIp", clientIp);
             }

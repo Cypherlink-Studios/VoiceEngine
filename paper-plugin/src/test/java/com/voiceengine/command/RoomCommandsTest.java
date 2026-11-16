@@ -1,6 +1,7 @@
 package com.voiceengine.command;
 
 import com.google.gson.JsonObject;
+import com.voiceengine.config.PlayerPreferencesManager;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
 import net.kyori.adventure.text.Component;
@@ -9,9 +10,11 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 import java.io.StringReader;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -36,7 +39,9 @@ class RoomCommandsTest {
                 backend_offline: "<prefix>Backend offline"
               room:
                 created: "<prefix>Room created PIN: <pin>"
+                created_streamer: "<prefix>Room created (PIN hidden) <click:copy_to_clipboard:'<pin>'>[Copy PIN]</click>"
                 joined: "<prefix>Room joined PIN: <pin>"
+                joined_streamer: "<prefix>Joined private room"
                 left: "<prefix>Room left"
                 kicked: "<prefix>You were kicked"
                 kick_success: "<prefix>Kicked player <player>"
@@ -237,5 +242,52 @@ class RoomCommandsTest {
         ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
         verify(player).sendMessage(msgCaptor.capture());
         assertTrue(serializer.serialize(msgCaptor.getValue()).contains("Spying room of SuspectUser"));
+    }
+
+    @Test
+    void testRoomCreateAndJoinMaskPinInStreamerMode(@TempDir Path tempDir) {
+        Player player = mock(Player.class);
+        UUID uuid = UUID.randomUUID();
+        when(player.getUniqueId()).thenReturn(uuid);
+        when(player.getName()).thenReturn("StreamerAlice");
+        when(player.locale()).thenReturn(Locale.US);
+
+        VoiceBackendClient client = mock(VoiceBackendClient.class);
+        when(client.isOpen()).thenReturn(true);
+
+        AtomicReference<JsonObject> sentCmd = new AtomicReference<>();
+        doAnswer(inv -> {
+            sentCmd.set(inv.getArgument(0));
+            return null;
+        }).when(client).sendRoomCommand(any(JsonObject.class));
+
+        PlayerPreferencesManager prefs = new PlayerPreferencesManager(tempDir.toFile());
+        prefs.setStreamerMode(uuid, true);
+
+        RoomCommands commands = new RoomCommands(() -> client, translationService, prefs);
+        commands.onRoomCreate(player);
+
+        JsonObject createResp = new JsonObject();
+        createResp.addProperty("requestId", sentCmd.get().get("requestId").getAsString());
+        createResp.addProperty("success", true);
+        createResp.addProperty("pin", "654321");
+        commands.handleBackendResponse(createResp);
+
+        commands.onRoomJoin(player, "654321");
+        JsonObject joinResp = new JsonObject();
+        joinResp.addProperty("requestId", sentCmd.get().get("requestId").getAsString());
+        joinResp.addProperty("success", true);
+        joinResp.addProperty("pin", "654321");
+        commands.handleBackendResponse(joinResp);
+
+        ArgumentCaptor<Component> msgCaptor = ArgumentCaptor.forClass(Component.class);
+        verify(player, times(2)).sendMessage(msgCaptor.capture());
+        String createText = serializer.serialize(msgCaptor.getAllValues().get(0));
+        String joinText = serializer.serialize(msgCaptor.getAllValues().get(1));
+
+        assertTrue(createText.contains("[Copy PIN]"));
+        assertFalse(createText.contains("654321"));
+        assertTrue(joinText.contains("Joined private room"));
+        assertFalse(joinText.contains("654321"));
     }
 }

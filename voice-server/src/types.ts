@@ -28,6 +28,8 @@ export interface SessionTokenRecord {
   clientIp?: string;
   isMuted?: boolean;
   serverId?: string;
+  streamerMode?: boolean;
+  streamerModeExplicit?: boolean;
 }
 
 export interface RelativeSpatialAudio {
@@ -129,6 +131,7 @@ export interface ClientSession {
   isStaffVanish?: boolean;
   isRoomSpy?: boolean;
   isAdmin?: boolean;
+  streamerMode?: boolean;
 }
 
 export interface ModerationActionPayload {

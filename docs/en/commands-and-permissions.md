@@ -19,7 +19,8 @@ Any of the following command aliases can be used interchangeably:
 
 | Command | Permission | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `/voice` | `voiceengine.use` | Everyone (`true`) | Generates a 6-character session token and prints the clickable web client connection URL. |
+| `/voice` | `voiceengine.use` | Everyone (`true`) | Generates a 6-character session token and prints the clickable web client connection URL (or zero-leak clipboard buttons when Streamer Mode is active). |
+| `/voice streamer [on\|off\|status]` | `voiceengine.streamer` | Everyone (`true`) | Toggles or inspects persistent Zero-Leak Streamer Mode, hiding codes, tokenized URLs, and room PINs in chat and syncing bidirectionally with the web client. |
 | `/voice admin` | `voiceengine.admin` | OP | Generates an admin token and opens the VoiceEngine Web Admin Portal. |
 | `/voice reload` | `voiceengine.admin.reload` | OP | Reloads `config.yml`, language bundles, speaker blocks, and emitters on the fly. |
 | `/voice status` | `voiceengine.admin.status` | OP | Displays backend WebSocket connection state, reconnect attempts, and active tokens. |
@@ -62,6 +63,14 @@ Requires the `voiceengine.admin.audio` permission node (default: OP):
 
 ### Proxy Aliases
 `/voice-velocity`, `/ve-velocity`, `/voiceengine-velocity`, `/audio-velocity`.
+
+### Proxy Player Commands
+
+| Command | Permission | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `/voice-velocity` | `voiceengine.use` | Everyone (`true`) | Generates a network session token (or zero-leak clipboard actions in Streamer Mode). |
+| `/voice-velocity streamer [on\|off\|status]` | `voiceengine.streamer` | Everyone (`true`) | Toggles or inspects persistent Zero-Leak Streamer Mode across the Velocity proxy (stored in SQLite `player_preferences` and synced with the web client). |
+| `/voice-velocity admin` | `voiceengine.admin` | OP | Generates a network admin portal session token. |
 
 ### Moderation Commands
 

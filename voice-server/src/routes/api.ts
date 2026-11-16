@@ -63,6 +63,7 @@ export function createApiRouter(
       username: session.username,
       playerUuid: session.playerUuid,
       expiresAt: session.expiresAt,
+      streamerMode: Boolean(session.streamerMode),
     });
   });
 

@@ -8,6 +8,7 @@ export interface AdminSession {
   username: string;
   createdAt: number;
   expiresAt: number;
+  streamerMode?: boolean;
 }
 
 export class AdminAuthManager {
@@ -32,6 +33,7 @@ export class AdminAuthManager {
       username: record.playerName,
       createdAt: now,
       expiresAt: now + this.sessionTtlMs,
+      streamerMode: Boolean(record.streamerMode),
     };
 
     this.sessions.set(sessionToken, session);

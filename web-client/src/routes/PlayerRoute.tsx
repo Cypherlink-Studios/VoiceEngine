@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, EyeOff, Users, Lock } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Headphones, Sparkles, Radio, Eye, EyeOff, Users, Lock } from 'lucide-react';
 import { SpatialAudioPipeline } from '../audio/SpatialAudioPipeline.js';
 import { VoiceActivityDetector } from '../audio/VoiceActivityDetector.js';
 import { MicrophonePipeline } from '../audio/MicrophonePipeline.js';
@@ -24,6 +24,15 @@ export function PlayerRoute() {
   const { t } = useTranslation();
 
   const [tokenInput, setTokenInput] = useState('');
+  const [showTokenInput, setShowTokenInput] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const params = new URLSearchParams(window.location.search);
+    return (
+      localStorage.getItem('voiceengine:streamer_mode') !== 'true' &&
+      !params.has('token') &&
+      !params.has('code')
+    );
+  });
   const [isConnecting, setIsConnecting] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -177,6 +186,8 @@ export function PlayerRoute() {
     const token = searchParams.get('token') || searchParams.get('code');
     if (token) {
       setTokenInput(token.trim().toUpperCase());
+      setShowTokenInput(false);
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash || ''}`);
     }
   }, [searchParams]);
 
@@ -308,9 +319,23 @@ export function PlayerRoute() {
           setLocalPlayer(player);
           setIsAdmin(Boolean(player.isAdmin));
           setIsStaffVanish(Boolean(player.isStaffVanish));
+          if (typeof player.streamerMode === 'boolean') {
+            setStreamerMode(player.streamerMode);
+            localStorage.setItem('voiceengine:streamer_mode', String(player.streamerMode));
+            if (player.streamerMode) {
+              setShowTokenInput(false);
+            }
+          }
           setIsConnected(true);
           setIsConnecting(false);
           soundEffects.playConnect();
+        },
+        onStreamerModeChanged: (enabled) => {
+          setStreamerMode(enabled);
+          localStorage.setItem('voiceengine:streamer_mode', String(enabled));
+          if (enabled) {
+            setShowTokenInput(false);
+          }
         },
         onError: (err) => {
           setErrorMsg(err);
@@ -596,6 +621,10 @@ export function PlayerRoute() {
   const handleToggleStreamerMode = (enabled: boolean) => {
     setStreamerMode(enabled);
     localStorage.setItem('voiceengine:streamer_mode', String(enabled));
+    if (enabled) {
+      setShowTokenInput(false);
+    }
+    signalingRef.current?.sendStreamerModeUpdate(enabled);
   };
 
   const handleTogglePip = async () => {
@@ -1079,12 +1108,20 @@ export function PlayerRoute() {
             <div className="w-full flex flex-col gap-3">
               <div className="relative">
                 <input
-                  type="text"
+                  type={showTokenInput ? 'text' : 'password'}
                   placeholder={t('auth.joinCodePlaceholder')}
                   value={tokenInput}
                   onChange={(e) => setTokenInput(e.target.value.toUpperCase())}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-center text-sm font-mono tracking-widest text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all uppercase"
+                  className="w-full pl-4 pr-10 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-center text-sm font-mono tracking-widest text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all uppercase"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowTokenInput((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title={showTokenInput ? t('auth.hideCode') : t('auth.showCode')}
+                >
+                  {showTokenInput ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
 
               <button
@@ -1150,7 +1187,7 @@ export function PlayerRoute() {
                 <Lock className="w-3 h-3 text-amber-400" />
                 <span>
                   {activeChannel.startsWith('room_') && activeRoom?.pin
-                    ? t('rooms.activeRoomTitle', { pin: activeRoom.pin })
+                    ? t('rooms.activeRoomTitle', { pin: streamerMode ? '••••••' : activeRoom.pin })
                     : t('rooms.title')}
                 </span>
                 {activeChannel.startsWith('room_') && activeRoom && (
@@ -1197,6 +1234,7 @@ export function PlayerRoute() {
                 activeRoom={activeRoom}
                 roomError={roomError}
                 localPlayerUuid={localPlayer?.uuid}
+                streamerMode={streamerMode}
                 onSelectChannel={(channelId) => {
                   setShowRoomDrawer(false);
                   handleSelectChannel(channelId);

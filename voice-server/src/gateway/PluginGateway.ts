@@ -110,6 +110,8 @@ export class PluginGateway {
               isAdmin: Boolean(message.isAdmin),
               clientIp: message.clientIp,
               isMuted: Boolean(message.isMuted),
+              streamerMode: Boolean(message.streamerMode),
+              streamerModeExplicit: Boolean(message.streamerModeExplicit),
             });
           } else if (message.type === 'player_quit') {
             if (message.playerUuid && this.clientGateway) {
@@ -149,6 +151,18 @@ export class PluginGateway {
               ws.send(
                 JSON.stringify({
                   type: 'staff_vanish_sync_ack',
+                  playerUuid: message.playerUuid,
+                  enabled,
+                })
+              );
+            }
+          } else if (message.type === 'streamer_mode_sync') {
+            if (this.clientGateway && message.playerUuid) {
+              const enabled = Boolean(message.enabled);
+              this.clientGateway.setStreamerMode(message.playerUuid, enabled);
+              ws.send(
+                JSON.stringify({
+                  type: 'streamer_mode_sync_ack',
                   playerUuid: message.playerUuid,
                   enabled,
                 })
@@ -229,6 +243,37 @@ export class PluginGateway {
     for (const socket of this.paperSockets.values()) {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(payload);
+      }
+    }
+  }
+
+  public notifyStreamerMode(playerUuid: string, enabled: boolean, serverId?: string): void {
+    const payload = JSON.stringify({
+      type: 'streamer_mode_sync',
+      playerUuid,
+      enabled,
+    });
+
+    if (this.velocitySocket && this.velocitySocket.readyState === WebSocket.OPEN) {
+      this.velocitySocket.send(payload);
+    }
+
+    const player = this.spatialEngine.getPlayer(playerUuid);
+    const targetServerId = serverId || player?.serverId;
+
+    if (targetServerId && this.paperSockets.has(targetServerId)) {
+      const socket = this.paperSockets.get(targetServerId);
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(payload);
+        return;
+      }
+    }
+
+    if (!this.velocitySocket || this.velocitySocket.readyState !== WebSocket.OPEN) {
+      for (const socket of this.paperSockets.values()) {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send(payload);
+        }
       }
     }
   }

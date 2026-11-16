@@ -5,11 +5,20 @@ prefix_admin: "<gradient:#f12711:#f5af19><b>[VoiceEngine Admin]</b></gradient> "
 command:
   connect:
     prompt: "<prefix><click:open_url:'<url>'><hover:show_text:'<yellow>Haz clic para abrir el enlace de conexión</yellow>'><u><green>Haz clic aquí para conectar tu micrófono</green></u></hover></click> <gray>(código: <white><token></white>, expira en <time>)</gray>"
+    prompt_streamer: "<prefix><yellow>[Modo Streamer]</yellow> <gray>Sesión lista (<time>):</gray> <click:open_url:'<url>'><hover:show_text:'<yellow>Abrir VoiceEngine (URL limpia sin token)</yellow>'><u><green>[Abrir Web]</green></u></hover></click> <click:copy_to_clipboard:'<token>'><hover:show_text:'<aqua>Copiar código al portapapeles</aqua>'><u><aqua>[Copiar Código]</aqua></u></hover></click> <click:copy_to_clipboard:'<token_url>'><hover:show_text:'<gold>Copiar enlace completo al portapapeles</gold>'><u><gold>[Copiar Enlace]</gold></u></hover></click>"
     only_players: "<prefix><red>Solo los jugadores pueden conectarse a VoiceEngine.</red>"
     no_permission: "<prefix><red>No tienes permiso para usar VoiceEngine.</red>"
     backend_offline: "<prefix><red>El servidor de voz está desconectado. No se puede generar la sesión.</red>"
+  streamer:
+    enabled: "<prefix><green>Modo Streamer Zero-Leak <yellow>ACTIVADO</yellow>. Códigos, URLs y PINs de sala permanecerán ocultos en el chat.</green>"
+    disabled: "<prefix><red>Modo Streamer Zero-Leak <yellow>DESACTIVADO</yellow>. Se han restaurado los enlaces y códigos visibles.</red>"
+    status_on: "<prefix><gray>El Modo Streamer Zero-Leak está <green>ACTIVADO</green>.</gray>"
+    status_off: "<prefix><gray>El Modo Streamer Zero-Leak está <yellow>DESACTIVADO</yellow>.</gray>"
+    invalid_action: "<prefix><red>Opción inválida. Usa <yellow>/voice streamer [on|off|status]</yellow>.</red>"
+    no_permission: "<prefix><red>No tienes permiso para usar el Modo Streamer.</red>"
   admin:
     prompt: "<prefix_admin><click:open_url:'<url>'><hover:show_text:'<gold>Haz clic para abrir el Panel de Administración</gold>'><u><yellow>Haz clic aquí para abrir el Panel de Administración</yellow></u></hover></click> <gray>(código: <white><token></white>, expira en <time>)</gray>"
+    prompt_streamer: "<prefix_admin><yellow>[Modo Streamer]</yellow> <gray>Sesión admin lista (<time>):</gray> <click:open_url:'<url>'><hover:show_text:'<gold>Abrir Panel Admin (URL limpia sin token)</gold>'><u><yellow>[Abrir Panel]</yellow></u></hover></click> <click:copy_to_clipboard:'<token>'><hover:show_text:'<aqua>Copiar código admin al portapapeles</aqua>'><u><aqua>[Copiar Código]</aqua></u></hover></click> <click:copy_to_clipboard:'<token_url>'><hover:show_text:'<gold>Copiar enlace admin completo al portapapeles</gold>'><u><gold>[Copiar Enlace]</gold></u></hover></click>"
     no_permission: "<prefix_admin><red>No tienes permiso para acceder al panel de administración de VoiceEngine.</red>"
     backend_offline: "<prefix_admin><red>El servidor de voz está desconectado. No se puede generar la sesión administrativa.</red>"
   reload:
@@ -28,7 +37,9 @@ command:
     no_permission: "<prefix_admin><red>No tienes permiso para usar el modo staff vanish.</red>"
   room:
     created: "<prefix><green>¡Sala privada temporal creada! Código: <yellow><b><pin></b></yellow> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Click para copiar PIN</yellow>'><u><aqua>[Copiar PIN]</aqua></u></hover></click></green>"
+    created_streamer: "<prefix><yellow>[Modo Streamer]</yellow> <green>¡Sala privada temporal creada! (PIN oculto)</green> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Copiar PIN de 6 dígitos al portapapeles</yellow>'><u><aqua>[Copiar PIN]</aqua></u></hover></click>"
     joined: "<prefix><green>Te has unido a la sala temporal <yellow><pin></yellow>. El chat de proximidad está desactivado en esta sala.</green>"
+    joined_streamer: "<prefix><yellow>[Modo Streamer]</yellow> <green>Te has unido a la sala privada temporal. El chat de proximidad está desactivado en esta sala.</green>"
     left: "<prefix><gray>Has salido de la sala temporal. Vuelves al chat de voz por proximidad.</gray>"
     kicked: "<prefix><red>Has sido expulsado de la sala temporal.</red>"
     kick_success: "<prefix><green>Has expulsado a <yellow><player></yellow> de la sala temporal.</green>"
@@ -108,6 +119,7 @@ command:
 
 notification:
   join: "<prefix><gray>¡El chat de voz por proximidad está activo! Escribe <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> para unirte.</gray>"
+  join_streamer: "<prefix><yellow>[Modo Streamer activo]</yellow> <gray>¡El chat de voz por proximidad está activo! Escribe <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> para conectar de forma segura.</gray>"
 
 error:
   invalid_syntax: "<prefix><red>Sintaxis inválida: <yellow><syntax></yellow></red>"

@@ -2,6 +2,7 @@ package com.voiceengine.command;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.voiceengine.config.PlayerPreferencesManager;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
@@ -25,12 +26,22 @@ import java.util.function.Supplier;
 public class RoomCommands {
     private final Supplier<VoiceBackendClient> clientSupplier;
     private final TranslationService translationService;
+    private final PlayerPreferencesManager preferencesManager;
     private final ConcurrentHashMap<String, Consumer<JsonObject>> pendingRequests = new ConcurrentHashMap<>();
     private final List<String> cachedRoomPlayers = new CopyOnWriteArrayList<>();
 
     public RoomCommands(Supplier<VoiceBackendClient> clientSupplier, TranslationService translationService) {
+        this(clientSupplier, translationService, null);
+    }
+
+    public RoomCommands(
+        Supplier<VoiceBackendClient> clientSupplier,
+        TranslationService translationService,
+        PlayerPreferencesManager preferencesManager
+    ) {
         this.clientSupplier = clientSupplier;
         this.translationService = translationService;
+        this.preferencesManager = preferencesManager;
     }
 
     public void handleBackendResponse(JsonObject response) {
@@ -100,7 +111,9 @@ public class RoomCommands {
             boolean success = resp.has("success") && resp.get("success").getAsBoolean();
             if (success) {
                 String pin = resp.get("pin").getAsString();
-                translationService.send(player, "command.room.created", Placeholder.parsed("pin", pin));
+                boolean streamerMode = preferencesManager != null && preferencesManager.isStreamerMode(player.getUniqueId());
+                String key = streamerMode ? "command.room.created_streamer" : "command.room.created";
+                translationService.send(player, key, Placeholder.parsed("pin", pin));
             } else {
                 String error = resp.has("message") ? resp.get("message").getAsString() : "Failed to create room";
                 translationService.send(player, "command.room.error", Placeholder.parsed("error", error));
@@ -132,7 +145,12 @@ public class RoomCommands {
             boolean success = resp.has("success") && resp.get("success").getAsBoolean();
             if (success) {
                 String joinedPin = resp.get("pin").getAsString();
-                translationService.send(player, "command.room.joined", Placeholder.parsed("pin", joinedPin));
+                boolean streamerMode = preferencesManager != null && preferencesManager.isStreamerMode(player.getUniqueId());
+                if (streamerMode) {
+                    translationService.send(player, "command.room.joined_streamer");
+                } else {
+                    translationService.send(player, "command.room.joined", Placeholder.parsed("pin", joinedPin));
+                }
             } else {
                 String error = resp.has("message") ? resp.get("message").getAsString() : "Invalid PIN or room full";
                 translationService.send(player, "command.room.error", Placeholder.parsed("error", error));

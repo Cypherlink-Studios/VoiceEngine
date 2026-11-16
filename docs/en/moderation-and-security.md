@@ -61,3 +61,13 @@ Rather than waiting for token timeouts or polling intervals:
 ```
 
 The punished player's microphone is muted on the SFU instantly without requiring a page refresh, and their web client shows an active penalty dialog detailing the reason and expiration time.
+
+---
+
+## Zero-Leak Streamer Mode
+
+Players streaming live can enable persistent Streamer Mode via `/voice streamer` (Paper, stored in `player-preferences.yml`) or `/voice-velocity streamer` (Velocity, stored in SQLite `player_preferences`), or from the web client's Settings modal:
+
+- **Zero-Leak In-Game Prompts**: `/voice`, `/voice admin`, and `/voice room create|join` omit plaintext codes, tokenized URLs, and room PINs from chat, providing clean base URL links alongside `copy_to_clipboard` actions (`[Copy Code]`, `[Copy Link]`, `[Copy PIN]`).
+- **Pre-Auth Browser Protection**: Opening `/?token=` or `/admin?token=` immediately strips the query parameter from the browser address bar via `window.history.replaceState` and renders token inputs masked (`type="password"`).
+- **Bidirectional Sync**: Toggling Streamer Mode in Minecraft or in the web client updates both sides in real time over WebSocket (`streamer_mode_sync` / `streamer_mode_update`).

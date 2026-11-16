@@ -139,6 +139,17 @@ export class ClientGateway {
                 this.spatialEngine.setPlayerStaffVanish(tokenRecord.playerUuid, true);
               }
 
+              const clientStreamerMode = Boolean(msg.clientStreamerMode);
+              let streamerMode = Boolean(tokenRecord.streamerMode);
+              if (!tokenRecord.streamerModeExplicit && clientStreamerMode) {
+                streamerMode = true;
+                this.pluginGateway?.notifyStreamerMode?.(
+                  tokenRecord.playerUuid,
+                  true,
+                  tokenRecord.serverId
+                );
+              }
+
               session = {
                 sessionId,
                 playerUuid: tokenRecord.playerUuid,
@@ -157,6 +168,7 @@ export class ClientGateway {
                 serverId: tokenRecord.serverId || 'default',
                 isAdmin: Boolean(tokenRecord.isAdmin),
                 isStaffVanish,
+                streamerMode,
               };
 
               const existingSession = this.playerSessions.get(session.playerUuid);
@@ -178,6 +190,7 @@ export class ClientGateway {
                   username: session.username,
                   isAdmin: session.isAdmin,
                   isStaffVanish: session.isStaffVanish,
+                  streamerMode: Boolean(session.streamerMode),
                   routerRtpCapabilities: this.sfu.getRtpCapabilities(),
                   sendTransportOptions: {
                     id: sendTransport.id,
@@ -489,6 +502,14 @@ export class ClientGateway {
               }
               const enable = typeof msg.enabled === 'boolean' ? msg.enabled : !session.isStaffVanish;
               this.setStaffVanish(session.playerUuid, enable);
+              break;
+            }
+
+            case 'streamer_mode_update': {
+              if (!session) return;
+              const enabled = Boolean(msg.enabled);
+              session.streamerMode = enabled;
+              this.pluginGateway?.notifyStreamerMode?.(session.playerUuid, enabled, session.serverId);
               break;
             }
 
@@ -1253,6 +1274,21 @@ export class ClientGateway {
   public isStaff(playerUuid: string): boolean {
     const session = this.playerSessions.get(playerUuid);
     return Boolean(session?.isAdmin || session?.isStaffVanish || this.staffVanishUuids.has(playerUuid));
+  }
+
+  public setStreamerMode(playerUuid: string, enabled: boolean): void {
+    const session = this.playerSessions.get(playerUuid);
+    if (session) {
+      session.streamerMode = enabled;
+      if (session.ws.readyState === WebSocket.OPEN) {
+        session.ws.send(
+          JSON.stringify({
+            type: 'streamer_mode_changed',
+            enabled,
+          })
+        );
+      }
+    }
   }
 
   public setStaffVanish(playerUuid: string, enabled: boolean): void {

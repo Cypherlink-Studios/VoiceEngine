@@ -78,6 +78,12 @@ class TranslationServiceTest {
         Component compEs = translationService.render(Locale.forLanguageTag("es-ES"), "notification.join");
         String textEs = PlainTextComponentSerializer.plainText().serialize(compEs);
         assertTrue(textEs.contains("chat de voz por proximidad"));
+
+        Component compStreamerEn = translationService.render(Locale.US, "notification.join_streamer");
+        assertTrue(PlainTextComponentSerializer.plainText().serialize(compStreamerEn).contains("[Streamer Mode active]"));
+
+        Component compStreamerEs = translationService.render(Locale.forLanguageTag("es-ES"), "command.streamer.enabled");
+        assertTrue(PlainTextComponentSerializer.plainText().serialize(compStreamerEs).contains("ACTIVADO"));
     }
 
     @Test

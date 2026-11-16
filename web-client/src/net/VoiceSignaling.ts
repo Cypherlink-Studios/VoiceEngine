@@ -26,7 +26,7 @@ export interface ModerationNotice {
 }
 
 export interface SignalingCallbacks {
-  onAuthenticated: (player: { uuid: string; username: string; isAdmin?: boolean; isStaffVanish?: boolean }) => void;
+  onAuthenticated: (player: { uuid: string; username: string; isAdmin?: boolean; isStaffVanish?: boolean; streamerMode?: boolean }) => void;
   onError: (errorMsg: string) => void;
   onPeersUpdated: (peers: PeerRadarInfo[]) => void;
   onDisconnected: () => void;
@@ -44,6 +44,7 @@ export interface SignalingCallbacks {
   onRoomSpeaking?: (roomId: string, peerUuid: string, speaking: boolean) => void;
   onRoomError?: (error: { error: string; message: string; retryAfterSeconds?: number }) => void;
   onStaffVanishStatusChanged?: (enabled: boolean) => void;
+  onStreamerModeChanged?: (enabled: boolean) => void;
 }
 
 export class VoiceSignaling {
@@ -126,12 +127,16 @@ export class VoiceSignaling {
       this.startPingLoop();
       this.mediaPipeline.setWsSend((data) => this.send(data));
       const deviceId = this.getOrCreateDeviceId();
+      const clientStreamerMode =
+        typeof window !== 'undefined' &&
+        window.localStorage?.getItem('voiceengine:streamer_mode') === 'true';
       // Send authentication request with binary spatial support flag
       this.send({
         type: 'client_auth',
         token: this.token,
         deviceId,
         supportsBinary: true,
+        clientStreamerMode,
       });
     };
 
@@ -279,6 +284,7 @@ export class VoiceSignaling {
           username: msg.username,
           isAdmin: Boolean(msg.isAdmin),
           isStaffVanish: Boolean(msg.isStaffVanish),
+          streamerMode: typeof msg.streamerMode === 'boolean' ? msg.streamerMode : undefined,
         });
         break;
       }
@@ -416,6 +422,11 @@ export class VoiceSignaling {
 
       case 'staff_vanish_status': {
         this.callbacks.onStaffVanishStatusChanged?.(Boolean(msg.enabled));
+        break;
+      }
+
+      case 'streamer_mode_changed': {
+        this.callbacks.onStreamerModeChanged?.(Boolean(msg.enabled));
         break;
       }
 
@@ -585,6 +596,13 @@ export class VoiceSignaling {
   public toggleStaffVanish(enabled?: boolean): void {
     this.send({
       type: 'staff_vanish_toggle',
+      enabled,
+    });
+  }
+
+  public sendStreamerModeUpdate(enabled: boolean): void {
+    this.send({
+      type: 'streamer_mode_update',
       enabled,
     });
   }

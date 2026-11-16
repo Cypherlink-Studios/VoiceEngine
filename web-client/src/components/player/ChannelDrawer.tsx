@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PublicFixedChannel } from '../layout/BrandProvider.js';
-import { Radio, Users, Volume2, Shield, Lock, Plus, LogOut, Copy, Check, UserMinus, AlertTriangle } from 'lucide-react';
+import { Radio, Users, Volume2, Shield, Lock, Plus, LogOut, Copy, Check, UserMinus, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { ChannelMember, RoomMember } from '../../net/VoiceSignaling.js';
 import { useTranslation } from '../../i18n/index.js';
 
@@ -25,6 +25,7 @@ interface ChannelDrawerProps {
   activeRoom?: ActiveRoomState | null;
   roomError?: RoomErrorState | null;
   localPlayerUuid?: string;
+  streamerMode?: boolean;
   onSelectChannel: (channelId: string) => void;
   onMemberClick?: (member: ChannelMember | RoomMember) => void;
   onCreateRoom?: () => void;
@@ -41,6 +42,7 @@ export function ChannelDrawer({
   activeRoom,
   roomError,
   localPlayerUuid,
+  streamerMode = false,
   onSelectChannel,
   onMemberClick,
   onCreateRoom,
@@ -51,6 +53,13 @@ export function ChannelDrawer({
   const { t } = useTranslation();
   const [pinInput, setPinInput] = useState('');
   const [copiedPin, setCopiedPin] = useState(false);
+  const [revealPin, setRevealPin] = useState(false);
+
+  useEffect(() => {
+    setRevealPin(false);
+  }, [activeRoom?.roomId, streamerMode]);
+
+  const isPinMasked = streamerMode && !revealPin;
 
   const isInRoom = activeChannel.startsWith('room_');
   const isOwner = Boolean(activeRoom && localPlayerUuid && activeRoom.ownerUuid === localPlayerUuid);
@@ -144,8 +153,17 @@ export function ChannelDrawer({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white">
-                  {t('rooms.activeRoomTitle', { pin: activeRoom.pin })}
+                  {t('rooms.activeRoomTitle', { pin: isPinMasked ? '••••••' : activeRoom.pin })}
                 </span>
+                {streamerMode && (
+                  <button
+                    onClick={() => setRevealPin((prev) => !prev)}
+                    className="p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                    title={revealPin ? t('rooms.hidePin') : t('rooms.showPin')}
+                  >
+                    {revealPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                )}
                 <button
                   onClick={() => handleCopyPin(activeRoom.pin)}
                   className="p-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
@@ -230,16 +248,28 @@ export function ChannelDrawer({
           /* Join Room with 6-digit PIN Input */
           <div className="flex flex-col gap-2 p-3 rounded-xl bg-slate-800/40 border border-white/5">
             <form onSubmit={handleJoinSubmit} className="flex items-center gap-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={6}
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder={t('rooms.pinPlaceholder')}
-                className="flex-1 bg-slate-950/70 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 font-mono tracking-widest text-center focus:outline-none focus:border-amber-400/60"
-              />
+              <div className="relative flex-1">
+                <input
+                  type={isPinMasked ? 'password' : 'text'}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder={t('rooms.pinPlaceholder')}
+                  className="w-full bg-slate-950/70 border border-white/10 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white placeholder-slate-500 font-mono tracking-widest text-center focus:outline-none focus:border-amber-400/60"
+                />
+                {streamerMode && (
+                  <button
+                    type="button"
+                    onClick={() => setRevealPin((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title={revealPin ? t('rooms.hidePin') : t('rooms.showPin')}
+                  >
+                    {revealPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+              </div>
               <button
                 type="submit"
                 disabled={pinInput.trim().length !== 6}

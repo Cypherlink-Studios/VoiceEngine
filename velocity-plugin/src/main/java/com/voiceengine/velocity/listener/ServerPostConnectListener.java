@@ -6,6 +6,7 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.voiceengine.velocity.config.VelocityVoiceConfig;
+import com.voiceengine.velocity.moderation.ModerationDatabase;
 import com.voiceengine.velocity.net.VelocityBackendClient;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
@@ -19,14 +20,24 @@ public class ServerPostConnectListener {
 
     private final Supplier<VelocityVoiceConfig> configSupplier;
     private final Supplier<VelocityBackendClient> clientSupplier;
+    private final ModerationDatabase moderationDatabase;
     private final Set<UUID> welcomedPlayers = ConcurrentHashMap.newKeySet();
 
     public ServerPostConnectListener(
         Supplier<VelocityVoiceConfig> configSupplier,
         Supplier<VelocityBackendClient> clientSupplier
     ) {
+        this(configSupplier, clientSupplier, null);
+    }
+
+    public ServerPostConnectListener(
+        Supplier<VelocityVoiceConfig> configSupplier,
+        Supplier<VelocityBackendClient> clientSupplier,
+        ModerationDatabase moderationDatabase
+    ) {
         this.configSupplier = configSupplier;
         this.clientSupplier = clientSupplier;
+        this.moderationDatabase = moderationDatabase;
     }
 
     @Subscribe
@@ -38,7 +49,9 @@ public class ServerPostConnectListener {
             // First connection to the proxy network
             VelocityVoiceConfig config = configSupplier.get();
             if (config.notifyOnJoin() && welcomedPlayers.add(player.getUniqueId())) {
-                player.sendMessage(MINI_MESSAGE.deserialize(config.joinMessage()));
+                boolean streamerMode = moderationDatabase != null && moderationDatabase.getStreamerMode(player.getUniqueId());
+                String prefix = streamerMode ? "<yellow>[Streamer Mode active]</yellow> " : "";
+                player.sendMessage(MINI_MESSAGE.deserialize(prefix + config.joinMessage()));
             }
         } else {
             // Player transitioned between servers (e.g. Lobby -> Survival)

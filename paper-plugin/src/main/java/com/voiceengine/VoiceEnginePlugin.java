@@ -7,6 +7,7 @@ import com.voiceengine.api.event.PlayerSpeakingStateChangeEvent;
 import com.voiceengine.auth.TokenManager;
 import com.voiceengine.command.CommandService;
 import com.voiceengine.command.VoiceCommands;
+import com.voiceengine.config.PlayerPreferencesManager;
 import com.voiceengine.config.VoiceConfig;
 import com.voiceengine.i18n.TranslationService;
 import com.voiceengine.net.VoiceBackendClient;
@@ -58,6 +59,7 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
     private VoiceEngineAPI api;
     private RoomCommands roomCommands;
     private VanishHookListener vanishHookListener;
+    private PlayerPreferencesManager playerPreferencesManager;
     private final Set<UUID> vanishedPlayers = ConcurrentHashMap.newKeySet();
 
     @Override
@@ -86,7 +88,10 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         this.speakerManager.load();
         this.audioManager.load();
 
-        this.roomCommands = new RoomCommands(() -> voiceBackendClient, translationService);
+        this.playerPreferencesManager = new PlayerPreferencesManager(getDataFolder());
+        this.playerPreferencesManager.load();
+
+        this.roomCommands = new RoomCommands(() -> voiceBackendClient, translationService, playerPreferencesManager);
 
         // 3. Connect to Voice Server Backend
         initVoiceBackendClient();
@@ -158,7 +163,8 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
                             voiceBackendClient.registerToken(token, clientIp);
                         }
                     },
-                    this::toggleStaffVanish
+                    this::toggleStaffVanish,
+                    playerPreferencesManager
                 ),
                 roomCommands,
                 speakerCommands,
@@ -217,6 +223,9 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         if (audioManager != null) {
             audioManager.save();
         }
+        if (playerPreferencesManager != null) {
+            playerPreferencesManager.save();
+        }
         getServer().getServicesManager().unregisterAll(this);
         VoiceEngine.setApi(null);
 
@@ -264,6 +273,10 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             speakerManager.load();
         }
 
+        if (playerPreferencesManager != null) {
+            playerPreferencesManager.load();
+        }
+
         getLogger().info("VoiceEngine configuration and translations reloaded.");
     }
 
@@ -284,6 +297,11 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
             if (this.roomCommands != null) {
                 this.voiceBackendClient.setRoomResponseConsumer(this.roomCommands::handleBackendResponse);
             }
+            this.voiceBackendClient.setStreamerModeSyncConsumer((uuid, enabled) -> {
+                if (this.playerPreferencesManager != null) {
+                    this.playerPreferencesManager.setStreamerMode(uuid, enabled);
+                }
+            });
             this.voiceBackendClient.connect();
             for (UUID vanishedUuid : vanishedPlayers) {
                 this.voiceBackendClient.sendStaffVanishSync(vanishedUuid, true);
@@ -306,7 +324,12 @@ public class VoiceEnginePlugin extends JavaPlugin implements Listener {
         if (!isProxyMode() && voiceConfig != null && voiceConfig.notifyOnJoin()) {
             Bukkit.getScheduler().runTaskLater(this, () -> {
                 if (event.getPlayer().isOnline()) {
-                    translationService.send(event.getPlayer(), "notification.join");
+                    boolean streamerMode = playerPreferencesManager != null
+                        && playerPreferencesManager.isStreamerMode(event.getPlayer().getUniqueId());
+                    translationService.send(
+                        event.getPlayer(),
+                        streamerMode ? "notification.join_streamer" : "notification.join"
+                    );
                 }
             }, 40L); // 2 seconds after join
         }

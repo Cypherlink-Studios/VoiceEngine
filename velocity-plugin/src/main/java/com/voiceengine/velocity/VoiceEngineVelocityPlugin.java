@@ -81,7 +81,7 @@ public class VoiceEngineVelocityPlugin {
         initBackendClient();
 
         // 5. Register Listeners
-        this.postConnectListener = new ServerPostConnectListener(() -> voiceConfig, () -> backendClient);
+        this.postConnectListener = new ServerPostConnectListener(() -> voiceConfig, () -> backendClient, moderationDatabase);
         server.getEventManager().register(this, postConnectListener);
         server.getEventManager().register(this, new DisconnectListener(postConnectListener, () -> backendClient));
 
@@ -109,7 +109,8 @@ public class VoiceEngineVelocityPlugin {
                     }
                 },
                 this::reloadPlugin,
-                moderationService
+                moderationService,
+                moderationDatabase
             ));
 
             if (moderationService != null) {
@@ -166,6 +167,11 @@ public class VoiceEngineVelocityPlugin {
             if (moderationService != null) {
                 this.backendClient.setOnConnected(() -> moderationService.syncToBackend(backendClient));
             }
+            this.backendClient.setStreamerModeSyncConsumer((uuid, enabled) -> {
+                if (this.moderationDatabase != null) {
+                    this.moderationDatabase.setStreamerMode(uuid, enabled);
+                }
+            });
             this.backendClient.connect();
         } catch (Exception e) {
             logger.warn("Failed to initialize VelocityBackendClient: {}", e.getMessage());

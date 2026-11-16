@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Lock, LogOut, Palette, Volume2, Sliders, Activity, Headphones, ArrowLeft } from 'lucide-react';
+import { Lock, LogOut, Palette, Volume2, Sliders, Activity, Headphones, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { useBrand, PublicBranding, PublicFixedChannel } from '../components/layout/BrandProvider.js';
 import { BrandingTab } from '../components/admin/BrandingTab.js';
 import { ChannelsTab } from '../components/admin/ChannelsTab.js';
@@ -21,6 +21,9 @@ export function AdminRoute() {
   const [session, setSession] = useState<AdminSessionState | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [manualToken, setManualToken] = useState('');
+  const [showManualToken, setShowManualToken] = useState<boolean>(
+    () => localStorage.getItem('voiceengine:streamer_mode') !== 'true'
+  );
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSubmittingManual, setIsSubmittingManual] = useState(false);
   const authenticatingTokenRef = useRef<string | null>(null);
@@ -50,6 +53,9 @@ export function AdminRoute() {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.streamerMode === true) {
+          localStorage.setItem('voiceengine:streamer_mode', 'true');
+        }
         const sessionData: AdminSessionState = {
           sessionToken: data.sessionToken,
           username: data.username,
@@ -91,6 +97,8 @@ export function AdminRoute() {
     const stored = sessionStorage.getItem('ve_admin_session');
 
     if (tokenFromUrl) {
+      setShowManualToken(false);
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.hash || ''}`);
       authenticate(tokenFromUrl);
     } else if (stored) {
       try {
@@ -213,14 +221,24 @@ export function AdminRoute() {
             }}
             className="w-full flex gap-2"
           >
-            <input
-              type="text"
-              placeholder="PASTE ADMIN CODE"
-              value={manualToken}
-              disabled={isSubmittingManual}
-              onChange={(e) => setManualToken(e.target.value.toUpperCase())}
-              className="flex-1 px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-xs font-mono text-center tracking-widest text-white uppercase disabled:opacity-50"
-            />
+            <div className="relative flex-1">
+              <input
+                type={showManualToken ? 'text' : 'password'}
+                placeholder="PASTE ADMIN CODE"
+                value={manualToken}
+                disabled={isSubmittingManual}
+                onChange={(e) => setManualToken(e.target.value.toUpperCase())}
+                className="w-full pl-3 pr-9 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-xs font-mono text-center tracking-widest text-white uppercase disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => setShowManualToken((prev) => !prev)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title={showManualToken ? 'Hide code' : 'Show code'}
+              >
+                {showManualToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
             <button
               type="submit"
               disabled={isSubmittingManual || !manualToken.trim()}

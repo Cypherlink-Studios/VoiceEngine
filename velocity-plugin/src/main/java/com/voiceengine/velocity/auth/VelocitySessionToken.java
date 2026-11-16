@@ -8,8 +8,20 @@ public record VelocitySessionToken(
     UUID playerUuid,
     String playerName,
     Instant expiresAt,
-    boolean isAdmin
+    boolean isAdmin,
+    boolean streamerMode,
+    boolean streamerModeExplicit
 ) {
+    public VelocitySessionToken(
+        String token,
+        UUID playerUuid,
+        String playerName,
+        Instant expiresAt,
+        boolean isAdmin
+    ) {
+        this(token, playerUuid, playerName, expiresAt, isAdmin, false, false);
+    }
+
     public boolean isExpired() {
         return Instant.now().isAfter(expiresAt);
     }

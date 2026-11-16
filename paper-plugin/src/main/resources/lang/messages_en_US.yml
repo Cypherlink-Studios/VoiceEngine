@@ -5,11 +5,20 @@ prefix_admin: "<gradient:#f12711:#f5af19><b>[VoiceEngine Admin]</b></gradient> "
 command:
   connect:
     prompt: "<prefix><click:open_url:'<url>'><hover:show_text:'<yellow>Click to open connection link</yellow>'><u><green>Click here to connect your microphone</green></u></hover></click> <gray>(code: <white><token></white>, expires in <time>)</gray>"
+    prompt_streamer: "<prefix><yellow>[Streamer Mode]</yellow> <gray>Session ready (<time>):</gray> <click:open_url:'<url>'><hover:show_text:'<yellow>Open VoiceEngine (clean URL without token)</yellow>'><u><green>[Open Web]</green></u></hover></click> <click:copy_to_clipboard:'<token>'><hover:show_text:'<aqua>Copy single-use code to clipboard</aqua>'><u><aqua>[Copy Code]</aqua></u></hover></click> <click:copy_to_clipboard:'<token_url>'><hover:show_text:'<gold>Copy full connection link to clipboard</gold>'><u><gold>[Copy Link]</gold></u></hover></click>"
     only_players: "<prefix><red>Only players can connect to VoiceEngine.</red>"
     no_permission: "<prefix><red>You do not have permission to use VoiceEngine.</red>"
     backend_offline: "<prefix><red>Voice backend is offline. Unable to generate session.</red>"
+  streamer:
+    enabled: "<prefix><green>Zero-Leak Streamer Mode <yellow>ENABLED</yellow>. Codes, URLs, and room PINs will stay hidden in chat.</green>"
+    disabled: "<prefix><red>Zero-Leak Streamer Mode <yellow>DISABLED</yellow>. Standard clickable links and codes are restored.</red>"
+    status_on: "<prefix><gray>Zero-Leak Streamer Mode is currently <green>ENABLED</green>.</gray>"
+    status_off: "<prefix><gray>Zero-Leak Streamer Mode is currently <yellow>DISABLED</yellow>.</gray>"
+    invalid_action: "<prefix><red>Invalid option. Use <yellow>/voice streamer [on|off|status]</yellow>.</red>"
+    no_permission: "<prefix><red>You do not have permission to toggle Streamer Mode.</red>"
   admin:
     prompt: "<prefix_admin><click:open_url:'<url>'><hover:show_text:'<gold>Click to open Admin Portal</gold>'><u><yellow>Click here to open the Admin Portal</yellow></u></hover></click> <gray>(code: <white><token></white>, expires in <time>)</gray>"
+    prompt_streamer: "<prefix_admin><yellow>[Streamer Mode]</yellow> <gray>Admin session ready (<time>):</gray> <click:open_url:'<url>'><hover:show_text:'<gold>Open Admin Portal (clean URL without token)</gold>'><u><yellow>[Open Panel]</yellow></u></hover></click> <click:copy_to_clipboard:'<token>'><hover:show_text:'<aqua>Copy admin code to clipboard</aqua>'><u><aqua>[Copy Code]</aqua></u></hover></click> <click:copy_to_clipboard:'<token_url>'><hover:show_text:'<gold>Copy full admin link to clipboard</gold>'><u><gold>[Copy Link]</gold></u></hover></click>"
     no_permission: "<prefix_admin><red>You do not have permission to access the VoiceEngine admin portal.</red>"
     backend_offline: "<prefix_admin><red>Voice backend is offline. Unable to generate admin session.</red>"
   reload:
@@ -28,7 +37,9 @@ command:
     no_permission: "<prefix_admin><red>You do not have permission to use staff vanish.</red>"
   room:
     created: "<prefix><green>Temporary private room created! Code: <yellow><b><pin></b></yellow> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Click to copy PIN</yellow>'><u><aqua>[Copy PIN]</aqua></u></hover></click></green>"
+    created_streamer: "<prefix><yellow>[Streamer Mode]</yellow> <green>Temporary private room created! (PIN hidden)</green> <click:copy_to_clipboard:'<pin>'><hover:show_text:'<yellow>Copy 6-digit room PIN to clipboard</yellow>'><u><aqua>[Copy PIN]</aqua></u></hover></click>"
     joined: "<prefix><green>Joined temporary room <yellow><pin></yellow>. Proximity chat is disabled while in this room.</green>"
+    joined_streamer: "<prefix><yellow>[Streamer Mode]</yellow> <green>Joined temporary private room. Proximity chat is disabled while in this room.</green>"
     left: "<prefix><gray>Left temporary room. You are back in proximity voice chat.</gray>"
     kicked: "<prefix><red>You were kicked from the temporary room.</red>"
     kick_success: "<prefix><green>Kicked <yellow><player></yellow> from the temporary room.</green>"
@@ -108,6 +119,7 @@ command:
 
 notification:
   join: "<prefix><gray>Proximity voice is active! Type <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> to join.</gray>"
+  join_streamer: "<prefix><yellow>[Streamer Mode active]</yellow> <gray>Proximity voice is active! Type <click:run_command:'/voice'><yellow><u>/voice</u></yellow></click> to connect safely.</gray>"
 
 error:
   invalid_syntax: "<prefix><red>Invalid syntax: <yellow><syntax></yellow></red>"

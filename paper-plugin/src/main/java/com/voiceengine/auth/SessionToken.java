@@ -10,7 +10,9 @@ public record SessionToken(
     Instant createdAt,
     Instant expiresAt,
     boolean redeemed,
-    boolean isAdmin
+    boolean isAdmin,
+    boolean streamerMode,
+    boolean streamerModeExplicit
 ) {
     public SessionToken(
         String token,
@@ -20,7 +22,19 @@ public record SessionToken(
         Instant expiresAt,
         boolean redeemed
     ) {
-        this(token, playerUuid, playerName, createdAt, expiresAt, redeemed, false);
+        this(token, playerUuid, playerName, createdAt, expiresAt, redeemed, false, false, false);
+    }
+
+    public SessionToken(
+        String token,
+        UUID playerUuid,
+        String playerName,
+        Instant createdAt,
+        Instant expiresAt,
+        boolean redeemed,
+        boolean isAdmin
+    ) {
+        this(token, playerUuid, playerName, createdAt, expiresAt, redeemed, isAdmin, false, false);
     }
 
     public boolean isExpired() {
@@ -28,6 +42,6 @@ public record SessionToken(
     }
 
     public SessionToken markRedeemed() {
-        return new SessionToken(token, playerUuid, playerName, createdAt, expiresAt, true, isAdmin);
+        return new SessionToken(token, playerUuid, playerName, createdAt, expiresAt, true, isAdmin, streamerMode, streamerModeExplicit);
     }
 }

@@ -59,7 +59,7 @@ class VoiceBackendClientTest {
         };
 
         UUID playerUuid = UUID.randomUUID();
-        SessionToken token = new SessionToken("TEST12", playerUuid, "Steve", Instant.now(), Instant.now().plusSeconds(300), false, false);
+        SessionToken token = new SessionToken("TEST12", playerUuid, "Steve", Instant.now(), Instant.now().plusSeconds(300), false, false, true, true);
         client.registerToken(token, "192.168.1.50");
 
         assertEquals(1, sent.size());
@@ -70,5 +70,21 @@ class VoiceBackendClientTest {
         assertEquals("Steve", json.get("playerName").getAsString());
         assertEquals("survival-1", json.get("serverId").getAsString());
         assertEquals("192.168.1.50", json.get("clientIp").getAsString());
+        assertTrue(json.get("streamerMode").getAsBoolean());
+        assertTrue(json.get("streamerModeExplicit").getAsBoolean());
+
+        client.sendStreamerModeSync(playerUuid, true);
+        assertEquals(2, sent.size());
+        JsonObject syncJson = JsonParser.parseString(sent.get(1)).getAsJsonObject();
+        assertEquals("streamer_mode_sync", syncJson.get("type").getAsString());
+        assertEquals(playerUuid.toString(), syncJson.get("playerUuid").getAsString());
+        assertTrue(syncJson.get("enabled").getAsBoolean());
+
+        List<UUID> receivedUuids = new ArrayList<>();
+        client.setStreamerModeSyncConsumer((uuid, enabled) -> {
+            if (enabled) receivedUuids.add(uuid);
+        });
+        client.onMessage("{\"type\":\"streamer_mode_sync\",\"playerUuid\":\"" + playerUuid + "\",\"enabled\":true}");
+        assertEquals(List.of(playerUuid), receivedUuids);
     }
 }
