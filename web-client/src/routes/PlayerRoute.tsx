@@ -84,12 +84,20 @@ export function PlayerRoute() {
   );
   const [audioConstraints, setAudioConstraints] = useState<AudioConstraintsConfig>(() => {
     try {
-      return JSON.parse(
+      const parsed = JSON.parse(
         localStorage.getItem('voiceengine:audio_constraints') || ''
       );
+      if (parsed && typeof parsed === 'object') {
+        return {
+          echoCancellation: parsed.echoCancellation ?? true,
+          noiseSuppression: parsed.noiseSuppression ?? true,
+          autoGainControl: parsed.autoGainControl ?? true,
+        };
+      }
     } catch {
-      return { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+      // fall back to default audio constraints
     }
+    return { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
   });
 
   // Per-User Volumes & Local Mutes
@@ -172,6 +180,52 @@ export function PlayerRoute() {
     }
   }, [searchParams]);
 
+  const getMediaErrorName = (err: unknown): string | undefined =>
+    typeof err === 'object' && err !== null && 'name' in err
+      ? String((err as { name: unknown }).name)
+      : undefined;
+
+  const acquireMicrophoneStream = async (
+    deviceId: string,
+    constraints: AudioConstraintsConfig
+  ): Promise<MediaStream> => {
+    const buildAudioConstraints = (targetDeviceId?: string): MediaTrackConstraints => ({
+      ...(targetDeviceId ? { deviceId: { exact: targetDeviceId } } : {}),
+      echoCancellation: constraints.echoCancellation,
+      noiseSuppression: constraints.noiseSuppression,
+      autoGainControl: constraints.autoGainControl,
+    });
+
+    const getWithFallbackConstraints = async (targetDeviceId?: string): Promise<MediaStream> => {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: buildAudioConstraints(targetDeviceId),
+        });
+      } catch (err) {
+        if (!targetDeviceId && getMediaErrorName(err) === 'OverconstrainedError') {
+          console.warn('[PlayerRoute] Audio constraints rejected; falling back to default { audio: true }.');
+          return await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        throw err;
+      }
+    };
+
+    try {
+      return await getWithFallbackConstraints(deviceId || undefined);
+    } catch (err) {
+      const errName = getMediaErrorName(err);
+      if (deviceId && (errName === 'OverconstrainedError' || errName === 'NotFoundError')) {
+        console.warn(
+          `[PlayerRoute] Saved input device "${deviceId}" is unavailable (${errName}); falling back to default microphone.`
+        );
+        setSelectedInputId('');
+        localStorage.removeItem('voiceengine:input_device');
+        return await getWithFallbackConstraints(undefined);
+      }
+      throw err;
+    }
+  };
+
   const handleConnect = async () => {
     if (!tokenInput.trim()) {
       setErrorMsg(t('auth.enterTokenError'));
@@ -183,14 +237,7 @@ export function PlayerRoute() {
 
     try {
       // 1. Request microphone permissions with configured device and constraints
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: selectedInputId ? { exact: selectedInputId } : undefined,
-          echoCancellation: audioConstraints.echoCancellation,
-          noiseSuppression: audioConstraints.noiseSuppression,
-          autoGainControl: audioConstraints.autoGainControl,
-        },
-      });
+      const stream = await acquireMicrophoneStream(selectedInputId, audioConstraints);
       micStreamRef.current = stream;
 
       // 2. Initialize MicrophonePipeline (48kHz AudioContext, 80Hz HPF, RNNoise WASM, Smooth Gate)
@@ -400,8 +447,9 @@ export function PlayerRoute() {
       await signaling.connect(sendStream);
     } catch (err: unknown) {
       console.error('[PlayerRoute] Connection failed:', err);
-      const message = err instanceof Error ? err.message : t('auth.genericError');
-      setErrorMsg(message);
+      const errMessage = err instanceof Error && err.message ? err.message : null;
+      const errName = getMediaErrorName(err);
+      setErrorMsg(errMessage || errName || t('auth.genericError'));
       setIsConnecting(false);
     }
   };
@@ -607,68 +655,68 @@ export function PlayerRoute() {
     }
   };
 
-  const handleSelectInputDevice = async (deviceId: string) => {
-    setSelectedInputId(deviceId);
-    localStorage.setItem('voiceengine:input_device', deviceId);
-    if (isConnected) {
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            deviceId: deviceId ? { exact: deviceId } : undefined,
-            echoCancellation: audioConstraints.echoCancellation,
-            noiseSuppression: audioConstraints.noiseSuppression,
-            autoGainControl: audioConstraints.autoGainControl,
-          },
-        });
-        const newTrack = newStream.getAudioTracks()[0];
-        if (newTrack) {
-          if (micPipelineRef.current) {
-            micPipelineRef.current.setInputDevice(newStream);
-            if (micStreamRef.current) {
-              micStreamRef.current.getTracks().forEach((t) => t.stop());
-            }
-            micStreamRef.current = newStream;
-            setAnalyser(micPipelineRef.current.getAnalyser());
+  const applyInputDevice = async (deviceId: string, constraints: AudioConstraintsConfig) => {
+    if (!isConnected) return;
+    try {
+      const newStream = await acquireMicrophoneStream(deviceId, constraints);
+      const newTrack = newStream.getAudioTracks()[0];
+      if (newTrack) {
+        if (micPipelineRef.current) {
+          micPipelineRef.current.setInputDevice(newStream);
+          if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach((t) => t.stop());
+          }
+          micStreamRef.current = newStream;
+          setAnalyser(micPipelineRef.current.getAnalyser());
 
-            if (isLoopbackActive && pipelineRef.current) {
-              const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
-              const loopbackStream = new MediaStream([micPipelineRef.current.getProcessedTrack()]);
-              pipelineRef.current.startLoopback(loopbackStream, 0.18, canTransmit);
-            }
-          } else {
-            if (micStreamRef.current) {
-              micStreamRef.current.getTracks().forEach((t) => t.stop());
-            }
-            if (sendTrackRef.current) {
-              sendTrackRef.current.stop();
-            }
-            if (sendStreamRef.current) {
-              sendStreamRef.current.getTracks().forEach((t) => t.stop());
-            }
-            micStreamRef.current = newStream;
-
-            const newSendTrack = newTrack.clone();
+          if (isLoopbackActive && pipelineRef.current) {
             const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
-            newSendTrack.enabled = canTransmit;
-            sendTrackRef.current = newSendTrack;
-            const newSendStream = new MediaStream([newSendTrack]);
-            sendStreamRef.current = newSendStream;
+            const loopbackStream = new MediaStream([micPipelineRef.current.getProcessedTrack()]);
+            pipelineRef.current.startLoopback(loopbackStream, 0.18, canTransmit);
+          }
+        } else {
+          if (micStreamRef.current) {
+            micStreamRef.current.getTracks().forEach((t) => t.stop());
+          }
+          if (sendTrackRef.current) {
+            sendTrackRef.current.stop();
+          }
+          if (sendStreamRef.current) {
+            sendStreamRef.current.getTracks().forEach((t) => t.stop());
+          }
+          micStreamRef.current = newStream;
 
-            await signalingRef.current?.replaceMicrophoneTrack(newSendTrack);
+          const newSendTrack = newTrack.clone();
+          const canTransmit = isSpeakingRef.current && !isMutedRef.current && !isDeafenedRef.current;
+          newSendTrack.enabled = canTransmit;
+          sendTrackRef.current = newSendTrack;
+          const newSendStream = new MediaStream([newSendTrack]);
+          sendStreamRef.current = newSendStream;
 
-            if (pipelineRef.current) {
-              const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
-              setAnalyser(newAnalyser);
-              if (isLoopbackActive) {
-                pipelineRef.current.startLoopback(newStream, 0.18, canTransmit);
-              }
+          await signalingRef.current?.replaceMicrophoneTrack(newSendTrack);
+
+          if (pipelineRef.current) {
+            const newAnalyser = pipelineRef.current.createLocalAnalyser(newStream);
+            setAnalyser(newAnalyser);
+            if (isLoopbackActive) {
+              pipelineRef.current.startLoopback(newStream, 0.18, canTransmit);
             }
           }
         }
-      } catch (err) {
-        console.error('[PlayerRoute] Failed to switch microphone:', err);
       }
+    } catch (err) {
+      console.error('[PlayerRoute] Failed to switch microphone:', err);
     }
+  };
+
+  const handleSelectInputDevice = async (deviceId: string) => {
+    setSelectedInputId(deviceId);
+    if (deviceId) {
+      localStorage.setItem('voiceengine:input_device', deviceId);
+    } else {
+      localStorage.removeItem('voiceengine:input_device');
+    }
+    await applyInputDevice(deviceId, audioConstraints);
   };
 
   const handleToggleAiNoiseSuppression = (enabled: boolean) => {
@@ -700,9 +748,7 @@ export function PlayerRoute() {
   const handleUpdateConstraints = async (newConstraints: AudioConstraintsConfig) => {
     setAudioConstraints(newConstraints);
     localStorage.setItem('voiceengine:audio_constraints', JSON.stringify(newConstraints));
-    if (isConnected) {
-      await handleSelectInputDevice(selectedInputId);
-    }
+    await applyInputDevice(selectedInputId, newConstraints);
   };
 
   const handleSetPeerVolume = (uuid: string, volume: number) => {
