@@ -1,6 +1,6 @@
 {
   "name": "voice-server",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "description": "VoiceEngine WebRTC SFU and Proximity Voice Server",
   "main": "dist/index.js",
