@@ -5,29 +5,49 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.CodeSource;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
+import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 public class UpdateChecker {
     private final HttpClient httpClient;
+    private final Supplier<Optional<String>> localSha256Supplier;
     private ReleaseCheckResult cachedResult;
     private Instant cacheExpiry = Instant.MIN;
     private static final Duration CACHE_DURATION = Duration.ofHours(1);
+    private static final Pattern PAPER_JAR_PATTERN = Pattern.compile("(?i)VoiceEngine-paper.*\\.jar$");
 
     public UpdateChecker() {
-        this(HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build());
+        this(
+            HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build(),
+            UpdateChecker::resolveRunningJarSha256
+        );
     }
 
     public UpdateChecker(HttpClient httpClient) {
+        this(httpClient, UpdateChecker::resolveRunningJarSha256);
+    }
+
+    public UpdateChecker(HttpClient httpClient, Supplier<Optional<String>> localSha256Supplier) {
         this.httpClient = httpClient;
+        this.localSha256Supplier = localSha256Supplier != null ? localSha256Supplier : Optional::empty;
     }
 
     public CompletableFuture<ReleaseCheckResult> checkForUpdates(String repository, String currentVersion, boolean bypassCache) {
@@ -45,12 +65,16 @@ public class UpdateChecker {
             .build();
 
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply(response -> {
+            .thenCompose(response -> {
                 if (response.statusCode() == 404) {
-                    return ReleaseCheckResult.failure(currentVersion, "No releases found on GitHub repository: " + repository);
+                    return CompletableFuture.completedFuture(
+                        ReleaseCheckResult.failure(currentVersion, "No releases found on GitHub repository: " + repository)
+                    );
                 }
                 if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                    return ReleaseCheckResult.failure(currentVersion, "GitHub API returned status " + response.statusCode());
+                    return CompletableFuture.completedFuture(
+                        ReleaseCheckResult.failure(currentVersion, "GitHub API returned status " + response.statusCode())
+                    );
                 }
 
                 try {
@@ -70,7 +94,7 @@ public class UpdateChecker {
                                 String assetName = asset.has("name") ? asset.get("name").getAsString() : "";
                                 String browserUrl = asset.has("browser_download_url") ? asset.get("browser_download_url").getAsString() : "";
 
-                                if (assetName.matches("(?i)VoiceEngine-paper.*\\.jar$") && downloadUrl == null) {
+                                if (PAPER_JAR_PATTERN.matcher(assetName).matches() && downloadUrl == null) {
                                     downloadUrl = browserUrl;
                                 } else if (assetName.equalsIgnoreCase("checksums.sha256") || assetName.equalsIgnoreCase("checksums.txt")) {
                                     checksumUrl = browserUrl;
@@ -79,19 +103,119 @@ public class UpdateChecker {
                         }
                     }
 
-                    ReleaseInfo releaseInfo = new ReleaseInfo(tagName, name, body, downloadUrl, checksumUrl);
-                    boolean isAvailable = isNewerVersion(currentVersion, tagName);
-                    ReleaseCheckResult result = ReleaseCheckResult.success(isAvailable, currentVersion, tagName, releaseInfo);
+                    boolean versionNewer = isNewerVersion(currentVersion, tagName);
+                    if (!versionNewer || checksumUrl == null || checksumUrl.isBlank()) {
+                        ReleaseInfo releaseInfo = new ReleaseInfo(tagName, name, body, downloadUrl, checksumUrl, null);
+                        ReleaseCheckResult result = ReleaseCheckResult.success(versionNewer, currentVersion, tagName, releaseInfo);
+                        cacheResult(result);
+                        return CompletableFuture.completedFuture(result);
+                    }
 
-                    this.cachedResult = result;
-                    this.cacheExpiry = Instant.now().plus(CACHE_DURATION);
-
-                    return result;
+                    String finalDownloadUrl = downloadUrl;
+                    String finalChecksumUrl = checksumUrl;
+                    return fetchExpectedSha256(finalChecksumUrl, PAPER_JAR_PATTERN)
+                        .thenApply(expectedShaOpt -> {
+                            String expectedSha = expectedShaOpt.orElse(null);
+                            boolean isAvailable = true;
+                            if (expectedSha != null) {
+                                Optional<String> localSha = localSha256Supplier.get();
+                                if (localSha.isPresent() && localSha.get().equalsIgnoreCase(expectedSha)) {
+                                    isAvailable = false;
+                                }
+                            }
+                            ReleaseInfo releaseInfo = new ReleaseInfo(tagName, name, body, finalDownloadUrl, finalChecksumUrl, expectedSha);
+                            ReleaseCheckResult result = ReleaseCheckResult.success(isAvailable, currentVersion, tagName, releaseInfo);
+                            cacheResult(result);
+                            return result;
+                        });
                 } catch (Exception e) {
-                    return ReleaseCheckResult.failure(currentVersion, "Failed to parse release metadata: " + e.getMessage());
+                    return CompletableFuture.completedFuture(
+                        ReleaseCheckResult.failure(currentVersion, "Failed to parse release metadata: " + e.getMessage())
+                    );
                 }
             })
             .exceptionally(ex -> ReleaseCheckResult.failure(currentVersion, "Network error: " + ex.getMessage()));
+    }
+
+    private void cacheResult(ReleaseCheckResult result) {
+        this.cachedResult = result;
+        this.cacheExpiry = Instant.now().plus(CACHE_DURATION);
+    }
+
+    private CompletableFuture<Optional<String>> fetchExpectedSha256(String checksumUrl, Pattern assetPattern) {
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(checksumUrl))
+            .header("User-Agent", "VoiceEngine-Paper-Updater")
+            .timeout(Duration.ofSeconds(15))
+            .GET()
+            .build();
+
+        return httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+            .thenApply(resp -> {
+                if (resp.statusCode() < 200 || resp.statusCode() >= 300 || resp.body() == null) {
+                    return Optional.<String>empty();
+                }
+                return parseSha256ForAsset(resp.body(), assetPattern);
+            })
+            .exceptionally(ex -> Optional.empty());
+    }
+
+    public static Optional<String> parseSha256ForAsset(String manifest, Pattern assetPattern) {
+        if (manifest == null || manifest.isBlank()) {
+            return Optional.empty();
+        }
+        for (String line : manifest.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+            String[] parts = trimmed.split("\\s+", 2);
+            if (parts.length == 2) {
+                String hash = parts[0].trim();
+                String fileName = parts[1].trim();
+                if (fileName.startsWith("*")) {
+                    fileName = fileName.substring(1);
+                }
+                int slashIdx = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
+                if (slashIdx >= 0) {
+                    fileName = fileName.substring(slashIdx + 1);
+                }
+                if (hash.matches("(?i)[0-9a-f]{64}") && assetPattern.matcher(fileName).matches()) {
+                    return Optional.of(hash.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    public static Optional<String> resolveRunningJarSha256() {
+        try {
+            CodeSource codeSource = UpdateChecker.class.getProtectionDomain().getCodeSource();
+            if (codeSource == null || codeSource.getLocation() == null) {
+                return Optional.empty();
+            }
+            Path jarPath = Path.of(codeSource.getLocation().toURI());
+            if (!Files.isRegularFile(jarPath)) {
+                return Optional.empty();
+            }
+            return computeSha256(jarPath);
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<String> computeSha256(Path file) {
+        try (InputStream in = Files.newInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                digest.update(buffer, 0, read);
+            }
+            return Optional.of(HexFormat.of().formatHex(digest.digest()));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     public ReleaseCheckResult getCachedResult() {

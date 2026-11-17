@@ -10,23 +10,28 @@ import com.velocitypowered.api.plugin.PluginContainer;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import com.voiceengine.velocity.auth.VelocityTokenManager;
+import com.voiceengine.velocity.command.VelocityUpdateCommands;
 import com.voiceengine.velocity.command.VelocityVoiceCommands;
 import com.voiceengine.velocity.config.VelocityVoiceConfig;
 import com.voiceengine.velocity.listener.DisconnectListener;
 import com.voiceengine.velocity.listener.ServerPostConnectListener;
 import com.voiceengine.velocity.net.VelocityBackendClient;
+import com.voiceengine.velocity.update.UpdateChecker;
+import com.voiceengine.velocity.update.UpdateDownloader;
 import org.incendo.cloud.SenderMapper;
 import org.incendo.cloud.annotations.AnnotationParser;
 import org.incendo.cloud.execution.ExecutionCoordinator;
 import org.incendo.cloud.velocity.VelocityCommandManager;
 import org.slf4j.Logger;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.CodeSource;
 
 @Plugin(
     id = "voiceengine-velocity",
     name = "VoiceEngine-Velocity",
-    version = "1.1.0-SNAPSHOT",
+    version = "1.2.0",
     description = "VoiceEngine Velocity Proxy Voice Integration",
     authors = {"VoiceEngine"}
 )
@@ -42,6 +47,8 @@ public class VoiceEngineVelocityPlugin {
     private ServerPostConnectListener postConnectListener;
     private com.voiceengine.velocity.moderation.ModerationDatabase moderationDatabase;
     private com.voiceengine.velocity.moderation.VelocityModerationService moderationService;
+    private UpdateChecker updateChecker;
+    private UpdateDownloader updateDownloader;
 
     @Inject
     public VoiceEngineVelocityPlugin(
@@ -80,12 +87,25 @@ public class VoiceEngineVelocityPlugin {
         // 4. Connect to Voice Server backend
         initBackendClient();
 
-        // 5. Register Listeners
-        this.postConnectListener = new ServerPostConnectListener(() -> voiceConfig, () -> backendClient, moderationDatabase);
+        // 5. Initialize Updater
+        this.updateChecker = new UpdateChecker();
+        this.updateDownloader = new UpdateDownloader();
+        String currentVersion = pluginContainer.getDescription().getVersion().orElse("1.2.0");
+        Path updateFolder = (dataDirectory.getParent() != null ? dataDirectory.getParent() : dataDirectory).resolve("update");
+
+        // 6. Register Listeners
+        this.postConnectListener = new ServerPostConnectListener(
+            server,
+            this,
+            () -> voiceConfig,
+            () -> backendClient,
+            moderationDatabase,
+            updateChecker
+        );
         server.getEventManager().register(this, postConnectListener);
         server.getEventManager().register(this, new DisconnectListener(postConnectListener, () -> backendClient));
 
-        // 6. Initialize Commands via Incendo Cloud Velocity
+        // 7. Initialize Commands via Incendo Cloud Velocity
         try {
             VelocityCommandManager<CommandSource> commandManager = new VelocityCommandManager<>(
                 pluginContainer,
@@ -113,6 +133,14 @@ public class VoiceEngineVelocityPlugin {
                 moderationDatabase
             ));
 
+            annotationParser.parse(new VelocityUpdateCommands(
+                updateChecker,
+                updateDownloader,
+                () -> voiceConfig,
+                currentVersion,
+                updateFolder
+            ));
+
             if (moderationService != null) {
                 annotationParser.parse(new com.voiceengine.velocity.command.VelocityModerationCommands(
                     server,
@@ -121,6 +149,20 @@ public class VoiceEngineVelocityPlugin {
             }
         } catch (Exception e) {
             logger.error("Failed to initialize Cloud Velocity command manager: {}", e.getMessage(), e);
+        }
+
+        // 8. Optional Startup Update Check
+        if (voiceConfig.updatesCheckOnStartup()) {
+            updateChecker.checkForUpdates(voiceConfig.updatesRepository(), currentVersion, false)
+                .thenAccept(result -> {
+                    if (result.updateAvailable()) {
+                        logger.info(
+                            "[VoiceEngine] A new VoiceEngine-Velocity update is available: {} (current: {}). Use /voice-velocity update apply to stage the update.",
+                            result.latestVersion(),
+                            currentVersion
+                        );
+                    }
+                });
         }
 
         logger.info("VoiceEngine Velocity proxy plugin enabled successfully!");
@@ -134,7 +176,37 @@ public class VoiceEngineVelocityPlugin {
         if (moderationDatabase != null) {
             moderationDatabase.close();
         }
+        Path runningJar = resolveRunningJarPath();
+        if (updateDownloader != null && runningJar != null) {
+            try {
+                if (updateDownloader.applyPendingUpdate(runningJar)) {
+                    logger.info("Applied staged VoiceEngine-Velocity update to {}", runningJar);
+                }
+            } catch (Exception e) {
+                Path staged = updateDownloader.getPendingStagedJar();
+                logger.warn(
+                    "Could not overwrite running JAR {} during shutdown ({}). Please manually move {} to {} before starting the proxy.",
+                    runningJar,
+                    e.getMessage(),
+                    staged,
+                    runningJar
+                );
+            }
+        }
         logger.info("VoiceEngine Velocity proxy plugin disabled.");
+    }
+
+    private Path resolveRunningJarPath() {
+        try {
+            CodeSource codeSource = VoiceEngineVelocityPlugin.class.getProtectionDomain().getCodeSource();
+            if (codeSource == null || codeSource.getLocation() == null) {
+                return null;
+            }
+            Path jarPath = Path.of(codeSource.getLocation().toURI());
+            return Files.isRegularFile(jarPath) ? jarPath : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public void reloadPlugin() {

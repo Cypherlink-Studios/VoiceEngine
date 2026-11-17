@@ -9,6 +9,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public class UpdateDownloader {
@@ -56,6 +57,17 @@ public class UpdateDownloader {
                 } catch (Exception e) {
                     tempFile.delete();
                     throw new RuntimeException("Failed to stream download: " + e.getMessage(), e);
+                }
+
+                String expectedSha = releaseInfo.expectedSha256();
+                if (expectedSha != null && !expectedSha.isBlank()) {
+                    Optional<String> actualSha = UpdateChecker.computeSha256(tempFile.toPath());
+                    if (actualSha.isEmpty() || !actualSha.get().equalsIgnoreCase(expectedSha)) {
+                        tempFile.delete();
+                        throw new RuntimeException(
+                            "SHA-256 checksum mismatch for downloaded JAR (expected " + expectedSha + ", got " + actualSha.orElse("unavailable") + ")"
+                        );
+                    }
                 }
 
                 try {

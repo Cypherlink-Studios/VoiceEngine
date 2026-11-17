@@ -17,3 +17,9 @@ notify-on-join: true
 
 # MiniMessage formatted join notification message
 join-message: "<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <gray>Proximity voice chat is active on this network! Type <click:run_command:'/voice'><hover:show_text:'<gray>Click to get connection link</gray>'><yellow>/voice</yellow></hover></click> to connect.</gray>"
+
+# Automatic Plugin Updater (GitHub Releases)
+updates:
+  check-on-startup: true
+  notify-admins-on-join: true
+  repository: "Cypherlink-Studios/VoiceEngine"

@@ -17,8 +17,31 @@ public record VelocityVoiceConfig(
     String secretKey,
     Duration tokenTtl,
     boolean notifyOnJoin,
-    String joinMessage
+    String joinMessage,
+    boolean updatesCheckOnStartup,
+    boolean updatesNotifyAdminsOnJoin,
+    String updatesRepository
 ) {
+    public VelocityVoiceConfig(
+        URI voiceServerUri,
+        String webClientUrl,
+        String secretKey,
+        Duration tokenTtl,
+        boolean notifyOnJoin,
+        String joinMessage
+    ) {
+        this(
+            voiceServerUri,
+            webClientUrl,
+            secretKey,
+            tokenTtl,
+            notifyOnJoin,
+            joinMessage,
+            true,
+            true,
+            "Cypherlink-Studios/VoiceEngine"
+        );
+    }
     public static VelocityVoiceConfig load(Path dataDirectory) {
         return load(dataDirectory, null);
     }
@@ -91,13 +114,31 @@ public record VelocityVoiceConfig(
 
         String joinMsg = map != null ? (String) map.getOrDefault("join-message", "<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <gray>Proximity voice chat is active! Type <click:run_command:'/voice'><yellow>/voice</yellow></click> to connect.</gray>") : "<gradient:#6366f1:#a855f7><bold>[VoiceEngine]</bold></gradient> <gray>Proximity voice chat is active! Type <click:run_command:'/voice'><yellow>/voice</yellow></click> to connect.</gray>";
 
+        boolean updatesCheckOnStartup = true;
+        boolean updatesNotifyAdminsOnJoin = true;
+        String updatesRepo = "Cypherlink-Studios/VoiceEngine";
+        if (map != null && map.get("updates") instanceof Map<?, ?> updatesMap) {
+            if (updatesMap.get("check-on-startup") instanceof Boolean b) {
+                updatesCheckOnStartup = b;
+            }
+            if (updatesMap.get("notify-admins-on-join") instanceof Boolean b) {
+                updatesNotifyAdminsOnJoin = b;
+            }
+            if (updatesMap.get("repository") instanceof String repo && !repo.isBlank()) {
+                updatesRepo = repo.trim();
+            }
+        }
+
         return new VelocityVoiceConfig(
             serverUri,
             webClient,
             secret,
             Duration.ofMinutes(ttlMinutes),
             notify,
-            joinMsg
+            joinMsg,
+            updatesCheckOnStartup,
+            updatesNotifyAdminsOnJoin,
+            updatesRepo
         );
     }
 }

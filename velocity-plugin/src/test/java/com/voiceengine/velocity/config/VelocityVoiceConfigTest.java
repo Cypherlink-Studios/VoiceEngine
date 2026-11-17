@@ -22,6 +22,9 @@ class VelocityVoiceConfigTest {
         assertEquals("change-me-to-a-secure-random-secret", config.secretKey());
         assertEquals(Duration.ofMinutes(5), config.tokenTtl());
         assertTrue(config.notifyOnJoin());
+        assertTrue(config.updatesCheckOnStartup());
+        assertTrue(config.updatesNotifyAdminsOnJoin());
+        assertEquals("Cypherlink-Studios/VoiceEngine", config.updatesRepository());
     }
 
     @Test
@@ -34,6 +37,10 @@ class VelocityVoiceConfigTest {
             token-ttl-minutes: 10
             notify-on-join: false
             join-message: "<green>Join our voice chat!</green>"
+            updates:
+              check-on-startup: false
+              notify-admins-on-join: false
+              repository: "CustomOrg/VoiceEngine"
             """;
         Files.writeString(configFile, yaml);
 
@@ -44,5 +51,8 @@ class VelocityVoiceConfigTest {
         assertEquals(Duration.ofMinutes(10), config.tokenTtl());
         assertFalse(config.notifyOnJoin());
         assertEquals("<green>Join our voice chat!</green>", config.joinMessage());
+        assertFalse(config.updatesCheckOnStartup());
+        assertFalse(config.updatesNotifyAdminsOnJoin());
+        assertEquals("CustomOrg/VoiceEngine", config.updatesRepository());
     }
 }

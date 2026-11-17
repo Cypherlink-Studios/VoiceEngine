@@ -11,7 +11,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -118,5 +122,82 @@ class UpdateCheckerAndDownloaderTest {
         assertTrue(staged.exists());
         assertEquals("VoiceEngine-paper.jar", staged.getName());
         assertEquals(dummyJarBytes.length, Files.readAllBytes(staged.toPath()).length);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testCheckForUpdatesSuppressesFalsePositiveWhenSha256Matches() {
+        String releaseJson = """
+            {
+              "tag_name": "v1.4.0",
+              "name": "Release 1.4.0",
+              "body": "Velocity-only changes",
+              "assets": [
+                {
+                  "name": "VoiceEngine-paper.jar",
+                  "browser_download_url": "https://github.com/downloads/VoiceEngine-paper.jar"
+                },
+                {
+                  "name": "checksums.sha256",
+                  "browser_download_url": "https://github.com/downloads/checksums.sha256"
+                }
+              ]
+            }
+            """;
+        String sharedHash = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        String checksumsBody = sharedHash + "  VoiceEngine-paper.jar\n";
+
+        HttpResponse<String> releaseResp = (HttpResponse<String>) mock(HttpResponse.class);
+        when(releaseResp.statusCode()).thenReturn(200);
+        when(releaseResp.body()).thenReturn(releaseJson);
+
+        HttpResponse<String> checksumResp = (HttpResponse<String>) mock(HttpResponse.class);
+        when(checksumResp.statusCode()).thenReturn(200);
+        when(checksumResp.body()).thenReturn(checksumsBody);
+
+        when(mockHttpClient.sendAsync(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenAnswer(inv -> {
+                HttpRequest req = inv.getArgument(0);
+                if (req.uri().toString().endsWith("checksums.sha256")) {
+                    return CompletableFuture.completedFuture(checksumResp);
+                }
+                return CompletableFuture.completedFuture(releaseResp);
+            });
+
+        UpdateChecker checker = new UpdateChecker(mockHttpClient, () -> Optional.of(sharedHash));
+        ReleaseCheckResult result = checker.checkForUpdates("Cypherlink-Studios/VoiceEngine", "1.3.0", true).join();
+
+        assertFalse(result.updateAvailable());
+        assertNull(result.errorMessage());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testDownloaderVerifiesSha256AndAbortsOnMismatch(@TempDir File tempDir) throws Exception {
+        HttpResponse<java.io.InputStream> mockStreamResponse = (HttpResponse<java.io.InputStream>) mock(HttpResponse.class);
+        byte[] dummyJarBytes = "PK\u0003\u0004corrupted-paper-jar".getBytes(StandardCharsets.UTF_8);
+
+        when(mockStreamResponse.statusCode()).thenReturn(200);
+        when(mockStreamResponse.body()).thenReturn(new ByteArrayInputStream(dummyJarBytes));
+        when(mockHttpClient.sendAsync(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(CompletableFuture.completedFuture(mockStreamResponse));
+
+        UpdateDownloader downloader = new UpdateDownloader(mockHttpClient);
+        ReleaseInfo badInfo = new ReleaseInfo(
+            "v1.3.1",
+            "Release 1.3.1",
+            "Notes",
+            "https://download.url/VoiceEngine-paper.jar",
+            null,
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        CompletionException ex = assertThrows(
+            CompletionException.class,
+            () -> downloader.downloadAndStage(badInfo, tempDir).join()
+        );
+        assertTrue(ex.getCause().getMessage().contains("SHA-256 checksum mismatch"));
+        assertFalse(new File(tempDir, "VoiceEngine-paper.jar").exists());
+        assertFalse(new File(tempDir, "VoiceEngine-paper.jar.tmp").exists());
     }
 }

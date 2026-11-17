@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.voiceengine"
-version = "1.3.0"
+version = "1.3.1"
 
 repositories {
     mavenCentral()
@@ -48,6 +48,15 @@ tasks.test {
 tasks.jar {
     archiveBaseName.set("VoiceEngine-paper")
     archiveClassifier.set("thin")
+}
+
+tasks.processResources {
+    val props = mapOf("version" to project.version)
+    inputs.properties(props)
+    filteringCharset = "UTF-8"
+    filesMatching(listOf("plugin.yml", "paper-plugin.yml")) {
+        expand(props)
+    }
 }
 
 tasks.shadowJar {
